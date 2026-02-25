@@ -82,7 +82,8 @@ private:
     int mStateDim;
     int mActionDim;
     TD3Config mConfig;
-
+    std::mt19937 mRng;
+    
     std::array<float, VECTOR_REWARD_DIM> mPreferenceVector = {0.5f, 0.3f, 0.15f, 0.05f};
     
     SpanActorCritic mModel;
@@ -107,7 +108,6 @@ private:
     std::vector<float> mTargetLogProbs;
     std::vector<int> mSampledIndices;
     
-    std::mt19937 mRng;
     int mStepCount = 0;
     int mUpdateCount = 0;
 };

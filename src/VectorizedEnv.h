@@ -1,10 +1,10 @@
 #pragma once
 
-// MUST BE FIRST
 #include <Jolt/Jolt.h>
 #include <vector>
 #include "CombatEnv.h"
 #include "PhysicsCore.h"
+#include "AlignedAllocator.h"
 
 class VectorizedEnv
 {
@@ -18,8 +18,8 @@ public:
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();
 
-    const std::vector<float>& GetObservations() const { return mAllObservations; }
-    const std::vector<float>& GetRewards() const { return mAllRewards; }
+    const AlignedVector32<float>& GetObservations() const { return mAllObservations; }
+    const AlignedVector32<float>& GetRewards() const { return mAllRewards; }
     const std::vector<bool>& GetDones() const { return mAllDones; }
 
     CombatEnv& GetEnv(int index) { return mEnvs[index]; }
@@ -32,12 +32,12 @@ public:
 private:
     PhysicsCore mPhysicsCore;
     CombatRobotLoader mRobotLoader;
- std::vector<CombatEnv> mEnvs;
+    std::vector<CombatEnv> mEnvs;
 
     int mNumEnvs;
     int mObservationDim;
 
-    std::vector<float> mAllObservations;
-    std::vector<float> mAllRewards;
+    AlignedVector32<float> mAllObservations;
+    AlignedVector32<float> mAllRewards;
     std::vector<bool> mAllDones;
 };

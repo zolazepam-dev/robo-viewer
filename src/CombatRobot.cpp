@@ -512,4 +512,42 @@ void CombatRobotLoader::GetObservations(
     observations[idx++] = robot.hp / 100.0f;
     observations[idx++] = opponent.hp / 100.0f;
     observations[idx++] = static_cast<float>((oppPos - myPos).Length()) / 20.0f;
+    
+    JPH::Vec3 myForward = myRot.RotateAxisY();
+    JPH::Vec3 toOpponent = (oppPos - myPos).Normalized();
+    float facingDot = myForward.Dot(toOpponent);
+    observations[idx++] = facingDot;
+    
+    float healthDiff = (robot.hp - opponent.hp) / 100.0f;
+    observations[idx++] = healthDiff;
+    
+    float mySpeed = myVel.Length();
+    float oppSpeed = oppVel.Length();
+    observations[idx++] = mySpeed / 10.0f;
+    observations[idx++] = oppSpeed / 10.0f;
+    
+    float speedRatio = (oppSpeed > 0.01f) ? (mySpeed / oppSpeed) : 1.0f;
+    observations[idx++] = std::clamp(speedRatio, 0.0f, 5.0f) / 5.0f;
+    
+    JPH::Vec3 relVel = oppVel - myVel;
+    observations[idx++] = relVel.GetX() / 10.0f;
+    observations[idx++] = relVel.GetY() / 10.0f;
+    observations[idx++] = relVel.GetZ() / 10.0f;
+    
+    float closingSpeed = -relVel.Dot(toOpponent);
+    observations[idx++] = closingSpeed / 10.0f;
+    
+    JPH::Vec3 crossProduct = myVel.Cross(oppVel);
+    observations[idx++] = crossProduct.GetX() / 10.0f;
+    observations[idx++] = crossProduct.GetY() / 10.0f;
+    observations[idx++] = crossProduct.GetZ() / 10.0f;
+    
+    observations[idx++] = robot.totalDamageDealt / 100.0f;
+    observations[idx++] = robot.totalDamageTaken / 100.0f;
+    observations[idx++] = robot.episodeSteps / 1000.0f;
+    
+    while (idx < 208)
+    {
+        observations[idx++] = 0.0f;
+    }
 }

@@ -35,7 +35,6 @@ cc_binary(
         "src/CombatEnv.h",
         "src/VectorizedEnv.cpp",
         "src/VectorizedEnv.h",
-        # Swapped out NeuralNetwork for the new SPAN/ODE2VAE stack
         "src/NeuralNetwork.cpp",
         "src/NeuralNetwork.h",
         "src/SpanNetwork.cpp",
@@ -50,6 +49,10 @@ cc_binary(
         "src/TD3Trainer.h",
         "src/Renderer.cpp",
         "src/Renderer.h",
+        "src/AlignedAllocator.h",
+        "src/LockFreeQueue.h",
+        "src/OverlayUI.cpp",
+        "src/OverlayUI.h",
     ],
     data = ["robots/combat_bot.json"],
     deps = [
@@ -62,7 +65,6 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
     ],
-    # MUST have -flto in linkopts for the linker to actually perform the optimization
     linkopts = ["-lGL", "-lpthread", "-flto"],
     copts = [
         "-std=c++20",
@@ -72,7 +74,7 @@ cc_binary(
         "-march=native",
         "-ffast-math",
         "-flto",
-        "-fno-strict-aliasing" # Required for the AVX2 fast-math pointer casting
+        "-fno-strict-aliasing"
     ],
 )
 

@@ -77,6 +77,7 @@ struct CombatRobotData
     float totalDamageDealt = 0.0f;
     float totalDamageTaken = 0.0f;
     float totalEnergyUsed = 0.0f;
+    int episodeSteps = 0;
 
     ResidualActionScale actionScale;
 

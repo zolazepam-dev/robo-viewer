@@ -7,6 +7,7 @@
 
 #include "NeuralMath.h"
 #include "LatentMemory.h"
+#include "AlignedAllocator.h"
 
 struct SpanLayerConfig
 {
@@ -27,8 +28,8 @@ public:
     void ForwardBatch(const float* input, float* output, int batchSize);
     void ForwardAVX2(const float* input, float* output);
     
-    std::vector<float>& GetControlPoints() { return mControlPoints; }
-    const std::vector<float>& GetControlPoints() const { return mControlPoints; }
+    AlignedVector32<float>& GetControlPoints() { return mControlPoints; }
+    const AlignedVector32<float>& GetControlPoints() const { return mControlPoints; }
     
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
@@ -44,11 +45,11 @@ private:
     int mNumKnots = 8;
     int mSplineDegree = 3;
     
-    alignas(32) std::vector<float> mKnots;
-    alignas(32) std::vector<float> mControlPoints;
+    AlignedVector32<float> mKnots;
+    AlignedVector32<float> mControlPoints;
     
-    alignas(32) std::vector<float> mBasisBuffer;
-    alignas(32) std::vector<float> mTempOutput;
+    AlignedVector32<float> mBasisBuffer;
+    AlignedVector32<float> mTempOutput;
 };
 
 class alignas(32) SpanNetwork
@@ -76,13 +77,13 @@ public:
     void SoftUpdate(const SpanNetwork& other, float tau);
 
 private:
-    alignas(32) std::vector<TensorProductBSpline> mLayers;
+    AlignedVector32<TensorProductBSpline> mLayers;
     std::vector<size_t> mLayerInputDims;
     std::vector<size_t> mLayerOutputDims;
     size_t mInputDim = 0;
     size_t mOutputDim = 0;
     
-    alignas(32) std::vector<float> mActivationBuffer;
+    AlignedVector32<float> mActivationBuffer;
 };
 
 class alignas(32) SpanActorCritic
@@ -138,9 +139,9 @@ private:
     size_t mHiddenDim = 0;
     size_t mLatentDim = 0;
     
-    alignas(32) std::vector<float> mStateActionBuffer;
-    alignas(32) std::vector<float> mLatentBuffer;
-    alignas(32) std::vector<float> mNoiseBuffer;
+    AlignedVector32<float> mStateActionBuffer;
+    AlignedVector32<float> mLatentBuffer;
+    AlignedVector32<float> mNoiseBuffer;
 };
 
 struct alignas(32) CriticBatchBuffer

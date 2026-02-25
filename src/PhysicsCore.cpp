@@ -23,8 +23,7 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     JPH::RegisterDefaultAllocator();
 
-    // Scale memory allocator based on environment count (Massive contiguous block)
-    uint32_t tempAllocSize = 10 * 1024 * 1024 + (mNumEnvs * 1024 * 1024);
+    uint32_t tempAllocSize = 256 * 1024 * 1024;
     mTempAllocator = new JPH::TempAllocatorImpl(tempAllocSize);
 
     // Thread Pinning Strategy: 

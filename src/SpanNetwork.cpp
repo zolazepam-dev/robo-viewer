@@ -163,7 +163,6 @@ void TensorProductBSpline::ForwardAVX2(const float* input, float* output)
             {
                 tanhArr[i] = tanhf(xArr[i]) * 0.5f + 0.5f;
             }
-            __m256 tanhX = _mm256_load_ps(tanhArr);
             
             for (int i = 0; i < 8; ++i)
             {

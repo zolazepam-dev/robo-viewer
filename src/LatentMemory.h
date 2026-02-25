@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "NeuralMath.h"
+#include "AlignedAllocator.h"
 
 struct alignas(32) SecondOrderLatentMemory
 {
@@ -75,26 +76,26 @@ public:
     size_t GetObsDim() const { return mObsDim; }
     size_t GetLatentDim() const { return mLatentDim; }
     
-    std::vector<float>& GetWeightsPos() { return mWeightsPos; }
-    std::vector<float>& GetWeightsVel() { return mWeightsVel; }
-    std::vector<float>& GetBiasPos() { return mBiasPos; }
-    std::vector<float>& GetBiasVel() { return mBiasVel; }
+    AlignedVector32<float>& GetWeightsPos() { return mWeightsPos; }
+    AlignedVector32<float>& GetWeightsVel() { return mWeightsVel; }
+    AlignedVector32<float>& GetBiasPos() { return mBiasPos; }
+    AlignedVector32<float>& GetBiasVel() { return mBiasVel; }
     
-    const std::vector<float>& GetWeightsPos() const { return mWeightsPos; }
-    const std::vector<float>& GetWeightsVel() const { return mWeightsVel; }
-    const std::vector<float>& GetBiasPos() const { return mBiasPos; }
-    const std::vector<float>& GetBiasVel() const { return mBiasVel; }
+    const AlignedVector32<float>& GetWeightsPos() const { return mWeightsPos; }
+    const AlignedVector32<float>& GetWeightsVel() const { return mWeightsVel; }
+    const AlignedVector32<float>& GetBiasPos() const { return mBiasPos; }
+    const AlignedVector32<float>& GetBiasVel() const { return mBiasVel; }
 
 private:
     size_t mObsDim = 0;
     size_t mLatentDim = 0;
     
-    alignas(32) std::vector<float> mWeightsPos;
-    alignas(32) std::vector<float> mWeightsVel;
-    alignas(32) std::vector<float> mBiasPos;
-    alignas(32) std::vector<float> mBiasVel;
+    AlignedVector32<float> mWeightsPos;
+    AlignedVector32<float> mWeightsVel;
+    AlignedVector32<float> mBiasPos;
+    AlignedVector32<float> mBiasVel;
     
-    alignas(32) std::vector<float> mTempBuffer;
+    AlignedVector32<float> mTempBuffer;
 };
 
 class alignas(32) ODE2VAEDynamics
@@ -111,20 +112,20 @@ public:
     size_t GetLatentDim() const { return mLatentDim; }
     size_t GetObsDim() const { return mObsDim; }
     
-    std::vector<float>& GetWeights() { return mWeights; }
-    std::vector<float>& GetBias() { return mBias; }
+    AlignedVector32<float>& GetWeights() { return mWeights; }
+    AlignedVector32<float>& GetBias() { return mBias; }
     
-    const std::vector<float>& GetWeights() const { return mWeights; }
-    const std::vector<float>& GetBias() const { return mBias; }
+    const AlignedVector32<float>& GetWeights() const { return mWeights; }
+    const AlignedVector32<float>& GetBias() const { return mBias; }
 
 private:
     size_t mLatentDim = 0;
     size_t mObsDim = 0;
     
-    alignas(32) std::vector<float> mWeights;
-    alignas(32) std::vector<float> mBias;
+    AlignedVector32<float> mWeights;
+    AlignedVector32<float> mBias;
     
-    alignas(32) std::vector<float> mCombinedInput;
+    AlignedVector32<float> mCombinedInput;
 };
 
 class alignas(32) LatentMemoryManager
@@ -159,7 +160,7 @@ private:
     ODE2VAEEncoder mEncoder;
     ODE2VAEDynamics mDynamics;
     
-    alignas(32) std::vector<float> mAccelerationBuffer;
+    AlignedVector32<float> mAccelerationBuffer;
 };
 
 struct alignas(32) VectorizedLatentBatch
