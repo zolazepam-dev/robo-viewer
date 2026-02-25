@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <Jolt/Jolt.h>
 #include "CombatRobot.h"
 
@@ -90,6 +91,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     coreSettings.mCollisionGroup.SetSubGroupID(0);
 
     JPH::Body* coreBody = bodyInterface.CreateBody(coreSettings);
+    if (!coreBody) throw std::runtime_error("FATAL: Failed to create body!");
     robotData.mainBodyId = coreBody->GetID();
     bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
 
@@ -151,6 +153,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         satSettings.mCollisionGroup.SetSubGroupID(i + 1);
 
         JPH::Body* satBody = bodyInterface.CreateBody(satSettings);
+        if (!satBody) throw std::runtime_error("FATAL: Failed to create body!");
         robotData.satellites[i].coreBodyId = satBody->GetID();
         bodyInterface.AddBody(robotData.satellites[i].coreBodyId, JPH::EActivation::Activate);
 
@@ -159,19 +162,12 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         rotSettings.mPosition1 = position;
         rotSettings.mPosition2 = position;
         
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = -FLT_MAX;
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = -FLT_MAX;
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = -FLT_MAX;
-        
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationX] = -FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationX] = FLT_MAX;
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationY] = -FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationY] = FLT_MAX;
-        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = -FLT_MAX;
-        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = FLT_MAX;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = 0.0f;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = 0.0f;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = 0.0f;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = 0.0f;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = 0.0f;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = 0.0f;
         
         rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationX] = 
             JPH::MotorSettings(motorTorque, jointDamping);
@@ -182,6 +178,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
             bodyInterface.CreateConstraint(&rotSettings, coreBody->GetID(), satBody->GetID()));
+        if (!robotData.satellites[i].rotationJoint) throw std::runtime_error("FATAL: Constraint creation returned nullptr!");
         physicsSystem->AddConstraint(robotData.satellites[i].rotationJoint);
         
         robotData.satellites[i].rotationJoint->SetMotorState(
@@ -225,26 +222,22 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         spikeSettings.mCollisionGroup.SetSubGroupID(NUM_SATELLITES + i + 1);
 
         JPH::Body* spikeBody = bodyInterface.CreateBody(spikeSettings);
+        if (!spikeBody) throw std::runtime_error("FATAL: Failed to create body!");
         robotData.satellites[i].spikeBodyId = spikeBody->GetID();
         bodyInterface.AddBody(robotData.satellites[i].spikeBodyId, JPH::EActivation::Activate);
 
         JPH::SliderConstraintSettings slideSettings;
+        slideSettings.mSpace = JPH::EConstraintSpace::WorldSpace;
+        slideSettings.mPoint1 = spikePos;
+        slideSettings.mPoint2 = spikePos;
         slideSettings.SetSliderAxis(direction);
         slideSettings.mLimitsMin = slideMin;
         slideSettings.mLimitsMax = slideMax;
         slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f);
-        
-        JPH::Vec3 perp;
-        if (std::abs(direction.GetY()) < 0.9f) perp = direction.Cross(JPH::Vec3(0, 1, 0)).Normalized();
-        else perp = direction.Cross(JPH::Vec3(1, 0, 0)).Normalized();
-        
-        slideSettings.mSliderAxis1 = direction;
-        slideSettings.mSliderAxis2 = perp;
-        slideSettings.mNormalAxis1 = perp;
-        slideSettings.mNormalAxis2 = direction.Cross(perp);
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
+        if (!robotData.satellites[i].slideJoint) throw std::runtime_error("FATAL: Constraint creation returned nullptr!");
         physicsSystem->AddConstraint(robotData.satellites[i].slideJoint);
         
         robotData.satellites[i].slideJoint->SetMotorState(JPH::EMotorState::Velocity);
@@ -374,6 +367,7 @@ void CombatRobotLoader::ApplyActions(
     const float* actions,
     JPH::PhysicsSystem* physicsSystem)
 {
+    JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
     float energySum = 0.0f;
 
     for (int i = 0; i < NUM_SATELLITES; ++i)
@@ -395,6 +389,24 @@ void CombatRobotLoader::ApplyActions(
         }
 
         energySum += std::abs(vx) + std::abs(vy) + std::abs(vz) + std::abs(slideVel);
+    }
+
+    const float reactionTorqueScale = 450.0f;
+    JPH::Vec3 reactionTorque(
+        actions[52] * reactionTorqueScale,
+        actions[53] * reactionTorqueScale,
+        actions[54] * reactionTorqueScale
+    );
+    bodyInterface.AddTorque(robot.mainBodyId, reactionTorque);
+
+    const float omniSpikeBurst = actions[55] * robot.actionScale.slideScale;
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        if (robot.satellites[i].slideJoint != nullptr)
+        {
+            float currentVel = robot.satellites[i].slideJoint->GetTargetVelocity();
+            robot.satellites[i].slideJoint->SetTargetVelocity(currentVel + omniSpikeBurst);
+        }
     }
 
     robot.totalEnergyUsed += energySum * 0.001f;
@@ -549,8 +561,36 @@ void CombatRobotLoader::GetObservations(
     observations[idx++] = robot.totalDamageTaken / 100.0f;
     observations[idx++] = robot.episodeSteps / 1000.0f;
     
-    while (idx < 208)
+    for (int i = 0; i < NUM_SATELLITES; ++i)
     {
-        observations[idx++] = 0.0f;
+        observations[idx++] = forces.impulseMagnitude[i];
     }
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        observations[idx++] = forces.jointStress[i];
+    }
+    
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        JPH::RVec3 satPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
+        observations[idx++] = static_cast<float>(satPos.GetY()) / 10.0f;
+    }
+    
+    JPH::Vec3 worldGravity(0.0f, -1.0f, 0.0f);
+    JPH::Vec3 localGravity = myRot.Conjugated() * worldGravity;
+    observations[idx++] = localGravity.GetX();
+    observations[idx++] = localGravity.GetY();
+    observations[idx++] = localGravity.GetZ();
+    
+    constexpr float coreMass = 13.0f;
+    observations[idx++] = myAngVel.GetX() * coreMass;
+    observations[idx++] = myAngVel.GetY() * coreMass;
+    observations[idx++] = myAngVel.GetZ() * coreMass;
+    
+    observations[idx++] = static_cast<float>(myPos.GetX()) / 100.0f;
+    observations[idx++] = static_cast<float>(myPos.GetZ()) / 100.0f;
+    
+    float dist = static_cast<float>((oppPos - myPos).Length());
+    float timeToCollision = dist / std::max(std::abs(closingSpeed), 0.1f);
+    observations[idx++] = timeToCollision / 20.0f;
 }
