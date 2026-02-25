@@ -66,38 +66,24 @@ void ForwardMoLU_AVX2(float* data, size_t size)
 
 void ForwardTanh_AVX2(float* data, size_t size)
 {
-    AssertAligned32(data);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
-    
-    const __m256 clampHi = _mm256_set1_ps(10.0f);
-    const __m256 clampLo = _mm256_set1_ps(-10.0f);
-    const __m256 pade_a = _mm256_set1_ps(0.275f);
-    const __m256 one = _mm256_set1_ps(1.0f);
-    const __m256 pade_b = _mm256_set1_ps(0.664f);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(data + i);
-        x = _mm256_min_ps(x, clampHi);
-        x = _mm256_max_ps(x, clampLo);
+        __m256 x = _mm256_loadu_ps(data + i);
         
-        __m256 x2 = _mm256_mul_ps(x, x);
+        alignas(32) float xArr[8];
+        _mm256_store_ps(xArr, x);
+        alignas(32) float thArr[8];
+        for (int j = 0; j < 8; ++j)
+        {
+            thArr[j] = tanhf(std::clamp(xArr[j], -10.0f, 10.0f));
+        }
+        __m256 th = _mm256_load_ps(thArr);
         
-        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
-        num = _mm256_mul_ps(x, num);
-        
-        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
-        
-        __m256 rcp = _mm256_rcp_ps(den);
-        __m256 rcp2 = _mm256_mul_ps(rcp, rcp);
-        __m256 correction = _mm256_fnmadd_ps(den, rcp2, rcp);
-        rcp = _mm256_add_ps(rcp, correction);
-        
-        __m256 th = _mm256_mul_ps(num, rcp);
-        _mm256_store_ps(data + i, th);
+        _mm256_storeu_ps(data + i, th);
     }
     
     for (; i < size; ++i)
@@ -109,8 +95,6 @@ void ForwardTanh_AVX2(float* data, size_t size)
 
 void ForwardReLU_AVX2(float* data, size_t size)
 {
-    AssertAligned32(data);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     const __m256 zero = _mm256_setzero_ps();
@@ -118,9 +102,9 @@ void ForwardReLU_AVX2(float* data, size_t size)
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(data + i);
+        __m256 x = _mm256_loadu_ps(data + i);
         __m256 result = _mm256_max_ps(zero, x);
-        _mm256_store_ps(data + i, result);
+        _mm256_storeu_ps(data + i, result);
     }
     
     for (; i < size; ++i)
@@ -131,8 +115,6 @@ void ForwardReLU_AVX2(float* data, size_t size)
 
 void ForwardSigmoid_AVX2(float* data, size_t size)
 {
-    AssertAligned32(data);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     
@@ -143,7 +125,7 @@ void ForwardSigmoid_AVX2(float* data, size_t size)
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(data + i);
+        __m256 x = _mm256_loadu_ps(data + i);
         x = _mm256_min_ps(x, clampHi);
         x = _mm256_max_ps(x, clampLo);
         
@@ -160,7 +142,7 @@ void ForwardSigmoid_AVX2(float* data, size_t size)
         __m256 denom = _mm256_add_ps(one, exp_neg_x);
         __m256 result = _mm256_div_ps(one, denom);
         
-        _mm256_store_ps(data + i, result);
+        _mm256_storeu_ps(data + i, result);
     }
     
     for (; i < size; ++i)
@@ -172,19 +154,16 @@ void ForwardSigmoid_AVX2(float* data, size_t size)
 
 void AddVectors_AVX2(float* dst, const float* src, size_t size)
 {
-    AssertAligned32(dst);
-    AssertAligned32(src);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 a = _mm256_load_ps(dst + i);
-        __m256 b = _mm256_load_ps(src + i);
+        __m256 a = _mm256_loadu_ps(dst + i);
+        __m256 b = _mm256_loadu_ps(src + i);
         __m256 result = _mm256_add_ps(a, b);
-        _mm256_store_ps(dst + i, result);
+        _mm256_storeu_ps(dst + i, result);
     }
     
     for (; i < size; ++i)
@@ -195,8 +174,6 @@ void AddVectors_AVX2(float* dst, const float* src, size_t size)
 
 void ScaleVector_AVX2(float* dst, float scale, size_t size)
 {
-    AssertAligned32(dst);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     const __m256 s = _mm256_set1_ps(scale);
@@ -204,9 +181,9 @@ void ScaleVector_AVX2(float* dst, float scale, size_t size)
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(dst + i);
+        __m256 x = _mm256_loadu_ps(dst + i);
         __m256 result = _mm256_mul_ps(x, s);
-        _mm256_store_ps(dst + i, result);
+        _mm256_storeu_ps(dst + i, result);
     }
     
     for (; i < size; ++i)
@@ -217,21 +194,17 @@ void ScaleVector_AVX2(float* dst, float scale, size_t size)
 
 void FMAVector_AVX2(float* dst, const float* a, const float* b, size_t size)
 {
-    AssertAligned32(dst);
-    AssertAligned32(a);
-    AssertAligned32(b);
-    
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(dst + i);
-        __m256 av = _mm256_load_ps(a + i);
-        __m256 bv = _mm256_load_ps(b + i);
+        __m256 x = _mm256_loadu_ps(dst + i);
+        __m256 av = _mm256_loadu_ps(a + i);
+        __m256 bv = _mm256_loadu_ps(b + i);
         __m256 result = _mm256_fmadd_ps(av, bv, x);
-        _mm256_store_ps(dst + i, result);
+        _mm256_storeu_ps(dst + i, result);
     }
     
     for (; i < size; ++i)
@@ -242,8 +215,6 @@ void FMAVector_AVX2(float* dst, const float* a, const float* b, size_t size)
 
 void Softmax_AVX2(float* data, size_t size)
 {
-    AssertAligned32(data);
-    
     float maxVal = data[0];
     for (size_t i = 1; i < size; ++i)
     {
@@ -270,10 +241,6 @@ void Softmax_AVX2(float* data, size_t size)
 
 void LayerNorm_AVX2(float* data, size_t size, const float* gamma, const float* beta)
 {
-    AssertAligned32(data);
-    AssertAligned32(gamma);
-    AssertAligned32(beta);
-    
     float mean = 0.0f;
     for (size_t i = 0; i < size; ++i)
     {
@@ -300,15 +267,15 @@ void LayerNorm_AVX2(float* data, size_t size, const float* gamma, const float* b
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_load_ps(data + i);
-        __m256 g = _mm256_load_ps(gamma + i);
-        __m256 b = _mm256_load_ps(beta + i);
+        __m256 x = _mm256_loadu_ps(data + i);
+        __m256 g = _mm256_loadu_ps(gamma + i);
+        __m256 b = _mm256_loadu_ps(beta + i);
         
         __m256 centered = _mm256_sub_ps(x, meanVec);
         __m256 normalized = _mm256_mul_ps(centered, invStdVec);
         __m256 scaled = _mm256_fmadd_ps(normalized, g, b);
         
-        _mm256_store_ps(data + i, scaled);
+        _mm256_storeu_ps(data + i, scaled);
     }
     
     for (; i < size; ++i)
@@ -320,9 +287,6 @@ void LayerNorm_AVX2(float* data, size_t size, const float* gamma, const float* b
 void MatMul_AVX2(const float* A, const float* B, float* C, 
                  size_t M, size_t K, size_t N)
 {
-    AssertAligned32(A);
-    AssertAligned32(B);
-    AssertAligned32(C);
     
     std::memset(C, 0, M * N * sizeof(float));
     
@@ -353,10 +317,6 @@ void MatMul_AVX2(const float* A, const float* B, float* C,
 void MatVec_FMA_AVX2(const float* weights, const float* inputs, float* outputs,
                       size_t input_dim, size_t output_dim)
 {
-    AssertAligned32(weights);
-    AssertAligned32(inputs);
-    AssertAligned32(outputs);
-    
     const size_t simdWidth = 8;
     
     for (size_t outIdx = 0; outIdx < output_dim; ++outIdx)
@@ -374,15 +334,15 @@ void MatVec_FMA_AVX2(const float* weights, const float* inputs, float* outputs,
             PrefetchL1(wPtr + 64);
             PrefetchL1(inputs + inIdx + 64);
             
-            __m256 w0 = _mm256_load_ps(wPtr);
-            __m256 w1 = _mm256_load_ps(wPtr + 8);
-            __m256 w2 = _mm256_load_ps(wPtr + 16);
-            __m256 w3 = _mm256_load_ps(wPtr + 24);
+            __m256 w0 = _mm256_loadu_ps(wPtr);
+            __m256 w1 = _mm256_loadu_ps(wPtr + 8);
+            __m256 w2 = _mm256_loadu_ps(wPtr + 16);
+            __m256 w3 = _mm256_loadu_ps(wPtr + 24);
             
-            __m256 i0 = _mm256_load_ps(inputs + inIdx);
-            __m256 i1 = _mm256_load_ps(inputs + inIdx + 8);
-            __m256 i2 = _mm256_load_ps(inputs + inIdx + 16);
-            __m256 i3 = _mm256_load_ps(inputs + inIdx + 24);
+            __m256 i0 = _mm256_loadu_ps(inputs + inIdx);
+            __m256 i1 = _mm256_loadu_ps(inputs + inIdx + 8);
+            __m256 i2 = _mm256_loadu_ps(inputs + inIdx + 16);
+            __m256 i3 = _mm256_loadu_ps(inputs + inIdx + 24);
             
             sum0 = _mm256_fmadd_ps(w0, i0, sum0);
             sum1 = _mm256_fmadd_ps(w1, i1, sum1);
@@ -392,8 +352,8 @@ void MatVec_FMA_AVX2(const float* weights, const float* inputs, float* outputs,
         
         for (; inIdx + 8 <= input_dim; inIdx += 8)
         {
-            __m256 w = _mm256_load_ps(weights + outIdx * input_dim + inIdx);
-            __m256 i = _mm256_load_ps(inputs + inIdx);
+            __m256 w = _mm256_loadu_ps(weights + outIdx * input_dim + inIdx);
+            __m256 i = _mm256_loadu_ps(inputs + inIdx);
             sum0 = _mm256_fmadd_ps(w, i, sum0);
         }
         
@@ -421,10 +381,6 @@ void MatVec_FMA_AVX2(const float* weights, const float* inputs, float* outputs,
 void MatVec_FMA_AVX2_Prefetch(const float* weights, const float* inputs, float* outputs,
                                size_t input_dim, size_t output_dim)
 {
-    AssertAligned32(weights);
-    AssertAligned32(inputs);
-    AssertAligned32(outputs);
-    
     const size_t simdWidth = 8;
     const size_t prefetchDistance = 4 * CACHE_LINE_SIZE / sizeof(float);
     
@@ -444,15 +400,15 @@ void MatVec_FMA_AVX2_Prefetch(const float* weights, const float* inputs, float* 
             _mm_prefetch(reinterpret_cast<const char*>(inputs + inIdx + prefetchDistance), _MM_HINT_T0);
             _mm_prefetch(reinterpret_cast<const char*>(wPtr + prefetchDistance + 8), _MM_HINT_T0);
             
-            __m256 w0 = _mm256_load_ps(wPtr);
-            __m256 w1 = _mm256_load_ps(wPtr + 8);
-            __m256 w2 = _mm256_load_ps(wPtr + 16);
-            __m256 w3 = _mm256_load_ps(wPtr + 24);
+            __m256 w0 = _mm256_loadu_ps(wPtr);
+            __m256 w1 = _mm256_loadu_ps(wPtr + 8);
+            __m256 w2 = _mm256_loadu_ps(wPtr + 16);
+            __m256 w3 = _mm256_loadu_ps(wPtr + 24);
             
-            __m256 i0 = _mm256_load_ps(inputs + inIdx);
-            __m256 i1 = _mm256_load_ps(inputs + inIdx + 8);
-            __m256 i2 = _mm256_load_ps(inputs + inIdx + 16);
-            __m256 i3 = _mm256_load_ps(inputs + inIdx + 24);
+            __m256 i0 = _mm256_loadu_ps(inputs + inIdx);
+            __m256 i1 = _mm256_loadu_ps(inputs + inIdx + 8);
+            __m256 i2 = _mm256_loadu_ps(inputs + inIdx + 16);
+            __m256 i3 = _mm256_loadu_ps(inputs + inIdx + 24);
             
             sum0 = _mm256_fmadd_ps(w0, i0, sum0);
             sum1 = _mm256_fmadd_ps(w1, i1, sum1);
@@ -464,8 +420,8 @@ void MatVec_FMA_AVX2_Prefetch(const float* weights, const float* inputs, float* 
         {
             _mm_prefetch(reinterpret_cast<const char*>(weights + outIdx * input_dim + inIdx + 8), _MM_HINT_T0);
             
-            __m256 w = _mm256_load_ps(weights + outIdx * input_dim + inIdx);
-            __m256 i = _mm256_load_ps(inputs + inIdx);
+            __m256 w = _mm256_loadu_ps(weights + outIdx * input_dim + inIdx);
+            __m256 i = _mm256_loadu_ps(inputs + inIdx);
             sum0 = _mm256_fmadd_ps(w, i, sum0);
         }
         

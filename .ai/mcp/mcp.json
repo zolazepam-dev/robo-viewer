@@ -1,0 +1,90 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/cammyz/robo-viewer"
+      ],
+      "env": {},
+      "timeout": 60000,
+      "trust": false
+    },
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git"
+      ],
+      "env": {},
+      "timeout": 60000,
+      "trust": false
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "env": {},
+      "timeout": 30000,
+      "trust": false
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {},
+      "timeout": 30000,
+      "trust": false
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {},
+      "timeout": 120000,
+      "trust": false
+    },
+    "time": {
+      "command": "/home/cammyz/.local/bin/mcp-server-time-fixed",
+      "args": [],
+      "env": {},
+      "timeout": 10000,
+      "trust": true
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "env": {},
+      "timeout": 60000,
+      "trust": false
+    },
+    "duckdb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "duckdb-mcp"
+      ],
+      "env": {},
+      "timeout": 60000,
+      "trust": false
+    },
+    "everything": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ],
+      "env": {},
+      "timeout": 30000,
+      "trust": false
+    }
+  }
+}

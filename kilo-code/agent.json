@@ -1,0 +1,17 @@
+{
+  "id": "kilo-code",
+  "name": "Kilo Code",
+  "version": "7.0.27",
+  "description": "Kilo Code - AI coding assistant with support for 500+ AI models, multi-agent orchestration, and seamless session syncing across IDEs",
+  "repository": "https://github.com/Kilo-Org/kilocode",
+  "authors": [
+    "Kilo Code Inc."
+  ],
+  "license": "Apache-2.0",
+  "distribution": {
+    "npx": {
+      "package": "@kilocode/cli@7.0.27",
+      "args": ["acp"]
+    }
+  }
+}

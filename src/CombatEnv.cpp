@@ -204,7 +204,7 @@ void CombatEnv::UpdateForceSensors()
     }
 }
 
-void CombatEnv::BuildObservationVector(std::vector<float>& obs, const CombatRobotData& robot,
+void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const CombatRobotData& robot,
                                         const CombatRobotData& opponent, const ForceSensorReading& forces)
 {
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();

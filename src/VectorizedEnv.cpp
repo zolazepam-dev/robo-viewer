@@ -47,6 +47,9 @@ void VectorizedEnv::Init()
     mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
     mAllRewards.resize(mNumEnvs * 2, 0.0f);
     mAllDones.resize(mNumEnvs, false);
+    
+    AssertAligned32(mAllObservations.data());
+    AssertAligned32(mAllRewards.data());
 
     Reset(-1);
 

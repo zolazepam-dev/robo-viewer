@@ -10,6 +10,7 @@
 #include "NeuralMath.h"
 #include "NeuralNetwork.h"
 #include "CombatRobot.h"
+#include "AlignedAllocator.h"
 
 constexpr float ARENA_SIZE = 12.0f;
 constexpr float ARENA_HALF = ARENA_SIZE * 0.5f;
@@ -36,16 +37,18 @@ struct ForceSensorReading
     }
 };
 
-struct StepResult
+struct alignas(32) StepResult
 {
-    std::vector<float> obs_robot1;
-    std::vector<float> obs_robot2;
+    AlignedVector32<float> obs_robot1;
+    AlignedVector32<float> obs_robot2;
     VectorReward reward1;
     VectorReward reward2;
     ForceSensorReading forces1;
     ForceSensorReading forces2;
     bool done = false;
     int winner = 0;
+    
+    StepResult() : obs_robot1(208), obs_robot2(208) {}
 };
 
 class CombatContactListener : public JPH::ContactListener
@@ -110,7 +113,7 @@ private:
     float ComputeAirtime() const;
     float ComputeEnergyUsed(const float* actions, int actionDim) const;
     void UpdateForceSensors();
-    void BuildObservationVector(std::vector<float>& obs, const CombatRobotData& robot,
+    void BuildObservationVector(AlignedVector32<float>& obs, const CombatRobotData& robot,
                                  const CombatRobotData& opponent, const ForceSensorReading& forces);
 
     JPH::PhysicsSystem* mPhysicsSystem = nullptr;
