@@ -1,0 +1,512 @@
+<mujoco>
+      <option timestep="0.001" gravity="0 0 -9.8" integrator="RK4" />
+
+      <visual>
+            <headlight ambient="0.4 0.3 0.1" diffuse="0.8 0.7 0.5" specular="0.3 0.3 0.3" />
+            <rgba fog="0.3 0.22 0.05 1" />
+            <quality shadowsize="4096" />
+      </visual>
+
+      <statistic extent="10" meansize="0.5" />
+
+      <default>
+            <geom friction="1.8 0.1 0.1" solref="0.01 1" solimp="0.9 0.95 0.001" />
+            <joint damping="0.8" armature="0.5" />
+            <motor gear="450" />
+      </default>
+
+      <asset>
+            <texture name="grid_tex" type="2d" builtin="checker" width="512" height="512"
+                  rgb1="0.1 0.1 0.2" rgb2="0.15 0.15 0.3" />
+
+            <material name="grid_material"
+                  texture="grid_tex"
+                  texrepeat="10 10"
+                  specular="0.2"
+                  shininess="0.1"
+                  rgba="0.1 0.06 0.04 0" />
+
+            <material name="wall_material"
+                  specular="0.5"
+                  shininess="0.1"
+                  rgba="0.18 0.09 0.06 0" />
+
+            <material name="safety_wall_material" rgba="1 0 0 0" /> <!-- Invisible -->
+
+            <material name="roof_material"
+                  specular="0.3"
+                  shininess="0.2"
+                  rgba="0.2 0.2 0.3 0" />
+
+            <texture name="robot1_tex" type="cube" builtin="flat" width="512" height="512"
+                  mark="random" markrgb="1.0 0.2 0.2" />
+            <texture name="robot2_tex" type="cube" builtin="flat" width="512" height="512"
+                  mark="random" markrgb="0.2 0.2 1.0" />
+            <material name="robot1_body_mat" texture="robot1_tex" specular="0.8" shininess="0.9"
+                  rgba="1.0 0.55 0.0 1" />
+            <material name="robot2_body_mat" texture="robot2_tex" specular="0.8" shininess="0.9"
+                  rgba="1.0 0.97 0.86 1" />
+
+            <material name="spike_mat" specular="1.0" shininess="1.0" rgba="0.5 0.5 0.5 1" />
+            <material name="yellow_outline" rgba="1 1 0 1" specular="1" shininess="1" emission="1.0" />
+
+            <!-- LED Eye Materials (emissive for glow effect) -->
+            <material name="led_eye_red" rgba="1 0 0 1" emission="2.0" specular="0.3" shininess="0.5"/>
+            <material name="led_eye_blue" rgba="0 0 1 1" emission="2.0" specular="0.3" shininess="0.5"/>
+            <material name="led_eye_green" rgba="0 1 0 1" emission="2.0" specular="0.3" shininess="0.5"/>
+            <material name="eye_pupil" rgba="0 0 0 1" emission="0.0" specular="0.1"/>
+      </asset>
+
+      <worldbody>
+            <light name="main_light" pos="0 0 15" dir="0 0 -1" diffuse="0.9 0.9 1.0"
+                  specular="0.5 0.5 0.8" />
+            <geom name="floor" type="plane" size="50 50 0.1"
+                  material="grid_material"
+                  condim="3"
+                  friction="1 0.005 0.005" />
+
+            <!-- Thick Outer Arena Walls -->
+            <geom name="wall_n" type="box" pos="0 15.0 6.0" size="12.5 2.5 6.0" material="wall_material" />
+            <geom name="wall_s" type="box" pos="0 -15.0 6.0" size="12.5 2.5 6.0" material="wall_material" />
+            <geom name="wall_e" type="box" pos="15.0 0 6.0" size="2.5 12.5 6.0" material="wall_material" />
+            <geom name="wall_w" type="box" pos="-15.0 0 6.0" size="2.5 12.5 6.0" material="wall_material" />
+            <geom name="roof" type="box" pos="0 0 12.1" size="17.6 17.6 0.1" material="roof_material" />
+
+            <!-- Rounded Corner Walls -->
+            <geom name="corner_ne" type="cylinder" fromto="12.5 12.5 0 12.5 12.5 12" size="2.5" material="wall_material" />
+            <geom name="corner_nw" type="cylinder" fromto="-12.5 12.5 0 -12.5 12.5 12" size="2.5" material="wall_material" />
+            <geom name="corner_se" type="cylinder" fromto="12.5 -12.5 0 12.5 -12.5 12" size="2.5" material="wall_material" />
+            <geom name="corner_sw" type="cylinder" fromto="-12.5 -12.5 0 -12.5 -12.5 12" size="2.5" material="wall_material" />
+
+            <!-- Yellow Arena Outline -->
+            <geom name="outline_n_floor" type="box" pos="0 12.0 0.01" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_s_floor" type="box" pos="0 -12.0 0.01" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_e_floor" type="box" pos="12.0 0 0.01" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_w_floor" type="box" pos="-12.0 0 0.01" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <!-- Ceiling -->
+            <geom name="outline_n_ceil" type="box" pos="0 12.0 12.0" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_s_ceil" type="box" pos="0 -12.0 12.0" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_e_ceil" type="box" pos="12.0 0 12.0" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_w_ceil" type="box" pos="-12.0 0 12.0" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+            <!-- Vertical Pillars -->
+            <geom name="outline_ne_pillar" type="box" pos="12.0 12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_nw_pillar" type="box" pos="-12.0 12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_se_pillar" type="box" pos="12.0 -12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+            <geom name="outline_sw_pillar" type="box" pos="-12.0 -12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+
+
+            <!-- Robot 1 (Bright Red) -->
+            <body name="robot1" pos="-3.3 0 0.7">
+                  <freejoint name="r1_root" />
+                  <geom name="r1_body" type="sphere" size="0.5"
+                        material="robot1_body_mat"
+                        mass="13" />
+                  <site name="r1_center" pos="0 0 0" size="0.01" rgba="1 0 0 1"/>
+                  <site name="r1_ray_fwd_site" pos="0 0 0" size="0.01" euler="0 0 0"/>
+                  <site name="r1_ray_fwd_l_site" pos="0 0 0" size="0.01" euler="0 0 22.5"/>
+                  <site name="r1_ray_fwd_r_site" pos="0 0 0" size="0.01" euler="0 0 -22.5"/>
+                  <site name="r1_ray_45_l_site" pos="0 0 0" size="0.01" euler="0 0 45"/>
+                  <site name="r1_ray_45_r_site" pos="0 0 0" size="0.01" euler="0 0 -45"/>
+                  <site name="r1_ray_90_l_site" pos="0 0 0" size="0.01" euler="0 0 90"/>
+                  <site name="r1_ray_90_r_site" pos="0 0 0" size="0.01" euler="0 0 -90"/>
+                  <site name="r1_ray_back_site" pos="0 0 0" size="0.01" euler="0 0 180"/>
+                  <site name="r1_ray_down_site" pos="0 0 0" size="0.01" euler="0 -90 0"/>
+                  <site name="r1_ray_up_site" pos="0 0 0" size="0.01" euler="0 90 0"/>
+
+                  <!-- Satellites R1 -->
+                  <body name="r1_s1" pos="0 0 0">
+                        <joint name="r1_s1y" type="hinge" axis="0 0 1" />
+                        <joint name="r1_s1p" type="hinge" axis="0 1 0" />
+                        <joint name="r1_s1r" type="hinge" axis="1 0 0" />
+                        <geom name="r1_sat1_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5" />
+                        <body name="r1_s1_lancer" pos="1.4 0 0">
+                            <joint name="r1_s1_slide" type="slide" axis="1 0 0" range="0 0.5"/>
+                            <geom name="r1_sat1_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r1_s1_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r1_s2" pos="0 0 0">
+                        <joint name="r1_s2y" type="hinge" axis="0 0 1" />
+                        <joint name="r1_s2p" type="hinge" axis="0 1 0" />
+                        <joint name="r1_s2r" type="hinge" axis="1 0 0" />
+                        <geom name="r1_sat2_core" type="sphere" pos="-0.9 0 0" size="0.1" material="robot1_body_mat" mass="3.5" />
+                        <body name="r1_s2_lancer" pos="-0.9 0 0">
+                            <joint name="r1_s2_slide" type="slide" axis="-1 0 0" range="0 0.5"/>
+                            <geom name="r1_sat2_spike" type="cylinder" fromto="0 0 0 -0.4 0 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r1_s2_site" pos="-0.4 0 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r1_s3" pos="0 0 0">
+                        <joint name="r1_s3y" type="hinge" axis="0 0 1" />
+                        <joint name="r1_s3p" type="hinge" axis="1 0 0" />
+                        <joint name="r1_s3r" type="hinge" axis="0 1 0" />
+                        <geom name="r1_sat3_core" type="sphere" pos="0 1.4 0" size="0.1" material="robot1_body_mat" mass="3.5" />
+                        <body name="r1_s3_lancer" pos="0 1.4 0">
+                            <joint name="r1_s3_slide" type="slide" axis="0 1 0" range="0 0.5"/>
+                            <geom name="r1_sat3_spike" type="cylinder" fromto="0 0 0 0 0.4 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r1_s3_site" pos="0 0.4 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r1_s4" pos="0 0 0">
+                        <joint name="r1_s4y" type="hinge" axis="0 0 1" />
+                        <joint name="r1_s4p" type="hinge" axis="1 0 0" />
+                        <joint name="r1_s4r" type="hinge" axis="0 1 0" />
+                        <geom name="r1_sat4_core" type="sphere" pos="0 -0.9 0" size="0.1" material="robot1_body_mat" mass="3.5" />
+                        <body name="r1_s4_lancer" pos="0 -0.9 0">
+                            <joint name="r1_s4_slide" type="slide" axis="0 -1 0" range="0 0.5"/>
+                            <geom name="r1_sat4_spike" type="cylinder" fromto="0 0 0 0 -0.4 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r1_s4_site" pos="0 -0.4 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <!-- New Satellites s5-s13 -->
+                  <body name="r1_s5" pos="0 0 0" euler="0 -45 0">
+                      <joint name="r1_s5y" type="hinge" axis="0 0 1"/><joint name="r1_s5p" type="hinge" axis="0 1 0"/><joint name="r1_s5r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat5_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s5_lancer" pos="1.4 0 0"><joint name="r1_s5_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat5_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s5_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s6" pos="0 0 0" euler="0 -45 72">
+                      <joint name="r1_s6y" type="hinge" axis="0 0 1"/><joint name="r1_s6p" type="hinge" axis="0 1 0"/><joint name="r1_s6r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat6_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s6_lancer" pos="1.4 0 0"><joint name="r1_s6_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat6_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s6_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s7" pos="0 0 0" euler="0 -45 144">
+                      <joint name="r1_s7y" type="hinge" axis="0 0 1"/><joint name="r1_s7p" type="hinge" axis="0 1 0"/><joint name="r1_s7r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat7_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s7_lancer" pos="1.4 0 0"><joint name="r1_s7_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat7_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s7_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s8" pos="0 0 0" euler="0 -45 216">
+                      <joint name="r1_s8y" type="hinge" axis="0 0 1"/><joint name="r1_s8p" type="hinge" axis="0 1 0"/><joint name="r1_s8r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat8_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s8_lancer" pos="1.4 0 0"><joint name="r1_s8_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat8_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s8_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s9" pos="0 0 0" euler="0 -45 288">
+                      <joint name="r1_s9y" type="hinge" axis="0 0 1"/><joint name="r1_s9p" type="hinge" axis="0 1 0"/><joint name="r1_s9r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat9_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s9_lancer" pos="1.4 0 0"><joint name="r1_s9_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat9_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s9_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s10" pos="0 0 0" euler="0 45 45">
+                      <joint name="r1_s10y" type="hinge" axis="0 0 1"/><joint name="r1_s10p" type="hinge" axis="0 1 0"/><joint name="r1_s10r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat10_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s10_lancer" pos="1.4 0 0"><joint name="r1_s10_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat10_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s10_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s11" pos="0 0 0" euler="0 45 135">
+                      <joint name="r1_s11y" type="hinge" axis="0 0 1"/><joint name="r1_s11p" type="hinge" axis="0 1 0"/><joint name="r1_s11r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat11_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s11_lancer" pos="1.4 0 0"><joint name="r1_s11_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat11_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s11_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s12" pos="0 0 0" euler="0 45 225">
+                      <joint name="r1_s12y" type="hinge" axis="0 0 1"/><joint name="r1_s12p" type="hinge" axis="0 1 0"/><joint name="r1_s12r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat12_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s12_lancer" pos="1.4 0 0"><joint name="r1_s12_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat12_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s12_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r1_s13" pos="0 0 0" euler="0 45 315">
+                      <joint name="r1_s13y" type="hinge" axis="0 0 1"/><joint name="r1_s13p" type="hinge" axis="0 1 0"/><joint name="r1_s13r" type="hinge" axis="1 0 0"/>
+                      <geom name="r1_sat13_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot1_body_mat" mass="3.5"/>
+                      <body name="r1_s13_lancer" pos="1.4 0 0"><joint name="r1_s13_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r1_sat13_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r1_s13_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+
+                  <!-- LED Eye Assemblies for Robot 1 -->
+                  <!-- Left Eye Assembly -->
+                  <body name="r1_eye_left_base" pos="0.3 0.2 0.1">
+                        <joint name="r1_eye_yaw_left" type="hinge" axis="0 0 1" range="-45 45"/>
+                        <joint name="r1_eye_pitch_left" type="hinge" axis="0 1 0" range="-30 30"/>
+                        <geom name="r1_eye_geom_left" type="sphere" size="0.2" material="led_eye_red" contype="0" conaffinity="0"/>
+                        <geom name="r1_pupil_left" type="sphere" pos="0.08 0 0.08" size="0.06" material="eye_pupil" contype="0" conaffinity="0"/>
+                  </body>
+
+                  <!-- Right Eye Assembly (mirrored) -->
+                  <body name="r1_eye_right_base" pos="0.3 -0.2 0.1">
+                        <joint name="r1_eye_yaw_right" type="hinge" axis="0 0 1" range="-45 45"/>
+                        <joint name="r1_eye_pitch_right" type="hinge" axis="0 1 0" range="-30 30"/>
+                        <geom name="r1_eye_geom_right" type="sphere" size="0.2" material="led_eye_red" contype="0" conaffinity="0"/>
+                        <geom name="r1_pupil_right" type="sphere" pos="0.08 0 0.08" size="0.06" material="eye_pupil" contype="0" conaffinity="0"/>
+                  </body>
+            </body>
+
+            <!-- Robot 2 (Bright Blue) -->
+            <body name="robot2" pos="3.3 0 0.7">
+                  <freejoint name="r2_root" />
+                  <geom name="r2_body" type="sphere" size="0.5" material="robot2_body_mat" mass="13" />
+                  <site name="r2_center" pos="0 0 0" size="0.01" rgba="0 0 1 1"/>
+                  <site name="r2_ray_fwd_site" pos="0 0 0" size="0.01" euler="0 0 180"/>
+                  <site name="r2_ray_fwd_l_site" pos="0 0 0" size="0.01" euler="0 0 157.5"/>
+                  <site name="r2_ray_fwd_r_site" pos="0 0 0" size="0.01" euler="0 0 202.5"/>
+                  <site name="r2_ray_45_l_site" pos="0 0 0" size="0.01" euler="0 0 135"/>
+                  <site name="r2_ray_45_r_site" pos="0 0 0" size="0.01" euler="0 0 225"/>
+                  <site name="r2_ray_90_l_site" pos="0 0 0" size="0.01" euler="0 0 90"/>
+                  <site name="r2_ray_90_r_site" pos="0 0 0" size="0.01" euler="0 0 -90"/>
+                  <site name="r2_ray_back_site" pos="0 0 0" size="0.01" euler="0 0 0"/>
+                  <site name="r2_ray_down_site" pos="0 0 0" size="0.01" euler="0 -90 0"/>
+                  <site name="r2_ray_up_site" pos="0 0 0" size="0.01" euler="0 90 0"/>
+
+                  <!-- Satellites R2 -->
+                  <body name="r2_s1" pos="0 0 0">
+                        <joint name="r2_s1y" type="hinge" axis="0 0 1" />
+                        <joint name="r2_s1p" type="hinge" axis="0 1 0" />
+                        <joint name="r2_s1r" type="hinge" axis="1 0 0" />
+                        <geom name="r2_sat1_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5" />
+                        <body name="r2_s1_lancer" pos="1.4 0 0">
+                            <joint name="r2_s1_slide" type="slide" axis="1 0 0" range="0 0.5"/>
+                            <geom name="r2_sat1_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r2_s1_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r2_s2" pos="0 0 0">
+                        <joint name="r2_s2y" type="hinge" axis="0 0 1" />
+                        <joint name="r2_s2p" type="hinge" axis="0 1 0" />
+                        <joint name="r2_s2r" type="hinge" axis="1 0 0" />
+                        <geom name="r2_sat2_core" type="sphere" pos="-0.9 0 0" size="0.1" material="robot2_body_mat" mass="3.5" />
+                        <body name="r2_s2_lancer" pos="-0.9 0 0">
+                            <joint name="r2_s2_slide" type="slide" axis="-1 0 0" range="0 0.5"/>
+                            <geom name="r2_sat2_spike" type="cylinder" fromto="0 0 0 -0.4 0 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r2_s2_site" pos="-0.4 0 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r2_s3" pos="0 0 0">
+                        <joint name="r2_s3y" type="hinge" axis="0 0 1" />
+                        <joint name="r2_s3p" type="hinge" axis="1 0 0" />
+                        <joint name="r2_s3r" type="hinge" axis="0 1 0" />
+                        <geom name="r2_sat3_core" type="sphere" pos="0 1.4 0" size="0.1" material="robot2_body_mat" mass="3.5" />
+                        <body name="r2_s3_lancer" pos="0 1.4 0">
+                            <joint name="r2_s3_slide" type="slide" axis="0 1 0" range="0 0.5"/>
+                            <geom name="r2_sat3_spike" type="cylinder" fromto="0 0 0 0 0.4 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r2_s3_site" pos="0 0.4 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <body name="r2_s4" pos="0 0 0">
+                        <joint name="r2_s4y" type="hinge" axis="0 0 1" />
+                        <joint name="r2_s4p" type="hinge" axis="1 0 0" />
+                        <joint name="r2_s4r" type="hinge" axis="0 1 0" />
+                        <geom name="r2_sat4_core" type="sphere" pos="0 -0.9 0" size="0.1" material="robot2_body_mat" mass="3.5" />
+                        <body name="r2_s4_lancer" pos="0 -0.9 0">
+                            <joint name="r2_s4_slide" type="slide" axis="0 -1 0" range="0 0.5"/>
+                            <geom name="r2_sat4_spike" type="cylinder" fromto="0 0 0 0 -0.4 0" size="0.02" material="spike_mat" mass="0.5" />
+                            <site name="r2_s4_site" pos="0 -0.4 0" size="0.03" rgba="1 1 1 0.5" />
+                        </body>
+                  </body>
+                  <!-- New Satellites s5-s13 for R2 -->
+                  <body name="r2_s5" pos="0 0 0" euler="0 -45 0">
+                      <joint name="r2_s5y" type="hinge" axis="0 0 1"/><joint name="r2_s5p" type="hinge" axis="0 1 0"/><joint name="r2_s5r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat5_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s5_lancer" pos="1.4 0 0"><joint name="r2_s5_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat5_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s5_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s6" pos="0 0 0" euler="0 -45 72">
+                      <joint name="r2_s6y" type="hinge" axis="0 0 1"/><joint name="r2_s6p" type="hinge" axis="0 1 0"/><joint name="r2_s6r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat6_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s6_lancer" pos="1.4 0 0"><joint name="r2_s6_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat6_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s6_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s7" pos="0 0 0" euler="0 -45 144">
+                      <joint name="r2_s7y" type="hinge" axis="0 0 1"/><joint name="r2_s7p" type="hinge" axis="0 1 0"/><joint name="r2_s7r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat7_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s7_lancer" pos="1.4 0 0"><joint name="r2_s7_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat7_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s7_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s8" pos="0 0 0" euler="0 -45 216">
+                      <joint name="r2_s8y" type="hinge" axis="0 0 1"/><joint name="r2_s8p" type="hinge" axis="0 1 0"/><joint name="r2_s8r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat8_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s8_lancer" pos="1.4 0 0"><joint name="r2_s8_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat8_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s8_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s9" pos="0 0 0" euler="0 -45 288">
+                      <joint name="r2_s9y" type="hinge" axis="0 0 1"/><joint name="r2_s9p" type="hinge" axis="0 1 0"/><joint name="r2_s9r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat9_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s9_lancer" pos="1.4 0 0"><joint name="r2_s9_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat9_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s9_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s10" pos="0 0 0" euler="0 45 45">
+                      <joint name="r2_s10y" type="hinge" axis="0 0 1"/><joint name="r2_s10p" type="hinge" axis="0 1 0"/><joint name="r2_s10r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat10_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s10_lancer" pos="1.4 0 0"><joint name="r2_s10_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat10_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s10_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s11" pos="0 0 0" euler="0 45 135">
+                      <joint name="r2_s11y" type="hinge" axis="0 0 1"/><joint name="r2_s11p" type="hinge" axis="0 1 0"/><joint name="r2_s11r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat11_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s11_lancer" pos="1.4 0 0"><joint name="r2_s11_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat11_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s11_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s12" pos="0 0 0" euler="0 45 225">
+                      <joint name="r2_s12y" type="hinge" axis="0 0 1"/><joint name="r2_s12p" type="hinge" axis="0 1 0"/><joint name="r2_s12r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat12_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s12_lancer" pos="1.4 0 0"><joint name="r2_s12_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat12_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s12_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+                  <body name="r2_s13" pos="0 0 0" euler="0 45 315">
+                      <joint name="r2_s13y" type="hinge" axis="0 0 1"/><joint name="r2_s13p" type="hinge" axis="0 1 0"/><joint name="r2_s13r" type="hinge" axis="1 0 0"/>
+                      <geom name="r2_sat13_core" type="sphere" pos="1.4 0 0" size="0.1" material="robot2_body_mat" mass="3.5"/>
+                      <body name="r2_s13_lancer" pos="1.4 0 0"><joint name="r2_s13_slide" type="slide" axis="1 0 0" range="0 0.5"/><geom name="r2_sat13_spike" type="cylinder" fromto="0 0 0 0.4 0 0" size="0.02" material="spike_mat" mass="0.5"/><site name="r2_s13_site" pos="0.4 0 0" size="0.03" rgba="1 1 1 0.5"/></body>
+                  </body>
+
+                  <!-- LED Eye Assemblies for Robot 2 -->
+                  <!-- Left Eye Assembly -->
+                  <body name="r2_eye_left_base" pos="0.3 0.2 0.1">
+                        <joint name="r2_eye_yaw_left" type="hinge" axis="0 0 1" range="-45 45"/>
+                        <joint name="r2_eye_pitch_left" type="hinge" axis="0 1 0" range="-30 30"/>
+                        <geom name="r2_eye_geom_left" type="sphere" size="0.2" material="led_eye_blue" contype="0" conaffinity="0"/>
+                        <geom name="r2_pupil_left" type="sphere" pos="0.08 0 0.08" size="0.06" material="eye_pupil" contype="0" conaffinity="0"/>
+                  </body>
+
+                  <!-- Right Eye Assembly (mirrored) -->
+                  <body name="r2_eye_right_base" pos="0.3 -0.2 0.1">
+                        <joint name="r2_eye_yaw_right" type="hinge" axis="0 0 1" range="-45 45"/>
+                        <joint name="r2_eye_pitch_right" type="hinge" axis="0 1 0" range="-30 30"/>
+                        <geom name="r2_eye_geom_right" type="sphere" size="0.2" material="led_eye_blue" contype="0" conaffinity="0"/>
+                        <geom name="r2_pupil_right" type="sphere" pos="0.08 0 0.08" size="0.06" material="eye_pupil" contype="0" conaffinity="0"/>
+                  </body>
+            </body>
+      </worldbody>
+
+      <actuator>
+            <!-- R1 Actuators (16) -->
+            <motor name="r1m1y" joint="r1_s1y" /> <motor name="r1m1p" joint="r1_s1p" /> <motor name="r1m1r" joint="r1_s1r" /> <motor name="r1m1s" joint="r1_s1_slide" />
+            <motor name="r1m2y" joint="r1_s2y" /> <motor name="r1m2p" joint="r1_s2p" /> <motor name="r1m2r" joint="r1_s2r" /> <motor name="r1m2s" joint="r1_s2_slide" />
+            <motor name="r1m3y" joint="r1_s3y" /> <motor name="r1m3p" joint="r1_s3p" /> <motor name="r1m3r" joint="r1_s3r" /> <motor name="r1m3s" joint="r1_s3_slide" />
+            <motor name="r1m4y" joint="r1_s4y" /> <motor name="r1m4p" joint="r1_s4p" /> <motor name="r1m4r" joint="r1_s4r" /> <motor name="r1m4s" joint="r1_s4_slide" />
+            <motor name="r1m5y" joint="r1_s5y" /> <motor name="r1m5p" joint="r1_s5p" /> <motor name="r1m5r" joint="r1_s5r" /> <motor name="r1m5s" joint="r1_s5_slide" />
+            <motor name="r1m6y" joint="r1_s6y" /> <motor name="r1m6p" joint="r1_s6p" /> <motor name="r1m6r" joint="r1_s6r" /> <motor name="r1m6s" joint="r1_s6_slide" />
+            <motor name="r1m7y" joint="r1_s7y" /> <motor name="r1m7p" joint="r1_s7p" /> <motor name="r1m7r" joint="r1_s7r" /> <motor name="r1m7s" joint="r1_s7_slide" />
+            <motor name="r1m8y" joint="r1_s8y" /> <motor name="r1m8p" joint="r1_s8p" /> <motor name="r1m8r" joint="r1_s8r" /> <motor name="r1m8s" joint="r1_s8_slide" />
+            <motor name="r1m9y" joint="r1_s9y" /> <motor name="r1m9p" joint="r1_s9p" /> <motor name="r1m9r" joint="r1_s9r" /> <motor name="r1m9s" joint="r1_s9_slide" />
+            <motor name="r1m10y" joint="r1_s10y" /> <motor name="r1m10p" joint="r1_s10p" /> <motor name="r1m10r" joint="r1_s10r" /> <motor name="r1m10s" joint="r1_s10_slide" />
+            <motor name="r1m11y" joint="r1_s11y" /> <motor name="r1m11p" joint="r1_s11p" /> <motor name="r1m11r" joint="r1_s11r" /> <motor name="r1m11s" joint="r1_s11_slide" />
+            <motor name="r1m12y" joint="r1_s12y" /> <motor name="r1m12p" joint="r1_s12p" /> <motor name="r1m12r" joint="r1_s12r" /> <motor name="r1m12s" joint="r1_s12_slide" />
+            <motor name="r1m13y" joint="r1_s13y" /> <motor name="r1m13p" joint="r1_s13p" /> <motor name="r1m13r" joint="r1_s13r" /> <motor name="r1m13s" joint="r1_s13_slide" />
+            <!-- R2 Actuators (16) -->
+            <motor name="r2m1y" joint="r2_s1y" /> <motor name="r2m1p" joint="r2_s1p" /> <motor name="r2m1r" joint="r2_s1r" /> <motor name="r2m1s" joint="r2_s1_slide" />
+            <motor name="r2m2y" joint="r2_s2y" /> <motor name="r2m2p" joint="r2_s2p" /> <motor name="r2m2r" joint="r2_s2r" /> <motor name="r2m2s" joint="r2_s2_slide" />
+            <motor name="r2m3y" joint="r2_s3y" /> <motor name="r2m3p" joint="r2_s3p" /> <motor name="r2m3r" joint="r2_s3r" /> <motor name="r2m3s" joint="r2_s3_slide" />
+            <motor name="r2m4y" joint="r2_s4y" /> <motor name="r2m4p" joint="r2_s4p" /> <motor name="r2m4r" joint="r2_s4r" /> <motor name="r2m4s" joint="r2_s4_slide" />
+            <motor name="r2m5y" joint="r2_s5y" /> <motor name="r2m5p" joint="r2_s5p" /> <motor name="r2m5r" joint="r2_s5r" /> <motor name="r2m5s" joint="r2_s5_slide" />
+            <motor name="r2m6y" joint="r2_s6y" /> <motor name="r2m6p" joint="r2_s6p" /> <motor name="r2m6r" joint="r2_s6r" /> <motor name="r2m6s" joint="r2_s6_slide" />
+            <motor name="r2m7y" joint="r2_s7y" /> <motor name="r2m7p" joint="r2_s7p" /> <motor name="r2m7r" joint="r2_s7r" /> <motor name="r2m7s" joint="r2_s7_slide" />
+            <motor name="r2m8y" joint="r2_s8y" /> <motor name="r2m8p" joint="r2_s8p" /> <motor name="r2m8r" joint="r2_s8r" /> <motor name="r2m8s" joint="r2_s8_slide" />
+            <motor name="r2m9y" joint="r2_s9y" /> <motor name="r2m9p" joint="r2_s9p" /> <motor name="r2m9r" joint="r2_s9r" /> <motor name="r2m9s" joint="r2_s9_slide" />
+            <motor name="r2m10y" joint="r2_s10y" /> <motor name="r2m10p" joint="r2_s10p" /> <motor name="r2m10r" joint="r2_s10r" /> <motor name="r2m10s" joint="r2_s10_slide" />
+            <motor name="r2m11y" joint="r2_s11y" /> <motor name="r2m11p" joint="r2_s11p" /> <motor name="r2m11r" joint="r2_s11r" /> <motor name="r2m11s" joint="r2_s11_slide" />
+            <motor name="r2m12y" joint="r2_s12y" /> <motor name="r2m12p" joint="r2_s12p" /> <motor name="r2m12r" joint="r2_s12r" /> <motor name="r2m12s" joint="r2_s12_slide" />
+            <motor name="r2m13y" joint="r2_s13y" /> <motor name="r2m13p" joint="r2_s13p" /> <motor name="r2m13r" joint="r2_s13r" /> <motor name="r2m13s" joint="r2_s13_slide" />
+
+            <!-- Eye control actuators (separate from RL control, indices 52+) -->
+            <!-- Robot 1 Eye Actuators -->
+            <position name="r1_eye_yaw_left_act" joint="r1_eye_yaw_left" gear="60" ctrllimited="true" ctrlrange="-45 45"/>
+            <position name="r1_eye_pitch_left_act" joint="r1_eye_pitch_left" gear="60" ctrllimited="true" ctrlrange="-30 30"/>
+            <position name="r1_eye_yaw_right_act" joint="r1_eye_yaw_right" gear="60" ctrllimited="true" ctrlrange="-45 45"/>
+            <position name="r1_eye_pitch_right_act" joint="r1_eye_pitch_right" gear="60" ctrllimited="true" ctrlrange="-30 30"/>
+
+            <!-- Robot 2 Eye Actuators -->
+            <position name="r2_eye_yaw_left_act" joint="r2_eye_yaw_left" gear="60" ctrllimited="true" ctrlrange="-45 45"/>
+            <position name="r2_eye_pitch_left_act" joint="r2_eye_pitch_left" gear="60" ctrllimited="true" ctrlrange="-30 30"/>
+            <position name="r2_eye_yaw_right_act" joint="r2_eye_yaw_right" gear="60" ctrllimited="true" ctrlrange="-45 45"/>
+            <position name="r2_eye_pitch_right_act" joint="r2_eye_pitch_right" gear="60" ctrllimited="true" ctrlrange="-30 30"/>
+      </actuator>
+
+      <sensor>
+        <!-- Robot 1 Sensors -->
+        <jointvel name="r1_jvel_s1y" joint="r1_s1y"/> <jointvel name="r1_jvel_s1p" joint="r1_s1p"/> <jointvel name="r1_jvel_s1r" joint="r1_s1r"/> <jointvel name="r1_jvel_s1s" joint="r1_s1_slide"/>
+        <jointvel name="r1_jvel_s2y" joint="r1_s2y"/> <jointvel name="r1_jvel_s2p" joint="r1_s2p"/> <jointvel name="r1_jvel_s2r" joint="r1_s2r"/> <jointvel name="r1_jvel_s2s" joint="r1_s2_slide"/>
+        <jointvel name="r1_jvel_s3y" joint="r1_s3y"/> <jointvel name="r1_jvel_s3p" joint="r1_s3p"/> <jointvel name="r1_jvel_s3r" joint="r1_s3r"/> <jointvel name="r1_jvel_s3s" joint="r1_s3_slide"/>
+        <jointvel name="r1_jvel_s4y" joint="r1_s4y"/> <jointvel name="r1_jvel_s4p" joint="r1_s4p"/> <jointvel name="r1_jvel_s4r" joint="r1_s4r"/> <jointvel name="r1_jvel_s4s" joint="r1_s4_slide"/>
+        <jointvel name="r1_jvel_s5y" joint="r1_s5y"/> <jointvel name="r1_jvel_s5p" joint="r1_s5p"/> <jointvel name="r1_jvel_s5r" joint="r1_s5r"/> <jointvel name="r1_jvel_s5s" joint="r1_s5_slide"/>
+        <jointvel name="r1_jvel_s6y" joint="r1_s6y"/> <jointvel name="r1_jvel_s6p" joint="r1_s6p"/> <jointvel name="r1_jvel_s6r" joint="r1_s6r"/> <jointvel name="r1_jvel_s6s" joint="r1_s6_slide"/>
+        <jointvel name="r1_jvel_s7y" joint="r1_s7y"/> <jointvel name="r1_jvel_s7p" joint="r1_s7p"/> <jointvel name="r1_jvel_s7r" joint="r1_s7r"/> <jointvel name="r1_jvel_s7s" joint="r1_s7_slide"/>
+        <jointvel name="r1_jvel_s8y" joint="r1_s8y"/> <jointvel name="r1_jvel_s8p" joint="r1_s8p"/> <jointvel name="r1_jvel_s8r" joint="r1_s8r"/> <jointvel name="r1_jvel_s8s" joint="r1_s8_slide"/>
+        <jointvel name="r1_jvel_s9y" joint="r1_s9y"/> <jointvel name="r1_jvel_s9p" joint="r1_s9p"/> <jointvel name="r1_jvel_s9r" joint="r1_s9r"/> <jointvel name="r1_jvel_s9s" joint="r1_s9_slide"/>
+        <jointvel name="r1_jvel_s10y" joint="r1_s10y"/> <jointvel name="r1_jvel_s10p" joint="r1_s10p"/> <jointvel name="r1_jvel_s10r" joint="r1_s10r"/> <jointvel name="r1_jvel_s10s" joint="r1_s10_slide"/>
+        <jointvel name="r1_jvel_s11y" joint="r1_s11y"/> <jointvel name="r1_jvel_s11p" joint="r1_s11p"/> <jointvel name="r1_jvel_s11r" joint="r1_s11r"/> <jointvel name="r1_jvel_s11s" joint="r1_s11_slide"/>
+        <jointvel name="r1_jvel_s12y" joint="r1_s12y"/> <jointvel name="r1_jvel_s12p" joint="r1_s12p"/> <jointvel name="r1_jvel_s12r" joint="r1_s12r"/> <jointvel name="r1_jvel_s12s" joint="r1_s12_slide"/>
+        <jointvel name="r1_jvel_s13y" joint="r1_s13y"/> <jointvel name="r1_jvel_s13p" joint="r1_s13p"/> <jointvel name="r1_jvel_s13r" joint="r1_s13r"/> <jointvel name="r1_jvel_s13s" joint="r1_s13_slide"/>
+        <actuatorfrc name="r1_afrc_s1y" actuator="r1m1y"/> <actuatorfrc name="r1_afrc_s1p" actuator="r1m1p"/> <actuatorfrc name="r1_afrc_s1r" actuator="r1m1r"/> <actuatorfrc name="r1_afrc_s1s" actuator="r1m1s"/>
+        <actuatorfrc name="r1_afrc_s2y" actuator="r1m2y"/> <actuatorfrc name="r1_afrc_s2p" actuator="r1m2p"/> <actuatorfrc name="r1_afrc_s2r" actuator="r1m2r"/> <actuatorfrc name="r1_afrc_s2s" actuator="r1m2s"/>
+        <actuatorfrc name="r1_afrc_s3y" actuator="r1m3y"/> <actuatorfrc name="r1_afrc_s3p" actuator="r1m3p"/> <actuatorfrc name="r1_afrc_s3r" actuator="r1m3r"/> <actuatorfrc name="r1_afrc_s3s" actuator="r1m3s"/>
+        <actuatorfrc name="r1_afrc_s4y" actuator="r1m4y"/> <actuatorfrc name="r1_afrc_s4p" actuator="r1m4p"/> <actuatorfrc name="r1_afrc_s4r" actuator="r1m4r"/> <actuatorfrc name="r1_afrc_s4s" actuator="r1m4s"/>
+        <actuatorfrc name="r1_afrc_s5y" actuator="r1m5y"/> <actuatorfrc name="r1_afrc_s5p" actuator="r1m5p"/> <actuatorfrc name="r1_afrc_s5r" actuator="r1m5r"/> <actuatorfrc name="r1_afrc_s5s" actuator="r1m5s"/>
+        <actuatorfrc name="r1_afrc_s6y" actuator="r1m6y"/> <actuatorfrc name="r1_afrc_s6p" actuator="r1m6p"/> <actuatorfrc name="r1_afrc_s6r" actuator="r1m6r"/> <actuatorfrc name="r1_afrc_s6s" actuator="r1m6s"/>
+        <actuatorfrc name="r1_afrc_s7y" actuator="r1m7y"/> <actuatorfrc name="r1_afrc_s7p" actuator="r1m7p"/> <actuatorfrc name="r1_afrc_s7r" actuator="r1m7r"/> <actuatorfrc name="r1_afrc_s7s" actuator="r1m7s"/>
+        <actuatorfrc name="r1_afrc_s8y" actuator="r1m8y"/> <actuatorfrc name="r1_afrc_s8p" actuator="r1m8p"/> <actuatorfrc name="r1_afrc_s8r" actuator="r1m8r"/> <actuatorfrc name="r1_afrc_s8s" actuator="r1m8s"/>
+        <actuatorfrc name="r1_afrc_s9y" actuator="r1m9y"/> <actuatorfrc name="r1_afrc_s9p" actuator="r1m9p"/> <actuatorfrc name="r1_afrc_s9r" actuator="r1m9r"/> <actuatorfrc name="r1_afrc_s9s" actuator="r1m9s"/>
+        <actuatorfrc name="r1_afrc_s10y" actuator="r1m10y"/> <actuatorfrc name="r1_afrc_s10p" actuator="r1m10p"/> <actuatorfrc name="r1_afrc_s10r" actuator="r1m10r"/> <actuatorfrc name="r1_afrc_s10s" actuator="r1m10s"/>
+        <actuatorfrc name="r1_afrc_s11y" actuator="r1m11y"/> <actuatorfrc name="r1_afrc_s11p" actuator="r1m11p"/> <actuatorfrc name="r1_afrc_s11r" actuator="r1m11r"/> <actuatorfrc name="r1_afrc_s11s" actuator="r1m11s"/>
+        <actuatorfrc name="r1_afrc_s12y" actuator="r1m12y"/> <actuatorfrc name="r1_afrc_s12p" actuator="r1m12p"/> <actuatorfrc name="r1_afrc_s12r" actuator="r1m12r"/> <actuatorfrc name="r1_afrc_s12s" actuator="r1m12s"/>
+        <actuatorfrc name="r1_afrc_s13y" actuator="r1m13y"/> <actuatorfrc name="r1_afrc_s13p" actuator="r1m13p"/> <actuatorfrc name="r1_afrc_s13r" actuator="r1m13r"/> <actuatorfrc name="r1_afrc_s13s" actuator="r1m13s"/>
+        <gyro name="r1_gyro" site="r1_center"/>
+        <accelerometer name="r1_accel" site="r1_center"/>
+        <velocimeter name="r1_velo" site="r1_center"/>
+        <magnetometer name="r1_magneto" site="r1_center"/>
+        <touch name="r1_body_touch" site="r1_center"/>
+        <touch name="r1_touch1" site="r1_s1_site"/> <touch name="r1_touch2" site="r1_s2_site"/>
+        <touch name="r1_touch3" site="r1_s3_site"/> <touch name="r1_touch4" site="r1_s4_site"/>
+        <touch name="r1_touch5" site="r1_s5_site"/> <touch name="r1_touch6" site="r1_s6_site"/>
+        <touch name="r1_touch7" site="r1_s7_site"/> <touch name="r1_touch8" site="r1_s8_site"/>
+        <touch name="r1_touch9" site="r1_s9_site"/> <touch name="r1_touch10" site="r1_s10_site"/>
+        <touch name="r1_touch11" site="r1_s11_site"/> <touch name="r1_touch12" site="r1_s12_site"/>
+        <touch name="r1_touch13" site="r1_s13_site"/>
+        <rangefinder name="r1_ray_fwd" site="r1_ray_fwd_site" />
+        <rangefinder name="r1_ray_fwd_l" site="r1_ray_fwd_l_site" />
+        <rangefinder name="r1_ray_fwd_r" site="r1_ray_fwd_r_site" />
+        <rangefinder name="r1_ray_45_l" site="r1_ray_45_l_site" />
+        <rangefinder name="r1_ray_45_r" site="r1_ray_45_r_site" />
+        <rangefinder name="r1_ray_90_l" site="r1_ray_90_l_site" />
+        <rangefinder name="r1_ray_90_r" site="r1_ray_90_r_site" />
+        <rangefinder name="r1_ray_back" site="r1_ray_back_site" />
+        <rangefinder name="r1_ray_down" site="r1_ray_down_site" />
+        <rangefinder name="r1_ray_up" site="r1_ray_up_site" />
+        <force name="r1_force1" site="r1_s1_site"/> <force name="r1_force2" site="r1_s2_site"/>
+        <force name="r1_force3" site="r1_s3_site"/> <force name="r1_force4" site="r1_s4_site"/>
+        <force name="r1_force5" site="r1_s5_site"/> <force name="r1_force6" site="r1_s6_site"/>
+        <force name="r1_force7" site="r1_s7_site"/> <force name="r1_force8" site="r1_s8_site"/>
+        <force name="r1_force9" site="r1_s9_site"/> <force name="r1_force10" site="r1_s10_site"/>
+        <force name="r1_force11" site="r1_s11_site"/> <force name="r1_force12" site="r1_s12_site"/>
+        <force name="r1_force13" site="r1_s13_site"/>
+
+        <!-- Robot 2 Sensors -->
+        <jointvel name="r2_jvel_s1y" joint="r2_s1y"/> <jointvel name="r2_jvel_s1p" joint="r2_s1p"/> <jointvel name="r2_jvel_s1r" joint="r2_s1r"/> <jointvel name="r2_jvel_s1s" joint="r2_s1_slide"/>
+        <jointvel name="r2_jvel_s2y" joint="r2_s2y"/> <jointvel name="r2_jvel_s2p" joint="r2_s2p"/> <jointvel name="r2_jvel_s2r" joint="r2_s2r"/> <jointvel name="r2_jvel_s2s" joint="r2_s2_slide"/>
+        <jointvel name="r2_jvel_s3y" joint="r2_s3y"/> <jointvel name="r2_jvel_s3p" joint="r2_s3p"/> <jointvel name="r2_jvel_s3r" joint="r2_s3r"/> <jointvel name="r2_jvel_s3s" joint="r2_s3_slide"/>
+        <jointvel name="r2_jvel_s4y" joint="r2_s4y"/> <jointvel name="r2_jvel_s4p" joint="r2_s4p"/> <jointvel name="r2_jvel_s4r" joint="r2_s4r"/> <jointvel name="r2_jvel_s4s" joint="r2_s4_slide"/>
+        <jointvel name="r2_jvel_s5y" joint="r2_s5y"/> <jointvel name="r2_jvel_s5p" joint="r2_s5p"/> <jointvel name="r2_jvel_s5r" joint="r2_s5r"/> <jointvel name="r2_jvel_s5s" joint="r2_s5_slide"/>
+        <jointvel name="r2_jvel_s6y" joint="r2_s6y"/> <jointvel name="r2_jvel_s6p" joint="r2_s6p"/> <jointvel name="r2_jvel_s6r" joint="r2_s6r"/> <jointvel name="r2_jvel_s6s" joint="r2_s6_slide"/>
+        <jointvel name="r2_jvel_s7y" joint="r2_s7y"/> <jointvel name="r2_jvel_s7p" joint="r2_s7p"/> <jointvel name="r2_jvel_s7r" joint="r2_s7r"/> <jointvel name="r2_jvel_s7s" joint="r2_s7_slide"/>
+        <jointvel name="r2_jvel_s8y" joint="r2_s8y"/> <jointvel name="r2_jvel_s8p" joint="r2_s8p"/> <jointvel name="r2_jvel_s8r" joint="r2_s8r"/> <jointvel name="r2_jvel_s8s" joint="r2_s8_slide"/>
+        <jointvel name="r2_jvel_s9y" joint="r2_s9y"/> <jointvel name="r2_jvel_s9p" joint="r2_s9p"/> <jointvel name="r2_jvel_s9r" joint="r2_s9r"/> <jointvel name="r2_jvel_s9s" joint="r2_s9_slide"/>
+        <jointvel name="r2_jvel_s10y" joint="r2_s10y"/> <jointvel name="r2_jvel_s10p" joint="r2_s10p"/> <jointvel name="r2_jvel_s10r" joint="r2_s10r"/> <jointvel name="r2_jvel_s10s" joint="r2_s10_slide"/>
+        <jointvel name="r2_jvel_s11y" joint="r2_s11y"/> <jointvel name="r2_jvel_s11p" joint="r2_s11p"/> <jointvel name="r2_jvel_s11r" joint="r2_s11r"/> <jointvel name="r2_jvel_s11s" joint="r2_s11_slide"/>
+        <jointvel name="r2_jvel_s12y" joint="r2_s12y"/> <jointvel name="r2_jvel_s12p" joint="r2_s12p"/> <jointvel name="r2_jvel_s12r" joint="r2_s12r"/> <jointvel name="r2_jvel_s12s" joint="r2_s12_slide"/>
+        <jointvel name="r2_jvel_s13y" joint="r2_s13y"/> <jointvel name="r2_jvel_s13p" joint="r2_s13p"/> <jointvel name="r2_jvel_s13r" joint="r2_s13r"/> <jointvel name="r2_jvel_s13s" joint="r2_s13_slide"/>
+        <actuatorfrc name="r2_afrc_s1y" actuator="r2m1y"/> <actuatorfrc name="r2_afrc_s1p" actuator="r2m1p"/> <actuatorfrc name="r2_afrc_s1r" actuator="r2m1r"/> <actuatorfrc name="r2_afrc_s1s" actuator="r2m1s"/>
+        <actuatorfrc name="r2_afrc_s2y" actuator="r2m2y"/> <actuatorfrc name="r2_afrc_s2p" actuator="r2m2p"/> <actuatorfrc name="r2_afrc_s2r" actuator="r2m2r"/> <actuatorfrc name="r2_afrc_s2s" actuator="r2m2s"/>
+        <actuatorfrc name="r2_afrc_s3y" actuator="r2m3y"/> <actuatorfrc name="r2_afrc_s3p" actuator="r2m3p"/> <actuatorfrc name="r2_afrc_s3r" actuator="r2m3r"/> <actuatorfrc name="r2_afrc_s3s" actuator="r2m3s"/>
+        <actuatorfrc name="r2_afrc_s4y" actuator="r2m4y"/> <actuatorfrc name="r2_afrc_s4p" actuator="r2m4p"/> <actuatorfrc name="r2_afrc_s4r" actuator="r2m4r"/> <actuatorfrc name="r2_afrc_s4s" actuator="r2m4s"/>
+        <actuatorfrc name="r2_afrc_s5y" actuator="r2m5y"/> <actuatorfrc name="r2_afrc_s5p" actuator="r2m5p"/> <actuatorfrc name="r2_afrc_s5r" actuator="r2m5r"/> <actuatorfrc name="r2_afrc_s5s" actuator="r2m5s"/>
+        <actuatorfrc name="r2_afrc_s6y" actuator="r2m6y"/> <actuatorfrc name="r2_afrc_s6p" actuator="r2m6p"/> <actuatorfrc name="r2_afrc_s6r" actuator="r2m6r"/> <actuatorfrc name="r2_afrc_s6s" actuator="r2m6s"/>
+        <actuatorfrc name="r2_afrc_s7y" actuator="r2m7y"/> <actuatorfrc name="r2_afrc_s7p" actuator="r2m7p"/> <actuatorfrc name="r2_afrc_s7r" actuator="r2m7r"/> <actuatorfrc name="r2_afrc_s7s" actuator="r2m7s"/>
+        <actuatorfrc name="r2_afrc_s8y" actuator="r2m8y"/> <actuatorfrc name="r2_afrc_s8p" actuator="r2m8p"/> <actuatorfrc name="r2_afrc_s8r" actuator="r2m8r"/> <actuatorfrc name="r2_afrc_s8s" actuator="r2m8s"/>
+        <actuatorfrc name="r2_afrc_s9y" actuator="r2m9y"/> <actuatorfrc name="r2_afrc_s9p" actuator="r2m9p"/> <actuatorfrc name="r2_afrc_s9r" actuator="r2m9r"/> <actuatorfrc name="r2_afrc_s9s" actuator="r2m9s"/>
+        <actuatorfrc name="r2_afrc_s10y" actuator="r2m10y"/> <actuatorfrc name="r2_afrc_s10p" actuator="r2m10p"/> <actuatorfrc name="r2_afrc_s10r" actuator="r2m10r"/> <actuatorfrc name="r2_afrc_s10s" actuator="r2m10s"/>
+        <actuatorfrc name="r2_afrc_s11y" actuator="r2m11y"/> <actuatorfrc name="r2_afrc_s11p" actuator="r2m11p"/> <actuatorfrc name="r2_afrc_s11r" actuator="r2m11r"/> <actuatorfrc name="r2_afrc_s11s" actuator="r2m11s"/>
+        <actuatorfrc name="r2_afrc_s12y" actuator="r2m12y"/> <actuatorfrc name="r2_afrc_s12p" actuator="r2m12p"/> <actuatorfrc name="r2_afrc_s12r" actuator="r2m12r"/> <actuatorfrc name="r2_afrc_s12s" actuator="r2m12s"/>
+        <actuatorfrc name="r2_afrc_s13y" actuator="r2m13y"/> <actuatorfrc name="r2_afrc_s13p" actuator="r2m13p"/> <actuatorfrc name="r2_afrc_s13r" actuator="r2m13r"/> <actuatorfrc name="r2_afrc_s13s" actuator="r2m13s"/>
+        <gyro name="r2_gyro" site="r2_center"/>
+        <accelerometer name="r2_accel" site="r2_center"/>
+        <velocimeter name="r2_velo" site="r2_center"/>
+        <magnetometer name="r2_magneto" site="r2_center"/>
+        <touch name="r2_body_touch" site="r2_center"/>
+        <touch name="r2_touch1" site="r2_s1_site"/> <touch name="r2_touch2" site="r2_s2_site"/>
+        <touch name="r2_touch3" site="r2_s3_site"/> <touch name="r2_touch4" site="r2_s4_site"/>
+        <touch name="r2_touch5" site="r2_s5_site"/> <touch name="r2_touch6" site="r2_s6_site"/>
+        <touch name="r2_touch7" site="r2_s7_site"/> <touch name="r2_touch8" site="r2_s8_site"/>
+        <touch name="r2_touch9" site="r2_s9_site"/> <touch name="r2_touch10" site="r2_s10_site"/>
+        <touch name="r2_touch11" site="r2_s11_site"/> <touch name="r2_touch12" site="r2_s12_site"/>
+        <touch name="r2_touch13" site="r2_s13_site"/>
+        <rangefinder name="r2_ray_fwd" site="r2_ray_fwd_site" />
+        <rangefinder name="r2_ray_fwd_l" site="r2_ray_fwd_l_site" />
+        <rangefinder name="r2_ray_fwd_r" site="r2_ray_fwd_r_site" />
+        <rangefinder name="r2_ray_45_l" site="r2_ray_45_l_site" />
+        <rangefinder name="r2_ray_45_r" site="r2_ray_45_r_site" />
+        <rangefinder name="r2_ray_90_l" site="r2_ray_90_l_site" />
+        <rangefinder name="r2_ray_90_r" site="r2_ray_90_r_site" />
+        <rangefinder name="r2_ray_back" site="r2_ray_back_site" />
+        <rangefinder name="r2_ray_down" site="r2_ray_down_site" />
+        <rangefinder name="r2_ray_up" site="r2_ray_up_site" />
+        <force name="r2_force1" site="r2_s1_site"/> <force name="r2_force2" site="r2_s2_site"/>
+        <force name="r2_force3" site="r2_s3_site"/> <force name="r2_force4" site="r2_s4_site"/>
+        <force name="r2_force5" site="r2_s5_site"/> <force name="r2_force6" site="r2_s6_site"/>
+        <force name="r2_force7" site="r2_s7_site"/> <force name="r2_force8" site="r2_s8_site"/>
+        <force name="r2_force9" site="r2_s9_site"/> <force name="r2_force10" site="r2_s10_site"/>
+        <force name="r2_force11" site="r2_s11_site"/> <force name="r2_force12" site="r2_s12_site"/>
+        <force name="r2_force13" site="r2_s13_site"/>
+      </sensor>
+</mujoco>

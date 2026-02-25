@@ -1,0 +1,1 @@
+build --copt=-DGLEW_NO_GLU

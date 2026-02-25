@@ -1,0 +1,54 @@
+{
+  "name": "CombatBot",
+  "core": {
+    "name": "body",
+    "shape": "sphere",
+    "radius": 0.5,
+    "mass": 13.0,
+    "position": [0.0, 0.0, 0.0]
+  },
+  "satellites": [
+    {
+      "name": "sat_0",
+      "offset_angle": 0,
+      "distance": 1.4,
+      "sphere_radius": 0.1,
+      "mass": 3.5,
+      "spike_length": 0.4,
+      "spike_radius": 0.02
+    },
+    {
+      "name": "sat_1",
+      "offset_angle": 90,
+      "distance": 1.4,
+      "sphere_radius": 0.1,
+      "mass": 3.5,
+      "spike_length": 0.4,
+      "spike_radius": 0.02
+    },
+    {
+      "name": "sat_2",
+      "offset_angle": 180,
+      "distance": 1.4,
+      "sphere_radius": 0.1,
+      "mass": 3.5,
+      "spike_length": 0.4,
+      "spike_radius": 0.02
+    },
+    {
+      "name": "sat_3",
+      "offset_angle": 270,
+      "distance": 1.4,
+      "sphere_radius": 0.1,
+      "mass": 3.5,
+      "spike_length": 0.4,
+      "spike_radius": 0.02
+    }
+  ],
+  "joints": {
+    "hinge_damping": 0.8,
+    "hinge_armature": 0.5,
+    "motor_torque": 450.0,
+    "slide_range": [0.0, 0.5]
+  }
+}

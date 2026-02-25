@@ -1,0 +1,10 @@
+{
+  "name": "PendulumBot",
+  "bodies": [
+    {"name": "base", "shape": "sphere", "radius": 0.6, "position": [0.0, 10.0, 0.0], "type": "static"},
+    {"name": "arm", "shape": "box", "half_extents": [0.2, 4.0, 0.2], "position": [4.0, 10.0, 0.0], "rotation": [0.0, 0.0, 90.0], "type": "dynamic"}
+  ],
+  "joints": [
+    {"name": "shoulder", "type": "hinge", "parent": "base", "child": "arm", "point": [0.0, 10.0, 0.0], "axis": [0.0, 0.0, 1.0], "motor_speed": 2.0, "motor_torque": 500.0}
+  ]
+}
