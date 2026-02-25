@@ -14,9 +14,25 @@
 
 constexpr int NUM_SATELLITES = 13;
 constexpr int ACTIONS_PER_SATELLITE = 4;
-constexpr int ACTIONS_PER_ROBOT = NUM_SATELLITES * ACTIONS_PER_SATELLITE;
+constexpr int REACTION_WHEEL_DIM = 4;
+constexpr int ACTIONS_PER_ROBOT = NUM_SATELLITES * ACTIONS_PER_SATELLITE + REACTION_WHEEL_DIM;
 constexpr int NUM_LIDAR_RAYS = 10;
-constexpr int OBSERVATION_DIM = 9 + 6 + NUM_SATELLITES * 9 + NUM_LIDAR_RAYS + 3;
+constexpr int OBSERVATION_DIM = 208;
+
+struct ForceSensorReading
+{
+    float impulseMagnitude[NUM_SATELLITES] = {0.0f};
+    float jointStress[NUM_SATELLITES] = {0.0f};
+
+    void Reset()
+    {
+        for (int i = 0; i < NUM_SATELLITES; ++i)
+        {
+            impulseMagnitude[i] = 0.0f;
+            jointStress[i] = 0.0f;
+        }
+    }
+};
 
 struct PIDController
 {
@@ -85,8 +101,8 @@ struct CombatRobotData
     std::array<float, ACTIONS_PER_ROBOT> residualActions{};
     std::array<float, ACTIONS_PER_ROBOT> finalActions{};
     
-    alignas(32) float observationBuffer[OBSERVATION_DIM];
-    alignas(32) float lidarDistances[NUM_LIDAR_RAYS];
+    float observationBuffer[OBSERVATION_DIM];
+    float lidarDistances[NUM_LIDAR_RAYS];
 };
 
 class CombatRobotLoader
@@ -128,6 +144,7 @@ public:
         CombatRobotData& robot,
         const CombatRobotData& opponent,
         float* observations,
+        const ForceSensorReading& forces,
         JPH::PhysicsSystem* physicsSystem
     );
     

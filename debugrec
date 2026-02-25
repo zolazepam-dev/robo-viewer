@@ -1,0 +1,49 @@
+System Context & Directives:
+You are a Senior Engine Debugger. You failed to apply the requested fixes to the Slider Constraint in the previous prompt. The mathematically impossible local-space geometry is still in the code and is causing an immediate null-pointer dereference. You must perform an exact text replacement to fix this.
+
+Objective:
+Perform a strict replacement of the Slider Constraint setup and inject the missing safety asserts.
+
+Task 1: Strict Block Replacement (CombatRobot.cpp)
+Locate this EXACT block of code inside CombatRobotLoader::LoadRobot:
+
+C++
+        JPH::SliderConstraintSettings slideSettings;
+        slideSettings.SetSliderAxis(direction);
+        slideSettings.mLimitsMin = slideMin;
+        slideSettings.mLimitsMax = slideMax;
+        slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f);
+
+        JPH::Vec3 perp;
+        if (std::abs(direction.GetY()) < 0.9f) perp = direction.Cross(JPH::Vec3(0, 1, 0)).Normalized();
+        else perp = direction.Cross(JPH::Vec3(1, 0, 0)).Normalized();
+
+        slideSettings.mSliderAxis1 = direction;
+        slideSettings.mSliderAxis2 = perp;
+        slideSettings.mNormalAxis1 = perp;
+        slideSettings.mNormalAxis2 = direction.Cross(perp);
+REPLACE IT ENTIRELY WITH THIS:
+
+C++
+        JPH::SliderConstraintSettings slideSettings;
+        slideSettings.mSpace = JPH::EConstraintSpace::WorldSpace;
+        slideSettings.mPoint1 = spikePos;
+        slideSettings.mPoint2 = spikePos;
+        slideSettings.SetSliderAxis(direction);
+        slideSettings.mLimitsMin = slideMin;
+        slideSettings.mLimitsMax = slideMax;
+        slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f);
+Task 2: Inject Assertions (CombatRobot.cpp)
+
+Find the line: robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(bodyInterface.CreateConstraint(&rotSettings, coreBody->GetID(), satBody->GetID()));
+
+Directly below it, add:
+assert(robotData.satellites[i].rotationJoint != nullptr && "SixDOF Constraint failed!");
+
+Find the line: robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
+
+Directly below it, add:
+assert(robotData.satellites[i].slideJoint != nullptr && "Slider Constraint failed!");
+
+Output Constraints:
+Output ONLY the fully modified CombatRobot.cpp file. Do not skip the assertions.

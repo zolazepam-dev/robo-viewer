@@ -37,10 +37,14 @@ void VectorizedEnv::Init()
     // ------------------------------
 
     mEnvs.resize(mNumEnvs);
+    std::cout << "[JOLTrl] Initializing " << mNumEnvs << " environments..." << std::endl;
     for (int i = 0; i < mNumEnvs; ++i)
     {
+        std::cout << "[JOLTrl] Init env " << i << "..." << std::flush;
         mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader);
+        std::cout << " done" << std::endl;
     }
+    std::cout << "[JOLTrl] All environments initialized." << std::endl;
 
     mObservationDim = mEnvs[0].GetObservationDim();
 

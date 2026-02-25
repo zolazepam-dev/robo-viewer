@@ -113,8 +113,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         }
     }
 
+    std::cout << "[LoadRobot" << robotIndex << "] Step 5: Entering satellite loop" << std::endl;
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
+        std::cout << "[LoadRobot" << robotIndex << "] Step 5." << i << ".1: Processing satellite " << i << std::endl;
         const float azimuth = JPH::DegreesToRadians(satellitesConfig[i].value("offset_angle", 0.0f));
         const float elevation = JPH::DegreesToRadians(satellitesConfig[i].value("elevation", 0.0f));
         const float dist = satellitesConfig[i].value("distance", 1.4f);
@@ -455,6 +457,7 @@ void CombatRobotLoader::GetObservations(
     CombatRobotData& robot,
     const CombatRobotData& opponent,
     float* observations,
+    const ForceSensorReading& forces,
     JPH::PhysicsSystem* physicsSystem)
 {
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();

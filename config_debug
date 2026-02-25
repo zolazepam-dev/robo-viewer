@@ -1,0 +1,43 @@
+# ==========================================
+# JOLTrl AVX2 Hardware Debugger Config
+# ==========================================
+version: "1.0"
+project: "robo-viewer"
+
+environment:
+  cpu_architecture: "x86_64"
+  simd_level: "avx2"
+  os: "linux"
+
+build:
+  toolchain: "bazel"
+  # Force strict debug symbols and disable LTO/O3 optimizations
+  # so GDB can map raw memory addresses back to C++ source lines.
+  flags:
+    - "-c dbg"
+    - "--copt=-g"
+    - "--copt=-O0"
+    - "--copt=-mavx2"
+    - "--copt=-mfma"
+    - "--strip=never"
+  target: "//:train"
+
+execution:
+  binary_path: "bazel-bin/train"
+  debugger: "gdb"
+  # Automatically dump the backtrace upon catching a SIGSEGV
+  gdb_args:
+    - "-batch"
+    - "-ex"
+    - "run"
+    - "-ex"
+    - "thread apply all bt full"
+    - "-ex"
+    - "info registers ymm0 ymm1 ymm2"
+    - "-ex"
+    - "quit"
+
+# For Agentic AI / CI Hooks
+on_segfault:
+  action: "capture_core_dump"
+  output_dir: "/tmp/joltrl_crashes"

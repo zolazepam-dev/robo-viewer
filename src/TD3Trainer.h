@@ -11,6 +11,7 @@
 #include "OpponentPool.h"
 #include "NeuralMath.h"
 #include "NeuralNetwork.h"
+#include "AlignedAllocator.h"
 
 struct TD3Config
 {
@@ -89,23 +90,23 @@ private:
     SpanActorCritic mModel;
     OpponentPool mOpponentPool;
     
-    std::vector<float> mBatchStates;
-    std::vector<float> mBatchActions;
-    std::vector<float> mBatchRewards;
-    std::vector<float> mBatchNextStates;
-    std::vector<float> mBatchDones;
+    AlignedVector32<float> mBatchStates;
+    AlignedVector32<float> mBatchActions;
+    AlignedVector32<float> mBatchRewards;
+    AlignedVector32<float> mBatchNextStates;
+    AlignedVector32<float> mBatchDones;
 
     std::vector<VectorReward> mBatchVectorRewards;
     
-    std::vector<float> mNextActions;
-    std::vector<float> mQ1Values;
-    std::vector<float> mQ2Values;
-    std::vector<float> mTargetQ;
+    AlignedVector32<float> mNextActions;
+    AlignedVector32<float> mQ1Values;
+    AlignedVector32<float> mQ2Values;
+    AlignedVector32<float> mTargetQ;
     
-    std::vector<float> mGrads;
+    AlignedVector32<float> mGrads;
 
-    std::vector<float> mBatchLogProbs;
-    std::vector<float> mTargetLogProbs;
+    AlignedVector32<float> mBatchLogProbs;
+    AlignedVector32<float> mTargetLogProbs;
     std::vector<int> mSampledIndices;
     
     int mStepCount = 0;

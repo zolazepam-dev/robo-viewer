@@ -50,7 +50,9 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     JPH::RVec3 pos1(-ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
     JPH::RVec3 pos2(ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
 
+    std::cout << " [LoadRobot1] " << std::flush;
     mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
+    std::cout << " [LoadRobot2] " << std::flush;
     mRobot2 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
 
     mStepCount = 0;
@@ -213,6 +215,7 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     JPH::RVec3 myPos = bodyInterface.GetPosition(robot.mainBodyId);
     JPH::Vec3 myVel = bodyInterface.GetLinearVelocity(robot.mainBodyId);
     JPH::Vec3 myAngVel = bodyInterface.GetAngularVelocity(robot.mainBodyId);
+    JPH::Quat myRot = bodyInterface.GetRotation(robot.mainBodyId);
 
     obs[idx++] = static_cast<float>(myPos.GetX());
     obs[idx++] = static_cast<float>(myPos.GetY());
@@ -269,9 +272,83 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
         obs[idx++] = forces.jointStress[i];
     }
 
-    obs[idx++] = robot.hp;
-    obs[idx++] = opponent.hp;
-    obs[idx++] = static_cast<float>((oppPos - myPos).Length());
+    obs[idx++] = robot.hp / 100.0f;
+    obs[idx++] = opponent.hp / 100.0f;
+    obs[idx++] = static_cast<float>((oppPos - myPos).Length()) / 20.0f;
+    
+    JPH::Vec3 myForward = myRot.RotateAxisY();
+    JPH::Vec3 toOpponent = (oppPos - myPos).Normalized();
+    float facingDot = myForward.Dot(toOpponent);
+    obs[idx++] = facingDot;
+    
+    float healthDiff = (robot.hp - opponent.hp) / 100.0f;
+    obs[idx++] = healthDiff;
+    
+    float mySpeed = myVel.Length();
+    float oppSpeed = oppVel.Length();
+    obs[idx++] = mySpeed / 10.0f;
+    obs[idx++] = oppSpeed / 10.0f;
+    
+    float speedRatio = (oppSpeed > 0.01f) ? (mySpeed / oppSpeed) : 1.0f;
+    obs[idx++] = std::clamp(speedRatio, 0.0f, 5.0f) / 5.0f;
+    
+    JPH::Vec3 relVel = oppVel - myVel;
+    obs[idx++] = relVel.GetX() / 10.0f;
+    obs[idx++] = relVel.GetY() / 10.0f;
+    obs[idx++] = relVel.GetZ() / 10.0f;
+    
+    float closingSpeed = -relVel.Dot(toOpponent);
+    obs[idx++] = closingSpeed / 10.0f;
+    
+    JPH::Vec3 crossProduct = myVel.Cross(oppVel);
+    obs[idx++] = crossProduct.GetX() / 10.0f;
+    obs[idx++] = crossProduct.GetY() / 10.0f;
+    obs[idx++] = crossProduct.GetZ() / 10.0f;
+    
+    obs[idx++] = robot.totalDamageDealt / 100.0f;
+    obs[idx++] = robot.totalDamageTaken / 100.0f;
+    obs[idx++] = robot.episodeSteps / 1000.0f;
+    
+    // === 48 NEW KINEMATIC TELEMETRY FEATURES ===
+    
+    // Force Sensors (26 dims): impulseMagnitude[0..12] + jointStress[0..12]
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        obs[idx++] = forces.impulseMagnitude[i];
+    }
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        obs[idx++] = forces.jointStress[i];
+    }
+    
+    // Altimeter (13 dims): Y position of all 13 satellite coreBodyIds
+    for (int i = 0; i < NUM_SATELLITES; ++i)
+    {
+        JPH::RVec3 satPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
+        obs[idx++] = static_cast<float>(satPos.GetY()) / 10.0f;
+    }
+    
+    // Local Gravity (3 dims): (0, -1, 0) rotated by myRot.Conjugated()
+    JPH::Vec3 worldGravity(0.0f, -1.0f, 0.0f);
+    JPH::Vec3 localGravity = myRot.Conjugated() * worldGravity;
+    obs[idx++] = localGravity.GetX();
+    obs[idx++] = localGravity.GetY();
+    obs[idx++] = localGravity.GetZ();
+    
+    // Angular Momentum (3 dims): myAngVel * coreMass
+    constexpr float coreMass = 13.0f;
+    obs[idx++] = myAngVel.GetX() * coreMass;
+    obs[idx++] = myAngVel.GetY() * coreMass;
+    obs[idx++] = myAngVel.GetZ() * coreMass;
+    
+    // Arena Center Dist (2 dims): X and Z normalized
+    obs[idx++] = static_cast<float>(myPos.GetX()) / 100.0f;
+    obs[idx++] = static_cast<float>(myPos.GetZ()) / 100.0f;
+    
+    // Time-to-Collision (1 dim): dist / max(closingSpeed, 0.1f)
+    float dist = static_cast<float>((oppPos - myPos).Length());
+    float timeToCollision = dist / std::max(std::abs(closingSpeed), 0.1f);
+    obs[idx++] = timeToCollision / 20.0f;
 }
 
 float CombatEnv::ComputeAirtime() const

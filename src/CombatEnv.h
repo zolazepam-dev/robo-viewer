@@ -22,23 +22,10 @@ constexpr int MAX_EPISODE_STEPS = 120000;
 constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
 constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
 
-struct ForceSensorReading
+struct StepResult
 {
-    float impulseMagnitude[NUM_SATELLITES] = {0.0f};
-    float jointStress[NUM_SATELLITES] = {0.0f};
-
-    void Reset()
-    {
-        for (int i = 0; i < NUM_SATELLITES; ++i)
-        {
-            impulseMagnitude[i] = 0.0f;
-            jointStress[i] = 0.0f;
-        }
-    }
-};
-
-struct alignas(32) StepResult
-{
+    static constexpr int OBS_DIM = 208;
+    
     AlignedVector32<float> obs_robot1;
     AlignedVector32<float> obs_robot2;
     VectorReward reward1;
@@ -48,7 +35,7 @@ struct alignas(32) StepResult
     bool done = false;
     int winner = 0;
     
-    StepResult() : obs_robot1(208), obs_robot2(208) {}
+    StepResult() : obs_robot1(OBS_DIM), obs_robot2(OBS_DIM) {}
 };
 
 class CombatContactListener : public JPH::ContactListener

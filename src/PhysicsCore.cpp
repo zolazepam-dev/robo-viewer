@@ -49,10 +49,10 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     mObjectLayerPairFilter = new ObjectLayerPairFilterImpl();
 
     // Scale physics system capacities for Dimensional Ghosting
-    const uint32_t bodiesPerEnv = 20; // 2 robots + satellites + spikes
+    const uint32_t bodiesPerEnv = 60; // 2 robots * 27 bodies + safety margin
     const uint32_t maxBodies = std::max<uint32_t>(1024, mNumEnvs * bodiesPerEnv + 10);
     const uint32_t numBodyMutexes = 0; // We manage threading via the JobSystem
-    const uint32_t maxBodyPairs = maxBodies * 4;
+    const uint32_t maxBodyPairs = maxBodies * 8; // Account for 13-satellite collisions
     const uint32_t maxContactConstraints = maxBodyPairs;
 
     mPhysicsSystem = new JPH::PhysicsSystem();
