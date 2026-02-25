@@ -27,8 +27,8 @@ public:
     void ForwardBatch(const float* input, float* output, int batchSize);
     void ForwardAVX2(const float* input, float* output);
     
-    alignas(32) std::vector<float>& GetControlPoints() { return mControlPoints; }
-    const alignas(32) std::vector<float>& GetControlPoints() const { return mControlPoints; }
+    std::vector<float>& GetControlPoints() { return mControlPoints; }
+    const std::vector<float>& GetControlPoints() const { return mControlPoints; }
     
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }

@@ -32,7 +32,7 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
 
     if (envIdx1 != envIdx2) return;
 
-    float impulseMag = manifold.mRelativeContactSurfaceVelocity.Length();
+    float impulseMag = manifold.mPenetrationDepth * manifold.mWorldSpaceNormal.Length();
     
     if (envIdx1 < NUM_PARALLEL_ENVS)
     {
@@ -188,8 +188,6 @@ void CombatEnv::CheckCollisions()
 
 void CombatEnv::UpdateForceSensors()
 {
-    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
         if (mRobot1.satellites[i].rotationJoint != nullptr)

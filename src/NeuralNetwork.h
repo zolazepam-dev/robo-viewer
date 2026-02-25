@@ -9,6 +9,9 @@
 #include <cstdint>
 
 #include "NeuralMath.h"
+#include "LatentMemory.h"
+
+constexpr int VECTOR_REWARD_DIM = 4;
 
 struct VectorReward
 {
@@ -48,52 +51,6 @@ static inline float MoLUDerivative(float x)
     float sech2 = 1.0f - th * th;
     return 0.5f * (1.0f + th) + 0.5f * x * sech2;
 }
-
-struct alignas(32) SecondOrderLatentMemory
-{
-    alignas(32) float z_pos[LATENT_DIM * NUM_PARALLEL_ENVS];
-    alignas(32) float z_vel[LATENT_DIM * NUM_PARALLEL_ENVS];
-    
-    int latentDim = LATENT_DIM;
-    int numEnvs = NUM_PARALLEL_ENVS;
-    float dt = 1.0f / 60.0f;
-
-    void Init()
-    {
-        std::memset(z_pos, 0, sizeof(z_pos));
-        std::memset(z_vel, 0, sizeof(z_vel));
-    }
-
-    void ResetEnv(int envIdx)
-    {
-        int offset = envIdx * latentDim;
-        std::memset(z_pos + offset, 0, latentDim * sizeof(float));
-        std::memset(z_vel + offset, 0, latentDim * sizeof(float));
-    }
-
-    void ResetAll()
-    {
-        std::memset(z_pos, 0, sizeof(z_pos));
-        std::memset(z_vel, 0, sizeof(z_vel));
-    }
-
-    float* GetPosition(int envIdx) { return z_pos + envIdx * latentDim; }
-    float* GetVelocity(int envIdx) { return z_vel + envIdx * latentDim; }
-    const float* GetPosition(int envIdx) const { return z_pos + envIdx * latentDim; }
-    const float* GetVelocity(int envIdx) const { return z_vel + envIdx * latentDim; }
-
-    void StepDynamicsScalar(const float* acceleration, int envIdx)
-    {
-        int offset = envIdx * latentDim;
-        for (int i = 0; i < latentDim; ++i)
-        {
-            z_vel[offset + i] += acceleration[i] * dt;
-            z_pos[offset + i] += z_vel[offset + i] * dt;
-        }
-    }
-
-    void StepDynamicsVectorized(const float* accelerations);
-};
 
 struct ODE2VAENetwork
 {

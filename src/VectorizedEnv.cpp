@@ -82,8 +82,8 @@ void VectorizedEnv::Step(const std::vector<float>& actions)
                   mAllObservations.begin() + obsOffset + mObservationDim);
 
         int rewardOffset = i * 2;
-        mAllRewards[rewardOffset] = result.reward1;
-        mAllRewards[rewardOffset + 1] = result.reward2;
+        mAllRewards[rewardOffset] = result.reward1.Scalar();
+        mAllRewards[rewardOffset + 1] = result.reward2.Scalar();
 
         mAllDones[i] = result.done;
     }

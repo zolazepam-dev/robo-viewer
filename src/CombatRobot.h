@@ -124,14 +124,14 @@ public:
     );
 
     void GetObservations(
-        const CombatRobotData& robot,
+        CombatRobotData& robot,
         const CombatRobotData& opponent,
         float* observations,
         JPH::PhysicsSystem* physicsSystem
     );
     
     void PerformLidarScan(
-        const CombatRobotData& robot,
+        CombatRobotData& robot,
         JPH::PhysicsSystem* physicsSystem
     );
 

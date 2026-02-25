@@ -4,120 +4,6 @@
 #include <immintrin.h>
 #include <limits>
 
-void ForwardMoLU_Scalar(float* data, size_t size)
-{
-    for (size_t i = 0; i < size; ++i)
-    {
-        float x = data[i];
-        data[i] = 0.5f * x * (1.0f + tanhf(x));
-    }
-}
-
-void ForwardMoLU_AVX2(float* data, size_t size)
-{
-    size_t i = 0;
-    const size_t simdEnd = size - (size % 8);
-    
-    for (; i < simdEnd; i += 8)
-    {
-        __m256 x = _mm256_loadu_ps(data + i);
-
-        // =====================================================================
-        // AVX2 FAST-MATH PADE APPROXIMATION FOR TANH - INTRINSICS PLACEHOLDER
-        // =====================================================================
-        //
-        // The MoLU activation requires: 0.5 * x * (1 + tanh(x))
-        //
-        // FAST TANH APPROXIMATION via Padé (3,2) rational function:
-        // tanh(x) ≈ x * (1 + a*x²) / (1 + b*x²)  where a=0.275, b=0.664
-        //
-        // This avoids _mm256_div_ps (expensive ~15-20 cycles) by using
-        // FMA-based Newton-Raphson reciprocal approximation instead:
-        //
-        // Step 1: Compute x²
-        // __m256 x2 = _mm256_mul_ps(x, x);
-        //
-        // Step 2: Padé numerator: x * (1 + a*x²)
-        // const __m256 a = _mm256_set1_ps(0.275f);
-        // __m256 num = _mm256_fmadd_ps(a, x2, _mm256_set1_ps(1.0f));
-        // num = _mm256_mul_ps(x, num);
-        //
-        // Step 3: Padé denominator: (1 + b*x²)
-        // const __m256 b = _mm256_set1_ps(0.664f);
-        // __m256 den = _mm256_fmadd_ps(b, x2, _mm256_set1_ps(1.0f));
-        //
-        // Step 4: Fast reciprocal via Newton-Raphson (2 iterations for precision)
-        // __m256 rcp = _mm256_rcp_ps(den);                          // Initial approx
-        // rcp = _mm256_fmadd_ps(rcp, _mm256_set1_ps(-1.0f),          // Iteration 1
-        //              _mm256_mul_ps(rcp, rcp));
-        // rcp = _mm256_fmadd_ps(den, _mm256_mul_ps(rcp, rcp), rcp);  // Iteration 2
-        //
-        // Step 5: tanh approximation
-        // __m256 th = _mm256_mul_ps(num, rcp);
-        //
-        // Step 6: MoLU: 0.5 * x * (1 + tanh(x))
-        // __m256 one_plus_th = _mm256_add_ps(_mm256_set1_ps(1.0f), th);
-        // __m256 half = _mm256_set1_ps(0.5f);
-        // __m256 result = _mm256_mul_ps(half, _mm256_mul_ps(x, one_plus_th));
-        //
-        // NaN SAFETY: Clamp large values before approximation
-        // x = _mm256_min_ps(x, _mm256_set1_ps(10.0f));
-        // x = _mm256_max_ps(x, _mm256_set1_ps(-10.0f));
-        // =====================================================================
-        
-        __m256 th;
-        
-        {
-            alignas(32) float x_arr[8];
-            _mm256_store_ps(x_arr, x);
-            alignas(32) float th_arr[8];
-            for (int j = 0; j < 8; ++j)
-            {
-                th_arr[j] = tanhf(x_arr[j]);
-            }
-            th = _mm256_load_ps(th_arr);
-        }
-        
-        __m256 one_plus_th = _mm256_add_ps(_mm256_set1_ps(1.0f), th);
-        __m256 half = _mm256_set1_ps(0.5f);
-        __m256 result = _mm256_mul_ps(half, _mm256_mul_ps(x, one_plus_th));
-        
-        _mm256_storeu_ps(data + i, result);
-    }
-
-    for (; i < size; ++i)
-    {
-        data[i] = 0.5f * data[i] * (1.0f + tanhf(data[i]));
-    }
-}
-
-void SecondOrderLatentMemory::StepDynamicsVectorized(const float* accelerations)
-{
-    const int totalSize = latentDim * numEnvs;
-    const int simdEnd = totalSize - (totalSize % 8);
-    const __m256 dt_vec = _mm256_set1_ps(dt);
-    
-    int i = 0;
-    for (; i < simdEnd; i += 8)
-    {
-        __m256 vel = _mm256_loadu_ps(z_vel + i);
-        __m256 pos = _mm256_loadu_ps(z_pos + i);
-        __m256 accel = _mm256_loadu_ps(accelerations + i);
-        
-        __m256 new_vel = _mm256_fmadd_ps(accel, dt_vec, vel);
-        __m256 new_pos = _mm256_fmadd_ps(new_vel, dt_vec, pos);
-        
-        _mm256_storeu_ps(z_vel + i, new_vel);
-        _mm256_storeu_ps(z_pos + i, new_pos);
-    }
-    
-    for (; i < totalSize; ++i)
-    {
-        z_vel[i] += accelerations[i] * dt;
-        z_pos[i] += z_vel[i] * dt;
-    }
-}
-
 void ODE2VAENetwork::Init(int observationDim, int latentDim, std::mt19937& rng)
 {
     obsDim = observationDim;
@@ -157,8 +43,8 @@ void ODE2VAENetwork::EncodeObservation(const float* obs, float* z_pos_out, float
             vel_val += W_encoder[(latentDim + i) * obsDim + j] * o;
         }
         
-        z_pos_out[i] = std::tanhf(pos_val);
-        z_vel_out[i] = std::tanhf(vel_val);
+        z_pos_out[i] = tanhf(pos_val);
+        z_vel_out[i] = tanhf(vel_val);
     }
 }
 
@@ -185,7 +71,7 @@ void ODE2VAENetwork::ComputeAcceleration(const float* z_pos, const float* z_vel,
         {
             val += W_vel[i * inputDim + j] * combined[j];
         }
-        accel_out[i] = std::tanhf(val);
+        accel_out[i] = tanhf(val);
     }
 }
 
@@ -441,7 +327,7 @@ void KLPERBuffer::Add(const float* state, const float* action, float behaviorLog
     mPriorities[mIndex] = mMaxPriority;
     mKLDivergences[mIndex] = 0.0f;
     
-    UpdateTree(mIndex, static_cast<int>(mMaxPriority));
+    UpdateTree(mIndex, mMaxPriority);
     
     mIndex = (mIndex + 1) % mCapacity;
     mSize = std::min(mSize + 1, mCapacity);
@@ -459,9 +345,9 @@ void KLPERBuffer::Sample(int batchSize, float* states, float* actions, float* lo
 
     for (int i = 0; i < batchSize; ++i) {
         float val = segment * (dist(rng) + i);
-        int idx = 0;
+        int idx = 1;
         
-        for (int j = mCapacity; j > 0; j /= 2) {
+        while (idx < mCapacity) {
             if (mSumTree[2 * idx] >= val) {
                 idx = 2 * idx;
             } else {
@@ -470,7 +356,7 @@ void KLPERBuffer::Sample(int batchSize, float* states, float* actions, float* lo
             }
         }
         
-        indices[i] = std::min(idx, mSize - 1);
+        indices[i] = std::min(idx - mCapacity, mSize - 1);
         
         std::copy(mStates.begin() + indices[i] * mStateDim,
                   mStates.begin() + (indices[i] + 1) * mStateDim,
@@ -502,7 +388,7 @@ void KLPERBuffer::UpdatePriorities(const std::vector<int>& indices, const float*
         mPriorities[indices[i]] = priority;
         mMaxPriority = std::max(mMaxPriority, priority);
         
-        UpdateTree(indices[i], static_cast<int>(priority));
+        UpdateTree(indices[i], priority);
     }
 }
 
@@ -512,7 +398,7 @@ void KLPERBuffer::UpdateKLDivergence(int index, float klDiv)
     float priority = std::pow(klDiv + 1e-6f, mAlpha);
     mPriorities[index] = priority;
     mMaxPriority = std::max(mMaxPriority, priority);
-    UpdateTree(index, static_cast<int>(priority));
+    UpdateTree(index, priority);
 }
 
 float KLPERBuffer::ComputeKLDivergence(float behaviorLogProb, float targetLogProb) const

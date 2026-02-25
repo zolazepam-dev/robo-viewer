@@ -10,29 +10,7 @@
 #include "LatentMemory.h"
 #include "OpponentPool.h"
 #include "NeuralMath.h"
-
-constexpr int VECTOR_REWARD_DIM = 4;
-
-struct VectorReward
-{
-    float damage_dealt = 0.0f;
-    float damage_taken = 0.0f;
-    float airtime = 0.0f;
-    float energy_used = 0.0f;
-
-    float Dot(const std::array<float, VECTOR_REWARD_DIM>& preference) const
-    {
-        return damage_dealt * preference[0] +
-               damage_taken * preference[1] +
-               airtime * preference[2] +
-               energy_used * preference[3];
-    }
-
-    float Scalar() const
-    {
-        return damage_dealt + damage_taken + airtime + energy_used;
-    }
-};
+#include "NeuralNetwork.h"
 
 struct TD3Config
 {
@@ -132,40 +110,4 @@ private:
     std::mt19937 mRng;
     int mStepCount = 0;
     int mUpdateCount = 0;
-};
-
-class ReplayBuffer
-{
-public:
-    ReplayBuffer(int capacity, int stateDim, int actionDim);
-    
-    void Add(const float* state, const float* action, const VectorReward& reward,
-             const float* nextState, bool done);
-    void Add(const float* state, const float* action, float reward,
-             const float* nextState, bool done);
-    
-    void Sample(int batchSize, float* states, float* actions, float* rewards,
-                float* nextStates, float* dones, std::mt19937& rng);
-    
-    void SampleVectorRewards(int batchSize, float* states, float* actions,
-                             VectorReward* rewards, float* nextStates, float* dones,
-                             std::mt19937& rng);
-    
-    int Size() const { return mSize; }
-    bool IsReady(int batchSize) const { return mSize >= batchSize; }
-    
-private:
-    std::vector<float> mStates;
-    std::vector<float> mActions;
-    std::vector<float> mRewards;
-    std::vector<float> mNextStates;
-    std::vector<float> mDones;
-
-    std::vector<VectorReward> mVectorRewards;
-    
-    int mCapacity;
-    int mStateDim;
-    int mActionDim;
-    int mSize = 0;
-    int mIndex = 0;
 };

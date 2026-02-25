@@ -124,8 +124,8 @@ if [ "$USE_VIEWER" = true ]; then
     TARGET="viewer"
     BINARY_PATH="bazel-bin/viewer"
 else
-    TARGET="combat_train"
-    BINARY_PATH="bazel-bin/combat_train"
+    TARGET="train"
+    BINARY_PATH="bazel-bin/train"
 fi
 
 print_info "Target: //:$TARGET"

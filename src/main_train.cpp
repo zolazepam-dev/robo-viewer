@@ -145,8 +145,8 @@ int main(int argc, char* argv[]) {
             float r1 = allRewards[envIdx * 2];
             float r2 = allRewards[envIdx * 2 + 1];
             
-            buffer.Add(obs1, act1, r1, obs1, allDones[envIdx]);
-            buffer.Add(obs2, act2, r2, obs2, allDones[envIdx]);
+            buffer.Add(obs1, act1, r1, obs2, allDones[envIdx]);
+            buffer.Add(obs2, act2, r2, obs1, allDones[envIdx]);
             
             avgRewards[rewardIdx % 100] = (r1 + r2) / 2.0f;
             rewardIdx++;
@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
             ImGui::Separator();
             ImGui::Checkbox("Enable Rendering", &renderEnabled);
             ImGui::SliderInt("Watch Env", &selectedEnvIdx, 0, config.numParallelEnvs - 1);
-            ImGui::Text("FPS: %.1f", 1.0f / static_cast<float>(currentTime - lastRenderTime));
+            ImGui::Text("FPS: %.1f", sps);
             ImGui::End();
 
             ImGui::Render();
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
             
             currentAvg = 0;
             for(int i=0; i<std::min(rewardIdx, 100); i++) currentAvg += avgRewards[i];
-            currentAvg /= std::min(rewardIdx, 100);
+            if (rewardIdx > 0) currentAvg /= std::min(rewardIdx, 100);
         }
         
         if (totalSteps % config.checkpointInterval == 0) {

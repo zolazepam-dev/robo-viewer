@@ -1,12 +1,14 @@
 #pragma once
 
-// STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
 #include <vector>
 #include <array>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 
+#include "PhysicsCore.h"
+#include "NeuralMath.h"
+#include "NeuralNetwork.h"
 #include "CombatRobot.h"
 
 constexpr float ARENA_SIZE = 12.0f;
@@ -16,30 +18,8 @@ constexpr float INITIAL_HP = 100.0f;
 constexpr float DAMAGE_MULTIPLIER = 5.0f;
 constexpr int MAX_EPISODE_STEPS = 120000;
 
-constexpr int VECTOR_REWARD_DIM = 4;
 constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
 constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
-
-struct VectorReward
-{
-    float damage_dealt = 0.0f;
-    float damage_taken = 0.0f;
-    float airtime = 0.0f;
-    float energy_used = 0.0f;
-
-    float Dot(const std::array<float, VECTOR_REWARD_DIM>& preference) const
-    {
-        return damage_dealt * preference[0] +
-               damage_taken * preference[1] +
-               airtime * preference[2] +
-               energy_used * preference[3];
-    }
-
-    float Scalar() const
-    {
-        return damage_dealt + damage_taken + airtime + energy_used;
-    }
-};
 
 struct ForceSensorReading
 {

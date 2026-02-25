@@ -157,20 +157,26 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         rotSettings.mPosition1 = position;
         rotSettings.mPosition2 = position;
         
-        rotSettings.SetFixedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationX);
-        rotSettings.SetFixedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationY);
-        rotSettings.SetFixedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationZ);
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationX] = -FLT_MAX;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationY] = -FLT_MAX;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = -FLT_MAX;
         
-        rotSettings.SetFreeAxis(JPH::SixDOFConstraintSettings::EAxis::RotationX);
-        rotSettings.SetFreeAxis(JPH::SixDOFConstraintSettings::EAxis::RotationY);
-        rotSettings.SetFreeAxis(JPH::SixDOFConstraintSettings::EAxis::RotationZ);
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationX] = -FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationX] = FLT_MAX;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationY] = -FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationY] = FLT_MAX;
+        rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = -FLT_MAX;
+        rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = FLT_MAX;
         
         rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationX] = 
-            JPH::MotorSettings(motorTorque, jointDamping, jointArmature);
+            JPH::MotorSettings(motorTorque, jointDamping);
         rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationY] = 
-            JPH::MotorSettings(motorTorque, jointDamping, jointArmature);
+            JPH::MotorSettings(motorTorque, jointDamping);
         rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = 
-            JPH::MotorSettings(motorTorque, jointDamping, jointArmature);
+            JPH::MotorSettings(motorTorque, jointDamping);
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
             bodyInterface.CreateConstraint(&rotSettings, coreBody->GetID(), satBody->GetID()));
@@ -224,13 +230,16 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         slideSettings.SetSliderAxis(direction);
         slideSettings.mLimitsMin = slideMin;
         slideSettings.mLimitsMax = slideMax;
-        slideSettings.mAutoDetectLimit = false;
-        slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f, 0.5f);
+        slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f);
+        
+        JPH::Vec3 perp;
+        if (std::abs(direction.GetY()) < 0.9f) perp = direction.Cross(JPH::Vec3(0, 1, 0)).Normalized();
+        else perp = direction.Cross(JPH::Vec3(1, 0, 0)).Normalized();
         
         slideSettings.mSliderAxis1 = direction;
-        slideSettings.mSliderAxis2 = direction.GetPerpendicular();
-        slideSettings.mNormalAxis1 = direction.GetPerpendicular();
-        slideSettings.mNormalAxis2 = direction.Cross(direction.GetPerpendicular());
+        slideSettings.mSliderAxis2 = perp;
+        slideSettings.mNormalAxis1 = perp;
+        slideSettings.mNormalAxis2 = direction.Cross(perp);
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
@@ -405,7 +414,7 @@ void CombatRobotLoader::ApplyResidualActions(
 }
 
 void CombatRobotLoader::PerformLidarScan(
-    const CombatRobotData& robot,
+    CombatRobotData& robot,
     JPH::PhysicsSystem* physicsSystem)
 {
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
@@ -415,8 +424,7 @@ void CombatRobotLoader::PerformLidarScan(
     
     const float maxDistance = 20.0f;
     
-    JPH::NarrowPhaseQuery narrowPhaseQuery(physicsSystem->GetBroadPhaseLayerFilter(), 
-                                            physicsSystem->GetObjectLayerFilter());
+    const JPH::NarrowPhaseQuery& narrowPhaseQuery = physicsSystem->GetNarrowPhaseQuery();
     
     for (int i = 0; i < NUM_LIDAR_RAYS; ++i)
     {
@@ -428,12 +436,9 @@ void CombatRobotLoader::PerformLidarScan(
         
         JPH::RayCastResult result;
         
-        JPH::BroadPhaseLayerFilter bpFilter;
-        JPH::ObjectLayerFilter objFilter;
-        JPH::BodyFilter bodyFilter;
-        bodyFilter.SetIgnoreBody(robot.mainBodyId);
+        JPH::IgnoreSingleBodyFilter bodyFilter(robot.mainBodyId);
         
-        bool hit = narrowPhaseQuery.CastRay(ray, result, bpFilter, objFilter, bodyFilter);
+        bool hit = narrowPhaseQuery.CastRay(ray, result, JPH::BroadPhaseLayerFilter(), JPH::ObjectLayerFilter(), bodyFilter);
         
         if (hit)
         {
@@ -447,7 +452,7 @@ void CombatRobotLoader::PerformLidarScan(
 }
 
 void CombatRobotLoader::GetObservations(
-    const CombatRobotData& robot,
+    CombatRobotData& robot,
     const CombatRobotData& opponent,
     float* observations,
     JPH::PhysicsSystem* physicsSystem)
