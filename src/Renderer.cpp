@@ -16,6 +16,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 
 extern Camera gCamera;
 
@@ -321,7 +322,7 @@ Renderer::~Renderer()
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
 
-void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos)
+void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex)
 {
     glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -345,17 +346,18 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
 
     JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
     
-    // Grab all bodies from the Physics Engine directly
     JPH::BodyIDVector bodies;
     physicsSystem->GetBodies(bodies);
+
+    const JPH::ObjectLayer staticLayer = Layers::STATIC;
+    const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
 
     for (const JPH::BodyID& body_id : bodies) {
         if (body_id.IsInvalid()) continue;
 
-        // DIMENSIONAL GHOSTING FILTER
-        // Ignore any robot that isn't the Floor (0) or Environment Zero (1)
         JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
-        if (layer != Layers::STATIC && layer != Layers::MOVING_BASE) {
+        
+        if (layer != staticLayer && layer != envBaseLayer) {
             continue; 
         }
 
@@ -379,6 +381,11 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
             scale = glm::vec3(half.GetX() * 2.0f, half.GetY() * 2.0f, half.GetZ() * 2.0f);
             break;
         }
+        case JPH::EShapeSubType::Cylinder: {
+            const auto* cylinder = static_cast<const JPH::CylinderShape*>(shape_ptr);
+            scale = glm::vec3(cylinder->GetRadius(), cylinder->GetHalfHeight() * 2.0f, cylinder->GetRadius());
+            break;
+        }
         default: {
             const JPH::Vec3 extent = shape_ptr->GetLocalBounds().GetExtent();
             scale = glm::vec3(extent.GetX() * 2.0f, extent.GetY() * 2.0f, extent.GetZ() * 2.0f);
@@ -397,9 +404,8 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
         float metallic = 0.9f;
         float roughness = 0.1f;
         
-        // Static floor gets a brighter color so it doesn't look like the void
-        if (layer == Layers::STATIC) {
-            objectColor = glm::vec3(0.4f, 0.4f, 0.4f); // Brightened from 0.1
+        if (layer == staticLayer) {
+            objectColor = glm::vec3(0.4f, 0.4f, 0.4f);
             metallic = 0.1f;
             roughness = 0.9f;
         } else if (body_index % 3 == 0) {
@@ -407,11 +413,11 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
             metallic = 0.8f;
             roughness = 0.2f;
         } else if (body_index % 3 == 1) {
-            objectColor = glm::vec3(0.2f, 0.7f, 0.9f);
+            objectColor = glm::vec3(0.2f, 0.4f, 0.9f);
             metallic = 0.95f;
             roughness = 0.05f;
         } else {
-            objectColor = glm::vec3(0.8f, 0.8f, 0.85f);
+            objectColor = glm::vec3(1.0f, 0.9f, 0.1f);
             metallic = 1.0f;
             roughness = 0.02f;
         }

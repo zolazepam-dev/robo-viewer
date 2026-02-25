@@ -6,9 +6,9 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
 
 #include <iostream>
 #include <chrono>
@@ -107,6 +107,8 @@ int main(int argc, char* argv[]) {
     double lastUiTime = glfwGetTime();
     int lastSteps = 0;
     float sps = 0.0f;
+    int selectedEnvIdx = 0;
+    bool renderEnabled = true;
 
     std::cout << "[JOLTrl] Hybrid Overseer Online. Igniting Training Matrix..." << std::endl;
     
@@ -169,7 +171,12 @@ int main(int argc, char* argv[]) {
             );
 
             // Draw exactly 1 environment via the Dimensional Filter
-            renderer.Draw(vecEnv.GetGlobalPhysics(), camPos);
+            if (renderEnabled) {
+                renderer.Draw(vecEnv.GetGlobalPhysics(), camPos, selectedEnvIdx);
+            } else {
+                glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            }
 
             // Draw ImGui Overlay
             ImGui_ImplOpenGL3_NewFrame();
@@ -187,6 +194,10 @@ int main(int argc, char* argv[]) {
             ImGui::Text("Steps Per Second: %.0f", sps);
             ImGui::Text("Episodes: %d", episodes);
             ImGui::Text("Average Reward: %.2f", currentAvg);
+            ImGui::Separator();
+            ImGui::Checkbox("Enable Rendering", &renderEnabled);
+            ImGui::SliderInt("Watch Env", &selectedEnvIdx, 0, config.numParallelEnvs - 1);
+            ImGui::Text("FPS: %.1f", 1.0f / static_cast<float>(currentTime - lastRenderTime));
             ImGui::End();
 
             ImGui::Render();

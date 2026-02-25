@@ -28,8 +28,7 @@ public:
     Renderer(int width, int height);
     ~Renderer();
 
-    // Signature simplified. We don't need to pass the body array anymore.
-    void Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos);
+    void Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex = 0);
 
 private:
     GLuint CompileShader(GLenum type, const char* source);

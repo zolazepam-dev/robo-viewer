@@ -65,7 +65,7 @@ RobotData RobotLoader::LoadRobot(const std::string& filepath, JPH::PhysicsSystem
         }
 
         const JPH::EMotionType motion_type = (type == "static") ? JPH::EMotionType::Static : JPH::EMotionType::Dynamic;
-        const JPH::ObjectLayer layer = (motion_type == JPH::EMotionType::Static) ? Layers::JOINT_ANCHOR : Layers::MOVING;
+        const JPH::ObjectLayer layer = (motion_type == JPH::EMotionType::Static) ? Layers::STATIC : Layers::MOVING_BASE;
 
         JPH::ShapeSettings::ShapeResult shape_result;
         if (shape == "box") {

@@ -3,13 +3,41 @@
 #include <memory>
 #include <random>
 #include <vector>
+#include <array>
+#include <cmath>
 
-#include "NeuralNetwork.h"
-#include "VectorizedEnv.h"
+#include "SpanNetwork.h"
+#include "LatentMemory.h"
+#include "OpponentPool.h"
+#include "NeuralMath.h"
 
-// TD3 hyperparameters
-struct TD3Config {
+constexpr int VECTOR_REWARD_DIM = 4;
+
+struct VectorReward
+{
+    float damage_dealt = 0.0f;
+    float damage_taken = 0.0f;
+    float airtime = 0.0f;
+    float energy_used = 0.0f;
+
+    float Dot(const std::array<float, VECTOR_REWARD_DIM>& preference) const
+    {
+        return damage_dealt * preference[0] +
+               damage_taken * preference[1] +
+               airtime * preference[2] +
+               energy_used * preference[3];
+    }
+
+    float Scalar() const
+    {
+        return damage_dealt + damage_taken + airtime + energy_used;
+    }
+};
+
+struct TD3Config
+{
     int hiddenDim = 256;
+    int latentDim = 64;
     float actorLR = 3e-4f;
     float criticLR = 3e-4f;
     float gamma = 0.99f;
@@ -17,68 +45,127 @@ struct TD3Config {
     float policyNoise = 0.2f;
     float noiseClip = 0.5f;
     float explNoise = 0.1f;
-    int policyDelay = 2;  // Delayed policy updates
+    int policyDelay = 2;
     int batchSize = 256;
     int bufferSize = 1000000;
     int startSteps = 10000;
+    int snapshotInterval = 10000;
 };
 
-class TD3Trainer {
+class TD3Trainer
+{
 public:
     TD3Trainer(int stateDim, int actionDim, const TD3Config& config = TD3Config());
     
-    // Select action with exploration noise
     void SelectAction(const float* state, float* action);
-    
-    // Select action without noise (for evaluation)
     void SelectActionEval(const float* state, float* action);
+    void SelectActionWithLatent(const float* state, float* action, int envIdx);
+    void SelectActionResidual(const float* state, float* residualAction);
     
-    // Train step
-    void Train(ReplayBuffer& buffer);
+    void Train(class ReplayBuffer& buffer);
+    void TrainWithVectorRewards(class ReplayBuffer& buffer);
     
-    // Save/load
     void Save(const std::string& path) const;
     void Load(const std::string& path);
     
-    // Get step count
     int GetStepCount() const { return mStepCount; }
     void IncrementStep() { mStepCount++; }
     
-    NeuralNetwork& GetActor() { return *mActor; }
-    const NeuralNetwork& GetActor() const { return *mActor; }
+    SpanActorCritic& GetModel() { return mModel; }
+    const SpanActorCritic& GetModel() const { return mModel; }
+
+    void SetPreferenceVector(const std::array<float, VECTOR_REWARD_DIM>& pref) { mPreferenceVector = pref; }
+    const std::array<float, VECTOR_REWARD_DIM>& GetPreferenceVector() const { return mPreferenceVector; }
+    void SetPreference(float damageDealt, float damageTaken, float airtime, float energy)
+    {
+        mPreferenceVector[0] = damageDealt;
+        mPreferenceVector[1] = damageTaken;
+        mPreferenceVector[2] = airtime;
+        mPreferenceVector[3] = energy;
+    }
+
+    float ComputeScalarReward(const VectorReward& vr) const
+    {
+        return vr.Dot(mPreferenceVector);
+    }
+
+    OpponentPool& GetOpponentPool() { return mOpponentPool; }
+    const OpponentPool& GetOpponentPool() const { return mOpponentPool; }
     
+    void SnapshotOpponent();
+    bool SampleOpponent();
+
 private:
-    void UpdateCritic(ReplayBuffer& buffer);
+    void UpdateCritic(class ReplayBuffer& buffer);
     void UpdateActor();
     void UpdateTargets();
+    void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
     
     int mStateDim;
     int mActionDim;
     TD3Config mConfig;
+
+    std::array<float, VECTOR_REWARD_DIM> mPreferenceVector = {0.5f, 0.3f, 0.15f, 0.05f};
     
-    std::unique_ptr<NeuralNetwork> mActor;
-    std::unique_ptr<NeuralNetwork> mActorTarget;
-    std::unique_ptr<NeuralNetwork> mCritic1;
-    std::unique_ptr<NeuralNetwork> mCritic1Target;
-    std::unique_ptr<NeuralNetwork> mCritic2;
-    std::unique_ptr<NeuralNetwork> mCritic2Target;
+    SpanActorCritic mModel;
+    OpponentPool mOpponentPool;
     
-    // Workspace for training
     std::vector<float> mBatchStates;
     std::vector<float> mBatchActions;
     std::vector<float> mBatchRewards;
     std::vector<float> mBatchNextStates;
     std::vector<float> mBatchDones;
+
+    std::vector<VectorReward> mBatchVectorRewards;
     
     std::vector<float> mNextActions;
     std::vector<float> mQ1Values;
     std::vector<float> mQ2Values;
     std::vector<float> mTargetQ;
     
-    std::vector<float> mGradsW;
-    std::vector<float> mGradsB;
+    std::vector<float> mGrads;
+
+    std::vector<float> mBatchLogProbs;
+    std::vector<float> mTargetLogProbs;
+    std::vector<int> mSampledIndices;
     
     std::mt19937 mRng;
     int mStepCount = 0;
     int mUpdateCount = 0;
+};
+
+class ReplayBuffer
+{
+public:
+    ReplayBuffer(int capacity, int stateDim, int actionDim);
+    
+    void Add(const float* state, const float* action, const VectorReward& reward,
+             const float* nextState, bool done);
+    void Add(const float* state, const float* action, float reward,
+             const float* nextState, bool done);
+    
+    void Sample(int batchSize, float* states, float* actions, float* rewards,
+                float* nextStates, float* dones, std::mt19937& rng);
+    
+    void SampleVectorRewards(int batchSize, float* states, float* actions,
+                             VectorReward* rewards, float* nextStates, float* dones,
+                             std::mt19937& rng);
+    
+    int Size() const { return mSize; }
+    bool IsReady(int batchSize) const { return mSize >= batchSize; }
+    
+private:
+    std::vector<float> mStates;
+    std::vector<float> mActions;
+    std::vector<float> mRewards;
+    std::vector<float> mNextStates;
+    std::vector<float> mDones;
+
+    std::vector<VectorReward> mVectorRewards;
+    
+    int mCapacity;
+    int mStateDim;
+    int mActionDim;
+    int mSize = 0;
+    int mIndex = 0;
 };

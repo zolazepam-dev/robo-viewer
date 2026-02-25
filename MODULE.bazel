@@ -3,27 +3,25 @@ module(
     version = "1.0.0",
 )
 
-bazel_dep(name = "rules_cc", version = "0.1.4")
+# --- Core Dependencies ---
+bazel_dep(name = "rules_cc", version = "0.2.17") # Bumped to the stable BCR version
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
+# --- Graphics & Math Stack (Native BCR) ---
 bazel_dep(name = "glfw", version = "3.4.0")
 bazel_dep(name = "glm", version = "1.0.1")
-bazel_dep(name = "nlohmann_json", version = "3.11.3")
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "glew", version = "2.2.0")
+bazel_dep(name = "nlohmann_json", version = "3.11.3")
+bazel_dep(name = "imgui", version = "1.92.2") # Replaces your custom http_archive!
 
+# --- External Physics Engine (Jolt) ---
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "jolt",
-    build_file = "//third_party:jolt.BUILD",
+    # FIX: Added '@' to strictly route this to your main workspace folder
+    build_file = "@//third_party:jolt.BUILD",
     sha256 = "5231953d1b1d5b9cb617facf86341a11337e1cd04456949af6911b917a1646cb",
     strip_prefix = "JoltPhysics-5.0.0",
     url = "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.0.0.tar.gz",
-)
-
-# Dear ImGui
-http_archive(
-    name = "imgui",
-    urls = ["https://github.com/ocornut/imgui/archive/refs/tags/v1.90.4.tar.gz"],
-    strip_prefix = "imgui-1.90.4",
-    build_file = "//third_party:imgui.BUILD",
 )

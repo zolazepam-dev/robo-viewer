@@ -1,49 +1,22 @@
 {
-  "name": "CombatBot",
   "core": {
-    "name": "body",
-    "shape": "sphere",
     "radius": 0.5,
-    "mass": 13.0,
-    "position": [0.0, 0.0, 0.0]
+    "mass": 13.0
   },
   "satellites": [
-    {
-      "name": "sat_0",
-      "offset_angle": 0,
-      "distance": 1.4,
-      "sphere_radius": 0.1,
-      "mass": 3.5,
-      "spike_length": 0.4,
-      "spike_radius": 0.02
-    },
-    {
-      "name": "sat_1",
-      "offset_angle": 90,
-      "distance": 1.4,
-      "sphere_radius": 0.1,
-      "mass": 3.5,
-      "spike_length": 0.4,
-      "spike_radius": 0.02
-    },
-    {
-      "name": "sat_2",
-      "offset_angle": 180,
-      "distance": 1.4,
-      "sphere_radius": 0.1,
-      "mass": 3.5,
-      "spike_length": 0.4,
-      "spike_radius": 0.02
-    },
-    {
-      "name": "sat_3",
-      "offset_angle": 270,
-      "distance": 1.4,
-      "sphere_radius": 0.1,
-      "mass": 3.5,
-      "spike_length": 0.4,
-      "spike_radius": 0.02
-    }
+    { "id": 1, "offset_angle": 0, "elevation": 0, "distance": 1.4 },
+    { "id": 2, "offset_angle": 72, "elevation": 0, "distance": 1.4 },
+    { "id": 3, "offset_angle": 144, "elevation": 0, "distance": 1.4 },
+    { "id": 4, "offset_angle": 216, "elevation": 0, "distance": 1.4 },
+    { "id": 5, "offset_angle": 288, "elevation": 0, "distance": 1.4 },
+    { "id": 6, "offset_angle": 0, "elevation": 45, "distance": 1.4 },
+    { "id": 7, "offset_angle": 90, "elevation": 45, "distance": 1.4 },
+    { "id": 8, "offset_angle": 180, "elevation": 45, "distance": 1.4 },
+    { "id": 9, "offset_angle": 270, "elevation": 45, "distance": 1.4 },
+    { "id": 10, "offset_angle": 0, "elevation": -45, "distance": 1.4 },
+    { "id": 11, "offset_angle": 90, "elevation": -45, "distance": 1.4 },
+    { "id": 12, "offset_angle": 180, "elevation": -45, "distance": 1.4 },
+    { "id": 13, "offset_angle": 270, "elevation": -45, "distance": 1.4 }
   ],
   "joints": {
     "hinge_damping": 0.8,

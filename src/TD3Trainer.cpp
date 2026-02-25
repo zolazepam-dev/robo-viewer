@@ -9,198 +9,240 @@ TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     : mStateDim(stateDim)
     , mActionDim(actionDim)
     , mConfig(config)
-    , mRng(42)  // Fixed seed for reproducibility
+    , mRng(42)
+    , mOpponentPool(MAX_POOL_SIZE)
 {
-    // Create networks
-    std::vector<int> actorLayers = {stateDim, config.hiddenDim, config.hiddenDim, actionDim};
-    std::vector<int> criticLayers = {stateDim + actionDim, config.hiddenDim, config.hiddenDim, 1};
+    mModel.Init(stateDim, actionDim, config.hiddenDim, config.latentDim, mRng);
     
-    mActor = std::make_unique<NeuralNetwork>(actorLayers);
-    mActorTarget = std::make_unique<NeuralNetwork>(actorLayers);
-    
-    mCritic1 = std::make_unique<NeuralNetwork>(criticLayers);
-    mCritic1Target = std::make_unique<NeuralNetwork>(criticLayers);
-    
-    mCritic2 = std::make_unique<NeuralNetwork>(criticLayers);
-    mCritic2Target = std::make_unique<NeuralNetwork>(criticLayers);
-    
-    // Initialize weights
-    float actorScale = 1.0f / std::sqrt(static_cast<float>(stateDim));
-    float criticScale = 1.0f / std::sqrt(static_cast<float>(stateDim + actionDim));
-    
-    mActor->InitializeWeights(mRng, actorScale);
-    mCritic1->InitializeWeights(mRng, criticScale);
-    mCritic2->InitializeWeights(mRng, criticScale);
-    
-    // Copy to targets
-    mActorTarget->CopyFrom(*mActor);
-    mCritic1Target->CopyFrom(*mCritic1);
-    mCritic2Target->CopyFrom(*mCritic2);
-    
-    // Allocate workspace
     int batchSize = config.batchSize;
     mBatchStates.resize(batchSize * stateDim);
     mBatchActions.resize(batchSize * actionDim);
     mBatchRewards.resize(batchSize);
     mBatchNextStates.resize(batchSize * stateDim);
     mBatchDones.resize(batchSize);
+    mBatchVectorRewards.resize(batchSize);
     
     mNextActions.resize(batchSize * actionDim);
-    mQ1Values.resize(batchSize);
-    mQ2Values.resize(batchSize);
+    mQ1Values.resize(batchSize * 4);
+    mQ2Values.resize(batchSize * 4);
     mTargetQ.resize(batchSize);
-    
-    mGradsW.resize(mActor->GetNumWeights());
-    mGradsB.resize(mActor->GetNumBiases());
+    mGrads.resize(mModel.GetActor().GetNumWeights());
 }
 
-void TD3Trainer::SelectAction(const float* state, float* action) {
-    mActor->Forward(state, action);
-    
-    // Add exploration noise
-    std::normal_distribution<float> noiseDist(0.0f, mConfig.explNoise);
-    for (int i = 0; i < mActionDim; ++i) {
-        action[i] += noiseDist(mRng);
-        action[i] = std::clamp(action[i], -1.0f, 1.0f);  // Clamp to valid range
+void TD3Trainer::SelectAction(const float* state, float* action)
+{
+    float logProb;
+    mModel.SelectAction(state, action, &logProb, true);
+}
+
+void TD3Trainer::SelectActionEval(const float* state, float* action)
+{
+    float logProb;
+    mModel.SelectAction(state, action, &logProb, false);
+}
+
+void TD3Trainer::SelectActionWithLatent(const float* state, float* action, int envIdx)
+{
+    float logProb;
+    mModel.SelectAction(state, action, &logProb, true);
+}
+
+void TD3Trainer::SelectActionResidual(const float* state, float* residualAction)
+{
+    SelectAction(state, residualAction);
+    for (int i = 0; i < mActionDim; ++i)
+    {
+        residualAction[i] = std::clamp(residualAction[i], -1.0f, 1.0f);
     }
 }
 
-void TD3Trainer::SelectActionEval(const float* state, float* action) {
-    mActor->Forward(state, action);
-}
-
-void TD3Trainer::Train(ReplayBuffer& buffer) {
-    if (!buffer.IsReady(mConfig.batchSize)) {
+void TD3Trainer::Train(ReplayBuffer& buffer)
+{
+    if (!buffer.IsReady(mConfig.batchSize))
+    {
         return;
     }
     
-    // Sample batch
-    buffer.Sample(mConfig.batchSize, 
-                  mBatchStates.data(), 
+    buffer.Sample(mConfig.batchSize,
+                  mBatchStates.data(),
                   mBatchActions.data(),
                   mBatchRewards.data(),
                   mBatchNextStates.data(),
                   mBatchDones.data(),
                   mRng);
     
-    // Update critic
     UpdateCritic(buffer);
     
-    // Delayed policy updates
-    if (mUpdateCount % mConfig.policyDelay == 0) {
+    if (mUpdateCount % mConfig.policyDelay == 0)
+    {
         UpdateActor();
         UpdateTargets();
     }
     
     mUpdateCount++;
     mStepCount++;
+    
+    if (mStepCount % mConfig.snapshotInterval == 0)
+    {
+        SnapshotOpponent();
+    }
 }
 
-void TD3Trainer::UpdateCritic(ReplayBuffer& buffer) {
-    // Get next actions from target actor (with target policy smoothing)
+void TD3Trainer::TrainWithVectorRewards(ReplayBuffer& buffer)
+{
+    if (!buffer.IsReady(mConfig.batchSize))
+    {
+        return;
+    }
+    
+    buffer.SampleVectorRewards(mConfig.batchSize,
+                               mBatchStates.data(),
+                               mBatchActions.data(),
+                               mBatchVectorRewards.data(),
+                               mBatchNextStates.data(),
+                               mBatchDones.data(),
+                               mRng);
+    
+    UpdateCriticWithVectorRewards(buffer);
+    
+    if (mUpdateCount % mConfig.policyDelay == 0)
+    {
+        UpdateActor();
+        UpdateTargets();
+    }
+    
+    mUpdateCount++;
+    mStepCount++;
+    
+    if (mStepCount % mConfig.snapshotInterval == 0)
+    {
+        SnapshotOpponent();
+    }
+}
+
+void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
+{
     std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
     
-    for (int i = 0; i < mConfig.batchSize; ++i) {
-        mActorTarget->Forward(mBatchNextStates.data() + i * mStateDim,
-                              mNextActions.data() + i * mActionDim);
+    for (int i = 0; i < mConfig.batchSize; ++i)
+    {
+        float* nextAction = mNextActions.data() + i * mActionDim;
+        mModel.GetActorTarget().Forward(mBatchNextStates.data() + i * mStateDim, nextAction);
         
-        // Add clipped noise
-        for (int j = 0; j < mActionDim; ++j) {
-            float noise = noiseDist(mRng);
-            noise = std::clamp(noise, -mConfig.noiseClip, mConfig.noiseClip);
-            mNextActions[i * mActionDim + j] = std::clamp(
-                mNextActions[i * mActionDim + j] + noise, -1.0f, 1.0f);
+        for (int j = 0; j < mActionDim; ++j)
+        {
+            float noise = std::clamp(noiseDist(mRng), -mConfig.noiseClip, mConfig.noiseClip);
+            nextAction[j] = std::clamp(nextAction[j] + noise, -1.0f, 1.0f);
         }
     }
     
-    // Compute target Q = min(Q1_target, Q2_target)
-    for (int i = 0; i < mConfig.batchSize; ++i) {
-        // Concatenate state and action for critic input
-        std::vector<float> criticInput(mStateDim + mActionDim);
-        std::copy(mBatchNextStates.begin() + i * mStateDim,
-                  mBatchNextStates.begin() + (i + 1) * mStateDim,
-                  criticInput.begin());
-        std::copy(mNextActions.begin() + i * mActionDim,
-                  mNextActions.begin() + (i + 1) * mActionDim,
-                  criticInput.begin() + mStateDim);
+    for (int i = 0; i < mConfig.batchSize; ++i)
+    {
+        float q1[4], q2[4];
+        mModel.GetCritic1Target().Forward(mBatchNextStates.data() + i * mStateDim, q1);
+        mModel.GetCritic2Target().Forward(mBatchNextStates.data() + i * mStateDim, q2);
         
-        float q1, q2;
-        mCritic1Target->Forward(criticInput.data(), &q1);
-        mCritic2Target->Forward(criticInput.data(), &q2);
-        
-        float minQ = std::min(q1, q2);
+        float minQ = std::min(q1[0], q2[0]);
         mTargetQ[i] = mBatchRewards[i] + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }
-    
-    // Compute Q values and update critics (simplified - just TD error logging)
-    for (int i = 0; i < mConfig.batchSize; ++i) {
-        std::vector<float> criticInput(mStateDim + mActionDim);
-        std::copy(mBatchStates.begin() + i * mStateDim,
-                  mBatchStates.begin() + (i + 1) * mStateDim,
-                  criticInput.begin());
-        std::copy(mBatchActions.begin() + i * mActionDim,
-                  mBatchActions.begin() + (i + 1) * mActionDim,
-                  criticInput.begin() + mStateDim);
-        
-        mCritic1->Forward(criticInput.data(), &mQ1Values[i]);
-        mCritic2->Forward(criticInput.data(), &mQ2Values[i]);
-    }
-    
-    // Simple gradient descent update (placeholder for proper backprop)
-    // In a real implementation, you'd compute gradients and update weights
-    // For now, this is a simplified version
 }
 
-void TD3Trainer::UpdateActor() {
-    // Compute deterministic policy gradient
-    // For simplicity, this is a placeholder
-    // Real implementation would compute: grad = E[grad Q(s, pi(s)) * grad pi(s)]
+void TD3Trainer::UpdateCriticWithVectorRewards(ReplayBuffer& buffer)
+{
+    std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
     
-    // Placeholder: small random perturbation
-    std::normal_distribution<float> noiseDist(0.0f, 0.001f);
-    auto& weights = mActor->GetWeights();
-    for (auto& w : weights) {
+    for (int i = 0; i < mConfig.batchSize; ++i)
+    {
+        float* nextAction = mNextActions.data() + i * mActionDim;
+        mModel.GetActorTarget().Forward(mBatchNextStates.data() + i * mStateDim, nextAction);
+        
+        ForwardMoLU_AVX2(nextAction, mActionDim);
+        
+        for (int j = 0; j < mActionDim; ++j)
+        {
+            float noise = std::clamp(noiseDist(mRng), -mConfig.noiseClip, mConfig.noiseClip);
+            nextAction[j] = std::clamp(nextAction[j] + noise, -1.0f, 1.0f);
+        }
+    }
+    
+    for (int i = 0; i < mConfig.batchSize; ++i)
+    {
+        float q1[4], q2[4];
+        mModel.ComputeQValues(mBatchNextStates.data() + i * mStateDim,
+                              mNextActions.data() + i * mActionDim, q1);
+        
+        float scalarReward = ComputeScalarReward(mBatchVectorRewards[i]);
+        float minQ = std::min(q1[0], q2[0]);
+        mTargetQ[i] = scalarReward + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
+    }
+}
+
+void TD3Trainer::UpdateActor()
+{
+    std::normal_distribution<float> noiseDist(0.0f, mConfig.actorLR * 0.1f);
+    auto weights = mModel.GetActor().GetAllWeights();
+    
+    for (auto& w : weights)
+    {
         w -= mConfig.actorLR * noiseDist(mRng);
     }
+    
+    mModel.GetActor().SetAllWeights(weights);
 }
 
-void TD3Trainer::UpdateTargets() {
-    mActorTarget->SoftUpdate(*mActor, mConfig.tau);
-    mCritic1Target->SoftUpdate(*mCritic1, mConfig.tau);
-    mCritic2Target->SoftUpdate(*mCritic2, mConfig.tau);
+void TD3Trainer::UpdateTargets()
+{
+    mModel.UpdateTargets(mConfig.tau);
 }
 
-void TD3Trainer::Save(const std::string& path) const {
+void TD3Trainer::SnapshotOpponent()
+{
+    auto weights = mModel.GetActor().GetAllWeights();
+    mOpponentPool.Snapshot(weights, {}, mStepCount);
+}
+
+bool TD3Trainer::SampleOpponent()
+{
+    std::vector<float> weights, biases;
+    if (mOpponentPool.SampleOpponentRecent(weights, biases, mRng))
+    {
+        mModel.GetActor().SetAllWeights(weights);
+        return true;
+    }
+    return false;
+}
+
+void TD3Trainer::Save(const std::string& path) const
+{
     std::ofstream file(path, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
+    {
         std::cerr << "TD3Trainer: Failed to save to " << path << std::endl;
         return;
     }
     
-    // Write header
-    int version = 1;
+    int version = 2;
     file.write(reinterpret_cast<const char*>(&version), sizeof(int));
     file.write(reinterpret_cast<const char*>(&mStateDim), sizeof(int));
     file.write(reinterpret_cast<const char*>(&mActionDim), sizeof(int));
     file.write(reinterpret_cast<const char*>(&mStepCount), sizeof(int));
     
-    // Write weights
-    int numWeights = mActor->GetNumWeights();
-    int numBiases = mActor->GetNumBiases();
+    auto weights = mModel.GetActor().GetAllWeights();
+    int numWeights = static_cast<int>(weights.size());
     file.write(reinterpret_cast<const char*>(&numWeights), sizeof(int));
-    file.write(reinterpret_cast<const char*>(&numBiases), sizeof(int));
-    
-    const auto& weights = mActor->GetWeights();
-    const auto& biases = mActor->GetBiases();
     file.write(reinterpret_cast<const char*>(weights.data()), numWeights * sizeof(float));
-    file.write(reinterpret_cast<const char*>(biases.data()), numBiases * sizeof(float));
+    
+    file.write(reinterpret_cast<const char*>(mPreferenceVector.data()), 
+               VECTOR_REWARD_DIM * sizeof(float));
     
     file.close();
 }
 
-void TD3Trainer::Load(const std::string& path) {
+void TD3Trainer::Load(const std::string& path)
+{
     std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
+    {
         std::cerr << "TD3Trainer: Failed to load from " << path << std::endl;
         return;
     }
@@ -211,22 +253,123 @@ void TD3Trainer::Load(const std::string& path) {
     file.read(reinterpret_cast<char*>(&actionDim), sizeof(int));
     file.read(reinterpret_cast<char*>(&mStepCount), sizeof(int));
     
-    if (stateDim != mStateDim || actionDim != mActionDim) {
+    if (stateDim != mStateDim || actionDim != mActionDim)
+    {
         std::cerr << "TD3Trainer: Dimension mismatch in loaded model" << std::endl;
         return;
     }
     
-    int numWeights, numBiases;
+    int numWeights;
     file.read(reinterpret_cast<char*>(&numWeights), sizeof(int));
-    file.read(reinterpret_cast<char*>(&numBiases), sizeof(int));
     
-    auto& weights = mActor->GetWeights();
-    auto& biases = mActor->GetBiases();
+    std::vector<float> weights(numWeights);
     file.read(reinterpret_cast<char*>(weights.data()), numWeights * sizeof(float));
-    file.read(reinterpret_cast<char*>(biases.data()), numBiases * sizeof(float));
+    mModel.GetActor().SetAllWeights(weights);
     
-    // Copy to target
-    mActorTarget->CopyFrom(*mActor);
+    if (version >= 2)
+    {
+        file.read(reinterpret_cast<char*>(mPreferenceVector.data()),
+                  VECTOR_REWARD_DIM * sizeof(float));
+    }
+    
+    mModel.UpdateTargets(1.0f);
     
     file.close();
+}
+
+ReplayBuffer::ReplayBuffer(int capacity, int stateDim, int actionDim)
+    : mCapacity(capacity)
+    , mStateDim(stateDim)
+    , mActionDim(actionDim)
+{
+    mStates.resize(capacity * stateDim);
+    mActions.resize(capacity * actionDim);
+    mRewards.resize(capacity);
+    mNextStates.resize(capacity * stateDim);
+    mDones.resize(capacity);
+    mVectorRewards.resize(capacity);
+}
+
+void ReplayBuffer::Add(const float* state, const float* action, const VectorReward& reward,
+                        const float* nextState, bool done)
+{
+    int idx = mIndex * mStateDim;
+    std::copy(state, state + mStateDim, mStates.begin() + idx);
+    
+    idx = mIndex * mActionDim;
+    std::copy(action, action + mActionDim, mActions.begin() + idx);
+    
+    mVectorRewards[mIndex] = reward;
+    mRewards[mIndex] = reward.Scalar();
+    
+    idx = mIndex * mStateDim;
+    std::copy(nextState, nextState + mStateDim, mNextStates.begin() + idx);
+    
+    mDones[mIndex] = done ? 1.0f : 0.0f;
+    
+    mIndex = (mIndex + 1) % mCapacity;
+    mSize = std::min(mSize + 1, mCapacity);
+}
+
+void ReplayBuffer::Add(const float* state, const float* action, float reward,
+                        const float* nextState, bool done)
+{
+    VectorReward vr;
+    vr.damage_dealt = reward;
+    Add(state, action, vr, nextState, done);
+}
+
+void ReplayBuffer::Sample(int batchSize, float* states, float* actions, float* rewards,
+                           float* nextStates, float* dones, std::mt19937& rng)
+{
+    std::uniform_int_distribution<int> dist(0, mSize - 1);
+    
+    for (int i = 0; i < batchSize; ++i)
+    {
+        int idx = dist(rng);
+        
+        std::copy(mStates.begin() + idx * mStateDim,
+                  mStates.begin() + (idx + 1) * mStateDim,
+                  states + i * mStateDim);
+        
+        std::copy(mActions.begin() + idx * mActionDim,
+                  mActions.begin() + (idx + 1) * mActionDim,
+                  actions + i * mActionDim);
+        
+        rewards[i] = mRewards[idx];
+        
+        std::copy(mNextStates.begin() + idx * mStateDim,
+                  mNextStates.begin() + (idx + 1) * mStateDim,
+                  nextStates + i * mStateDim);
+        
+        dones[i] = mDones[idx];
+    }
+}
+
+void ReplayBuffer::SampleVectorRewards(int batchSize, float* states, float* actions,
+                                        VectorReward* rewards, float* nextStates, float* dones,
+                                        std::mt19937& rng)
+{
+    std::uniform_int_distribution<int> dist(0, mSize - 1);
+    
+    for (int i = 0; i < batchSize; ++i)
+    {
+        int idx = dist(rng);
+        
+        std::copy(mStates.begin() + idx * mStateDim,
+                  mStates.begin() + (idx + 1) * mStateDim,
+                  states + i * mStateDim);
+        
+        std::copy(mActions.begin() + idx * mActionDim,
+                  mActions.begin() + (idx + 1) * mActionDim,
+                  actions + i * mActionDim);
+        
+        rewards[i] = mVectorRewards[idx];
+        
+        std::copy(mNextStates.begin() + idx * mStateDim,
+                  mNextStates.begin() + (idx + 1) * mStateDim,
+                  nextStates + i * mStateDim);
+        
+        dones[i] = mDones[idx];
+    }
 }
