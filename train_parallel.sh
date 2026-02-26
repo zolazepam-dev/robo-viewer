@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # SAFE MODE: Minimal load for visual debugging
-DEFAULT_ENVS=2  # 2 envs = 4 robots total
+DEFAULT_ENVS=10 # 2 envs = 4 robots total
 DEFAULT_CHECKPOINT_INTERVAL=10000
 DEFAULT_MAX_STEPS=10000000
 DEFAULT_CHECKPOINT_DIR="checkpoints"

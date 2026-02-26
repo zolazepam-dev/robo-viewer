@@ -8,10 +8,19 @@
 #include <chrono>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Body/BodyInterface.h>
+
+
+#include <Jolt/Physics/Collision/Shape/Shape.h>
+#include <Jolt/Physics/PhysicsSystem.h>
 
 // Global single instance of CombatContactListener
 CombatContactListener* gCombatContactListener = nullptr;
+
+const float kRoomSize = 12.0f;        // Each room is 12x12x12 meters
+const float kWallThickness = 1.0f;    // 1 meter thick walls
+const float kRoomSpacing = kRoomSize + kWallThickness;  // 13m total spacing between rooms
+const int kNumRoomsPerDimension = 3;  // 3x3x3 grid
+const int kTotalRooms = kNumRoomsPerDimension * kNumRoomsPerDimension * kNumRoomsPerDimension;
 
 VectorizedEnv::VectorizedEnv(int numEnvs)
     : mNumEnvs(numEnvs)
@@ -20,7 +29,6 @@ VectorizedEnv::VectorizedEnv(int numEnvs)
 
 void VectorizedEnv::Init()
 {
-
     if (!mPhysicsCore.Init(mNumEnvs))
     {
         std::cerr << "[JOLTrl] FATAL: Global PhysicsCore failed to initialize!" << std::endl;
@@ -31,20 +39,109 @@ void VectorizedEnv::Init()
     gCombatContactListener = &CombatContactListener::Get();
     mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
 
-    // --- THE GLOBAL ARENA FLOOR ---
-    // A single, massive 200x200 static plane for all 128 dimensions to share
+    // --- Create 3x3x3 room matrix with walls, floor, and ceiling ---
     JPH::BodyInterface& body_interface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
-    
-    // 1. Create the shape settings safely
-    JPH::BoxShapeSettings floor_shape_settings(JPH::Vec3(100.0f, 1.0f, 100.0f));
-    
-    // 2. Bake it into a reference-counted Shape BEFORE passing to the body settings
+
+    // Create shapes for room components (walls, floor, ceiling)
+    JPH::BoxShapeSettings floor_shape_settings(JPH::Vec3(kRoomSize / 2, kWallThickness / 2, kRoomSize / 2));
     JPH::RefConst<JPH::Shape> floor_shape = floor_shape_settings.Create().Get();
-    
-    // 3. Create the body
-    JPH::BodyCreationSettings floor_settings(floor_shape, JPH::RVec3(0.0f, -1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
-    // ------------------------------
+
+    JPH::BoxShapeSettings ceiling_shape_settings(JPH::Vec3(kRoomSize / 2, kWallThickness / 2, kRoomSize / 2));
+    JPH::RefConst<JPH::Shape> ceiling_shape = ceiling_shape_settings.Create().Get();
+
+    JPH::BoxShapeSettings wall_x_shape_settings(JPH::Vec3(kWallThickness / 2, kRoomSize / 2, kRoomSize / 2));
+    JPH::RefConst<JPH::Shape> wall_x_shape = wall_x_shape_settings.Create().Get();
+
+    JPH::BoxShapeSettings wall_z_shape_settings(JPH::Vec3(kRoomSize / 2, kRoomSize / 2, kWallThickness / 2));
+    JPH::RefConst<JPH::Shape> wall_z_shape = wall_z_shape_settings.Create().Get();
+
+    JPH::BoxShapeSettings wall_y_shape_settings(JPH::Vec3(kRoomSize / 2, kRoomSize / 2, kWallThickness / 2));
+    JPH::RefConst<JPH::Shape> wall_y_shape = wall_y_shape_settings.Create().Get();
+
+    // Create all rooms in 3x3x3 grid
+    for (int x = 0; x < kNumRoomsPerDimension; ++x)
+    {
+        for (int y = 0; y < kNumRoomsPerDimension; ++y)
+        {
+            for (int z = 0; z < kNumRoomsPerDimension; ++z)
+            {
+                // Calculate room origin position
+                JPH::RVec3 room_origin(
+                    x * kRoomSpacing,
+                    y * kRoomSpacing,
+                    z * kRoomSpacing
+                );
+
+                // --- Floor ---
+                JPH::RVec3 floor_pos = room_origin + JPH::RVec3(0, kWallThickness / 2, 0);
+                JPH::BodyCreationSettings floor_settings(
+                    floor_shape,
+                    floor_pos,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
+
+                // --- Ceiling ---
+                JPH::RVec3 ceiling_pos = room_origin + JPH::RVec3(0, kRoomSize + kWallThickness / 2, 0);
+                JPH::BodyCreationSettings ceiling_settings(
+                    ceiling_shape,
+                    ceiling_pos,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(ceiling_settings, JPH::EActivation::DontActivate);
+
+                // --- Walls ---
+                // Positive X wall
+                JPH::RVec3 wall_pos_x_pos = room_origin + JPH::RVec3(kRoomSize + kWallThickness / 2, kRoomSize / 2, 0);
+                JPH::BodyCreationSettings wall_x_pos_settings(
+                    wall_x_shape,
+                    wall_pos_x_pos,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(wall_x_pos_settings, JPH::EActivation::DontActivate);
+
+                // Negative X wall
+                JPH::RVec3 wall_pos_x_neg = room_origin + JPH::RVec3(-kWallThickness / 2, kRoomSize / 2, 0);
+                JPH::BodyCreationSettings wall_x_neg_settings(
+                    wall_x_shape,
+                    wall_pos_x_neg,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(wall_x_neg_settings, JPH::EActivation::DontActivate);
+
+                // Positive Z wall
+                JPH::RVec3 wall_pos_z_pos = room_origin + JPH::RVec3(0, kRoomSize / 2, kRoomSize + kWallThickness / 2);
+                JPH::BodyCreationSettings wall_z_pos_settings(
+                    wall_z_shape,
+                    wall_pos_z_pos,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(wall_z_pos_settings, JPH::EActivation::DontActivate);
+
+                // Negative Z wall
+                JPH::RVec3 wall_pos_z_neg = room_origin + JPH::RVec3(0, kRoomSize / 2, -kWallThickness / 2);
+                JPH::BodyCreationSettings wall_z_neg_settings(
+                    wall_z_shape,
+                    wall_pos_z_neg,
+                    JPH::Quat::sIdentity(),
+                    JPH::EMotionType::Static,
+                    Layers::STATIC
+                );
+                body_interface.CreateAndAddBody(wall_z_neg_settings, JPH::EActivation::DontActivate);
+            }
+        }
+    }
+    // -------------------------------------------------
 
     mEnvs.resize(mNumEnvs);
     std::cout << "[JOLTrl] Initializing " << mNumEnvs << " environments..." << std::endl;
@@ -136,6 +233,7 @@ void VectorizedEnv::ResetDoneEnvs()
         }
     }
 }
+
 VectorizedEnv::~VectorizedEnv()
 {
     if (gCombatContactListener)

@@ -169,151 +169,108 @@ int main(int argc, char* argv[]) {
     std::mt19937 rng(42);
     std::normal_distribution<float> noiseDist(0.0f, 1.0f);
     
-    int totalSteps = 0;
-    int episodes = 0;
-    float currentAvg = 0.0f;
-    std::vector<float> avgRewards(100, 0.0f);
-    int rewardIdx = 0;
-    
-    double lastRenderTime = glfwGetTime();
-    double lastUiTime = glfwGetTime();
-    int lastSteps = 0;
-    float sps = 0.0f;
-    int selectedEnvIdx = 0;
-    bool renderEnabled = true;
+     auto last_time = std::chrono::high_resolution_clock::now();
+     int step_counter = 0;
+     double current_sps = 0.0;
+     int selectedEnvIdx = 0;
+     bool renderEnabled = true;
+     Camera camera;
 
-    // Initialize camera
-    Camera camera;
+     std::cout << "[JOLTrl] Visualizer Matrix Engaged. Suppressing per-frame debug spam." << std::endl;
 
-    std::cout << "[JOLTrl] Hybrid Overseer Online. Igniting Training Matrix..." << std::endl;
-    
-    // 4. The Master Loop
-    while (totalSteps < config.maxSteps && !glfwWindowShouldClose(window)) {
-        
-         // --- MACHINE LEARNING PHASE ---
-         if (totalSteps < td3cfg.startSteps) {
-             for (int i = 0; i < totalActionDim; ++i) actions[i] = noiseDist(rng);
-         } else {
-            const auto& allObs = vecEnv.GetObservations();
-            for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
-                const float* obs1 = allObs.data() + envIdx * stateDim * 2;
-                const float* obs2 = obs1 + stateDim;
-                float* act1 = actions.data() + envIdx * actionDim * 2;
-                float* act2 = act1 + actionDim;
-                trainer.SelectAction(obs1, act1);
-                trainer.SelectAction(obs2, act2);
-            }
-        }
-        
+     while (!glfwWindowShouldClose(window)) {
+         
+         // 1. Generate kinetic jitter actions
+         AlignedVector32<float> actions(config.numParallelEnvs * 2 * 56);
+         for (float& a : actions) {
+             // Apply massive random forces to make them jump/move visibly
+             a = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+         }
+
+         // 2. Step the physics matrix silently
          vecEnv.Step(actions);
          vecEnv.ResetDoneEnvs();
-        
-        const auto& allObs = vecEnv.GetObservations();
-        const auto& allRewards = vecEnv.GetRewards();
-        const auto& allDones = vecEnv.GetDones();
-        
-        // Prepare telemetry data
-        TelemetryData telemetryData;
-        telemetryData.stepCount = totalSteps;
-        telemetryData.numEnvs = config.numParallelEnvs;
-        
-        // Copy observation data (limited to fit in telemetry structure)
-        int obsCopySize = std::min(config.numParallelEnvs * stateDim * 2, 128 * 240 * 2);
-        std::memcpy(telemetryData.envStates, allObs.data(), obsCopySize * sizeof(float));
-        
-        // Copy reward data
-        int rewardCopySize = std::min(config.numParallelEnvs * 2, 128 * 2);
-        std::memcpy(telemetryData.globalReward, allRewards.data(), rewardCopySize * sizeof(float));
-        
-        // TODO: Copy joint stress data from force sensors
-        
-        // Push telemetry data to queue
-        gTelemetryQueue.Push(telemetryData);
-        
-        for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
-            const float* obs1 = allObs.data() + envIdx * stateDim * 2;
-            const float* obs2 = obs1 + stateDim;
-            const float* act1 = actions.data() + envIdx * actionDim * 2;
-            const float* act2 = act1 + actionDim;
-            float r1 = allRewards[envIdx * 2];
-            float r2 = allRewards[envIdx * 2 + 1];
-            
-            buffer.Add(obs1, act1, r1, obs2, allDones[envIdx]);
-            buffer.Add(obs2, act2, r2, obs1, allDones[envIdx]);
-            
-            avgRewards[rewardIdx % 100] = (r1 + r2) / 2.0f;
-            rewardIdx++;
-            if (allDones[envIdx]) episodes++;
-        }
-        
-        if (buffer.Size() >= td3cfg.startSteps) trainer.Train(buffer);
-        totalSteps++;
-        
-        // --- HYBRID OVERSEER RENDER SIPHON (Capped at 60 FPS) ---
-        double currentTime = glfwGetTime();
-        if (currentTime - lastRenderTime >= (1.0 / 60.0)) {
-            lastRenderTime = currentTime;
-            glfwPollEvents();
 
-            // Simple orbital camera
-            camera.yaw += 0.005f;
-            glm::vec3 camPos(
-                camera.distance * cos(camera.pitch) * sin(camera.yaw),
-                camera.distance * sin(camera.pitch),
-                camera.distance * cos(camera.pitch) * cos(camera.yaw)
-            );
+         // 3. SPS Calculation & Telemetry (1-second sliding window)
+         step_counter += config.numParallelEnvs;
+         auto now = std::chrono::high_resolution_clock::now();
+         std::chrono::duration<double> elapsed = now - last_time;
+         
+         // Only update UI and Terminal once per second to prevent I/O choking
+         if (elapsed.count() >= 1.0) {
+             current_sps = step_counter / elapsed.count();
+             
+             // THE RADAR PING: Let's see if Robot 0 is actually moving
+             const auto& obs = vecEnv.GetObservations();
+             if (obs.size() >= 3) {
+                 // Assuming obs[1] is the Y-axis (Altitude) of the chassis
+                 std::cout << "[TELEMETRY] SPS: " << (int)current_sps 
+                           << " | Env[0] Robot[0] Altitude (Y): " << obs[1] 
+                           << std::endl;
+             } else {
+                 std::cout << "[TELEMETRY] SPS: " << (int)current_sps << std::endl;
+             }
+             
+             step_counter = 0;
+             last_time = now;
+         }
 
-            // Draw exactly 1 environment via the Dimensional Filter
-            if (renderEnabled) {
-                renderer.Draw(vecEnv.GetGlobalPhysics(), camPos, selectedEnvIdx);
-            } else {
-                glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            }
+         // 4. Render Frame
+         // (If the screen is still grey, your camera origin is trapped inside the floor mesh!)
+         double currentTime = glfwGetTime();
+         static double lastRenderTime = currentTime;
+         if (currentTime - lastRenderTime >= (1.0 / 60.0)) {
+             lastRenderTime = currentTime;
+             glfwPollEvents();
 
-            // Draw ImGui Overlay
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
+             // Simple orbital camera
+             camera.yaw += 0.005f;
+             glm::vec3 camPos(
+                 camera.distance * cos(camera.pitch) * sin(camera.yaw),
+                 camera.distance * sin(camera.pitch),
+                 camera.distance * cos(camera.pitch) * cos(camera.yaw)
+             );
 
-            ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
-            ImGui::Begin("JOLTrl Hybrid Overseer");
-            ImGui::Text("Silicon: Intel i5-10500");
-            ImGui::Text("Graphics: Intel HD 630");
-            ImGui::Separator();
-            ImGui::Text("Parallel Envs: %d", config.numParallelEnvs);
-            ImGui::Text("Total Steps: %d", totalSteps);
-            ImGui::Text("Steps Per Second: %.0f", sps);
-            ImGui::Text("Episodes: %d", episodes);
-            ImGui::Text("Average Reward: %.2f", currentAvg);
-            ImGui::Separator();
-            ImGui::Checkbox("Enable Rendering", &renderEnabled);
-            ImGui::SliderInt("Watch Env", &selectedEnvIdx, 0, config.numParallelEnvs - 1);
-            ImGui::Text("FPS: %.1f", sps);
-            ImGui::End();
+             // Draw exactly 1 environment via the Dimensional Filter
+             if (renderEnabled) {
+                 renderer.Draw(vecEnv.GetGlobalPhysics(), camPos, selectedEnvIdx);
+             } else {
+                 glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+             }
 
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            glfwSwapBuffers(window);
-        }
+             // Draw ImGui Overlay
+             ImGui_ImplOpenGL3_NewFrame();
+             ImGui_ImplGlfw_NewFrame();
+             ImGui::NewFrame();
 
-        // Calculate SPS once per second
-        if (currentTime - lastUiTime >= 1.0) {
-            sps = (totalSteps - lastSteps) / (currentTime - lastUiTime);
-            lastSteps = totalSteps;
-            lastUiTime = currentTime;
-            
-            currentAvg = 0;
-            for(int i=0; i<std::min(rewardIdx, 100); i++) currentAvg += avgRewards[i];
-            if (rewardIdx > 0) currentAvg /= std::min(rewardIdx, 100);
-        }
-        
-        if (totalSteps % config.checkpointInterval == 0) {
-            std::string checkpointPath = config.checkpointDir + "/model_" + std::to_string(totalSteps) + ".bin";
-            trainer.Save(checkpointPath);
-        }
-    }
+             ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+             ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
+             ImGui::Begin("JOLTrl Hybrid Overseer");
+             ImGui::Text("Silicon: Intel i5-10500");
+             ImGui::Text("Graphics: Intel HD 630");
+             ImGui::Separator();
+             ImGui::Text("Parallel Envs: %d", config.numParallelEnvs);
+             ImGui::Text("Total Steps: %d", step_counter);
+             ImGui::Text("Steps Per Second: %.0f", current_sps);
+             ImGui::Separator();
+             ImGui::Checkbox("Enable Rendering", &renderEnabled);
+             ImGui::SliderInt("Watch Env", &selectedEnvIdx, 0, config.numParallelEnvs - 1);
+             ImGui::End();
+
+             // Camera controls window
+             ImGui::SetNextWindowPos(ImVec2(10, 250), ImGuiCond_FirstUseEver);
+             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+             ImGui::SliderFloat("Distance", &camera.distance, 5.0f, 50.0f);
+             ImGui::SliderFloat("Pitch", &camera.pitch, -1.5f, 1.5f);
+             ImGui::SliderFloat("Yaw", &camera.yaw, -3.14f, 3.14f);
+             ImGui::End();
+
+             ImGui::Render();
+             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+             glfwSwapBuffers(window);
+         }
+     }
     
     trainer.Save("saved_models/model_final.bin");
     

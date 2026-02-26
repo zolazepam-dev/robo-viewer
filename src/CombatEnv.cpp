@@ -4,6 +4,8 @@
 #include <cmath>
 #include <iostream>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
 
 void CombatContactListener::OnContactAdded(const JPH::Body& body1, const JPH::Body& body2,
                                             const JPH::ContactManifold& manifold, JPH::ContactSettings& settings)
@@ -45,20 +47,18 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
 
-    // --- THE ARENA FLOOR ---
-    // Single shared static floor for this environment
-    JPH::BodyInterface& body_interface = mPhysicsSystem->GetBodyInterface();
-    
-    // Only create floor once (for env index 0) to avoid duplicate static bodies
-    if (envIndex == 0) {
-        JPH::BoxShapeSettings floor_shape_settings(JPH::Vec3(100.0f, 1.0f, 100.0f));
-        JPH::RefConst<JPH::Shape> floor_shape = floor_shape_settings.Create().Get();
-        JPH::BodyCreationSettings floor_settings(floor_shape, JPH::RVec3(0.0f, -1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-        body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
-    }
+    // 1. THE BROADPHASE GRID FIX
+    // Spaces all 128 environments out into a 16x8 matrix so they don't explode!
+    const int cols = 16;
+    const float spacing = 12.0f; // Tight 12m spacing for visual density
+    float offsetX = (mEnvIndex % cols) * spacing - (cols * spacing / 2.0f);
+    float offsetZ = (mEnvIndex / cols) * spacing - ((128 / cols) * spacing / 2.0f);
 
-    JPH::RVec3 pos1(-ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
-    JPH::RVec3 pos2(ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
+    JPH::RVec3 envOrigin(offsetX, 0.0f, offsetZ);
+
+    // 2. Initialize robots relative to their own arena center
+    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 2.0f, 0.0f);
+    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 2.0f, 0.0f);
 
     std::cout << " [LoadRobot1] " << std::flush;
     mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
@@ -90,8 +90,18 @@ void CombatEnv::Reset()
 
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
-    JPH::RVec3 pos1(-ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
-    JPH::RVec3 pos2(ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
+    // 1. THE BROADPHASE GRID FIX
+    // Spaces all 128 environments out into a 16x8 matrix so they don't explode!
+    const int cols = 16;
+    const float spacing = 12.0f; // Tight 12m spacing for visual density
+    float offsetX = (mEnvIndex % cols) * spacing - (cols * spacing / 2.0f);
+    float offsetZ = (mEnvIndex / cols) * spacing - ((128 / cols) * spacing / 2.0f);
+
+    JPH::RVec3 envOrigin(offsetX, 0.0f, offsetZ);
+
+    // 2. Initialize robots relative to their own arena center
+    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 2.0f, 0.0f);
+    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 2.0f, 0.0f);
 
     mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
     mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
