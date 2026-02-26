@@ -74,6 +74,15 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     if (mGroupFilter == nullptr)
     {
         mGroupFilter = new JPH::GroupFilterTable(256);
+        
+        // --- PREVENT INTERNAL EXPLOSIONS ---
+        // Disable all self-collisions between parts of the same robot
+        for (int i = 0; i < 256; ++i) {
+            for (int j = 0; j < 256; ++j) {
+                mGroupFilter->DisableCollision(i, j);
+            }
+        }
+        // -----------------------------------
     }
 
     const float coreRadius = config["core"].value("radius", 0.5f);
