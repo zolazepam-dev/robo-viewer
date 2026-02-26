@@ -223,13 +223,8 @@ int main(int argc, char* argv[]) {
              lastRenderTime = currentTime;
              glfwPollEvents();
 
-             // Simple orbital camera
-             camera.yaw += 0.005f;
-             glm::vec3 camPos(
-                 camera.distance * cos(camera.pitch) * sin(camera.yaw),
-                 camera.distance * sin(camera.pitch),
-                 camera.distance * cos(camera.pitch) * cos(camera.yaw)
-             );
+               // Fixed camera position (no rotation)
+               glm::vec3 camPos(10.0f, 8.0f, 10.0f);
 
              // Draw exactly 1 environment via the Dimensional Filter
              if (renderEnabled) {

@@ -29,16 +29,27 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
     JPH::ObjectLayer layer1 = body1.GetObjectLayer();
     JPH::ObjectLayer layer2 = body2.GetObjectLayer();
 
-    uint32_t envIdx1 = layer1 - Layers::MOVING_BASE;
-    uint32_t envIdx2 = layer2 - Layers::MOVING_BASE;
+    uint32_t envIdx1 = (layer1 == Layers::STATIC) ? static_cast<uint32_t>(-1) : (layer1 - Layers::MOVING_BASE);
+    uint32_t envIdx2 = (layer2 == Layers::STATIC) ? static_cast<uint32_t>(-1) : (layer2 - Layers::MOVING_BASE);
 
-    if (envIdx1 != envIdx2) return;
-    if (envIdx1 >= NUM_PARALLEL_ENVS) return;
+    uint32_t envIdx;
+    if (layer1 == Layers::STATIC && layer2 != Layers::STATIC) {
+        envIdx = envIdx2;
+    } else if (layer2 == Layers::STATIC && layer1 != Layers::STATIC) {
+        envIdx = envIdx1;
+    } else if (layer1 != Layers::STATIC && layer2 != Layers::STATIC) {
+        if (envIdx1 != envIdx2) return;
+        envIdx = envIdx1;
+    } else {
+        return; // Static-static collisions are ignored
+    }
+
+    if (envIdx >= NUM_PARALLEL_ENVS) return;
 
     float impulseMag = manifold.mPenetrationDepth * manifold.mWorldSpaceNormal.Length();
     
-    mForceReadingsPerEnv[envIdx1][0].impulseMagnitude[0] += impulseMag;
-    mForceReadingsPerEnv[envIdx1][1].impulseMagnitude[0] += impulseMag;
+    mForceReadingsPerEnv[envIdx][0].impulseMagnitude[0] += impulseMag;
+    mForceReadingsPerEnv[envIdx][1].impulseMagnitude[0] += impulseMag;
 }
 
 void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader)
@@ -47,18 +58,12 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
 
-    // 1. THE BROADPHASE GRID FIX
-    // Spaces all 128 environments out into a 16x8 matrix so they don't explode!
-    const int cols = 16;
-    const float spacing = 12.0f; // Tight 12m spacing for visual density
-    float offsetX = (mEnvIndex % cols) * spacing - (cols * spacing / 2.0f);
-    float offsetZ = (mEnvIndex / cols) * spacing - ((128 / cols) * spacing / 2.0f);
+    // Single room centered at (0, 0, 0), all robots spawn here
+    JPH::RVec3 envOrigin(0.0f, 0.0f, 0.0f);
 
-    JPH::RVec3 envOrigin(offsetX, 0.0f, offsetZ);
-
-    // 2. Initialize robots relative to their own arena center
-    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 2.0f, 0.0f);
-    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 2.0f, 0.0f);
+    // 2. Initialize robots relative to room center
+    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 6.0f, 0.0f);
+    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 6.0f, 0.0f);
 
     std::cout << " [LoadRobot1] " << std::flush;
     mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
@@ -90,18 +95,12 @@ void CombatEnv::Reset()
 
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
-    // 1. THE BROADPHASE GRID FIX
-    // Spaces all 128 environments out into a 16x8 matrix so they don't explode!
-    const int cols = 16;
-    const float spacing = 12.0f; // Tight 12m spacing for visual density
-    float offsetX = (mEnvIndex % cols) * spacing - (cols * spacing / 2.0f);
-    float offsetZ = (mEnvIndex / cols) * spacing - ((128 / cols) * spacing / 2.0f);
+    // Single room centered at (0, 0, 0), all robots spawn here
+    JPH::RVec3 envOrigin(0.0f, 0.0f, 0.0f);
 
-    JPH::RVec3 envOrigin(offsetX, 0.0f, offsetZ);
-
-    // 2. Initialize robots relative to their own arena center
-    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 2.0f, 0.0f);
-    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 2.0f, 0.0f);
+    // 2. Initialize robots relative to room center
+    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 6.0f, 0.0f);
+    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 6.0f, 0.0f);
 
     mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
     mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
