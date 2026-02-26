@@ -86,7 +86,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     }
 
     const float coreRadius = config["core"].value("radius", 0.5f);
-    const float coreMass = config["core"].value("mass", 13.0f);
+    const float coreMass = 13.0f; // Reverted from 40.0
     
     JPH::SphereShapeSettings coreShapeSettings(coreRadius);
     coreShapeSettings.SetDensity(coreMass / (4.0f / 3.0f * 3.14159f * coreRadius * coreRadius * coreRadius));
@@ -103,10 +103,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         ghostLayer
     );
 
-    coreSettings.mFriction = 0.0f;
-    coreSettings.mRestitution = 0.8f;
-    coreSettings.mLinearDamping = 0.05f;
-    coreSettings.mAngularDamping = 0.05f;
+    coreSettings.mFriction = 0.5f;
+    coreSettings.mRestitution = 0.2f;
+    coreSettings.mLinearDamping = 0.1f;
+    coreSettings.mAngularDamping = 0.1f;
     coreSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
     coreSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
     coreSettings.mCollisionGroup.SetSubGroupID(0);
@@ -168,10 +168,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
             ghostLayer
         );
 
-        satSettings.mFriction = 0.0f;
-        satSettings.mRestitution = 0.8f;
-        satSettings.mLinearDamping = 0.05f;
-        satSettings.mAngularDamping = 0.05f;
+        satSettings.mFriction = 0.5f;
+        satSettings.mRestitution = 0.2f;
+        satSettings.mLinearDamping = 0.1f;
+        satSettings.mAngularDamping = 0.1f;
         satSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
         satSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
         satSettings.mCollisionGroup.SetSubGroupID(i + 1);
@@ -193,12 +193,11 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         rotSettings.mLimitMin[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = 0.0f;
         rotSettings.mLimitMax[JPH::SixDOFConstraintSettings::EAxis::TranslationZ] = 0.0f;
         
-        rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationX] = 
-            JPH::MotorSettings(motorTorque, jointDamping);
-        rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationY] = 
-            JPH::MotorSettings(motorTorque, jointDamping);
-        rotSettings.mMotorSettings[JPH::SixDOFConstraintSettings::EAxis::RotationZ] = 
-            JPH::MotorSettings(motorTorque, jointDamping);
+        for (int axis = (int)JPH::SixDOFConstraintSettings::EAxis::RotationX; axis <= (int)JPH::SixDOFConstraintSettings::EAxis::RotationZ; ++axis) {
+            rotSettings.mMotorSettings[axis].mSpringSettings.mFrequency = 0.0f; // Pure velocity motor
+            rotSettings.mMotorSettings[axis].mMinTorqueLimit = -5000.0f;
+            rotSettings.mMotorSettings[axis].mMaxTorqueLimit = 5000.0f;
+        }
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
             bodyInterface.CreateConstraint(&rotSettings, coreBody->GetID(), satBody->GetID()));
@@ -261,7 +260,9 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         slideSettings.SetSliderAxis(direction);
         slideSettings.mLimitsMin = slideMin;
         slideSettings.mLimitsMax = slideMax;
-        slideSettings.mMotorSettings = JPH::MotorSettings(200.0f, 1.0f);
+        slideSettings.mMotorSettings.mSpringSettings.mFrequency = 0.0f; // Pure velocity
+        slideSettings.mMotorSettings.mMinForceLimit = -10000.0f;
+        slideSettings.mMotorSettings.mMaxForceLimit = 10000.0f;
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
@@ -419,7 +420,7 @@ void CombatRobotLoader::ApplyActions(
         energySum += std::abs(vx) + std::abs(vy) + std::abs(vz) + std::abs(slideVel);
     }
 
-    const float reactionTorqueScale = 450.0f;
+    const float reactionTorqueScale = 5000.0f;
     JPH::Vec3 reactionTorque(
         actions[52] * reactionTorqueScale,
         actions[53] * reactionTorqueScale,

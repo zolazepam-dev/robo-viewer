@@ -250,16 +250,6 @@ int main() {
     ImGui::DestroyContext();
     glfwTerminate();
     
-    return 0;
-}
-    
-    trainer.Save("saved_models/model_final.bin");
-    
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwTerminate();
-    
     std::cout << "Done. Model saved." << std::endl;
     return 0;
 }

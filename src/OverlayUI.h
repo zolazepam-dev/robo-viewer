@@ -3,7 +3,7 @@
 #include <Jolt/Jolt.h>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <imgui/imgui.h>
+#include "imgui.h"
 #include <vector>
 #include <array>
 #include <cmath>

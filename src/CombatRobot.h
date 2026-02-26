@@ -76,8 +76,8 @@ struct SatelliteData
 
 struct ResidualActionScale
 {
-    float rotationScale = 50.0f;
-    float slideScale = 200.0f;
+    float rotationScale = 100.0f;
+    float slideScale = 500.0f;
 };
 
 struct CombatRobotData

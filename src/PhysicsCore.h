@@ -102,6 +102,14 @@ public:
 
     JPH::PhysicsSystem& GetPhysicsSystem() { return *mPhysicsSystem; }
     const JPH::PhysicsSystem& GetPhysicsSystem() const { return *mPhysicsSystem; }
+    
+    // Allow updating settings at runtime
+    void SetSettings(const JPH::PhysicsSettings& settings) {
+        if (mPhysicsSystem) mPhysicsSystem->SetPhysicsSettings(settings);
+    }
+    JPH::PhysicsSettings GetSettings() const {
+        return mPhysicsSystem ? mPhysicsSystem->GetPhysicsSettings() : JPH::PhysicsSettings();
+    }
 
 private:
     JPH::TempAllocatorImpl* mTempAllocator = nullptr;

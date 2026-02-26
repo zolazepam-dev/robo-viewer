@@ -58,12 +58,9 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
 
-    // Single room centered at (0, 0, 0), all robots spawn here
-    JPH::RVec3 envOrigin(0.0f, 0.0f, 0.0f);
-
-    // 2. Initialize robots relative to room center
-    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 6.0f, 0.0f);
-    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 6.0f, 0.0f);
+    // Fixed spawn: robots at (-2, 2.5, 0) and (2, 2.5, 0) in the single room
+    JPH::RVec3 pos1(-2.0f, 2.5f, 0.0f);
+    JPH::RVec3 pos2(2.0f, 2.5f, 0.0f);
 
     std::cout << " [LoadRobot1] " << std::flush;
     mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
@@ -95,12 +92,9 @@ void CombatEnv::Reset()
 
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
-    // Single room centered at (0, 0, 0), all robots spawn here
-    JPH::RVec3 envOrigin(0.0f, 0.0f, 0.0f);
-
-    // 2. Initialize robots relative to room center
-    JPH::RVec3 pos1 = envOrigin + JPH::RVec3(-2.0f, 6.0f, 0.0f);
-    JPH::RVec3 pos2 = envOrigin + JPH::RVec3(2.0f, 6.0f, 0.0f);
+    // Same fixed spawn positions
+    JPH::RVec3 pos1(-2.0f, 2.5f, 0.0f);
+    JPH::RVec3 pos2(2.0f, 2.5f, 0.0f);
 
     mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
     mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
@@ -116,7 +110,6 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 StepResult CombatEnv::HarvestState()
 {
     StepResult result;
-    // Vectors already sized in StepResult constructor
 
     if (mDone) return result;
 
@@ -328,9 +321,7 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     obs[idx++] = robot.totalDamageTaken / 100.0f;
     obs[idx++] = robot.episodeSteps / 1000.0f;
     
-    // === 48 NEW KINEMATIC TELEMETRY FEATURES ===
-    
-    // Force Sensors (26 dims): impulseMagnitude[0..12] + jointStress[0..12]
+    // Force sensors (26 dims)
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
         obs[idx++] = forces.impulseMagnitude[i];
@@ -340,33 +331,34 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
         obs[idx++] = forces.jointStress[i];
     }
     
-    // Altimeter (13 dims): Y position of all 13 satellite coreBodyIds
+    // Altimeter (13 dims)
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
         JPH::RVec3 satPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
         obs[idx++] = static_cast<float>(satPos.GetY()) / 10.0f;
     }
     
-    // Local Gravity (3 dims): (0, -1, 0) rotated by myRot.Conjugated()
+    // Local Gravity (3 dims)
     JPH::Vec3 worldGravity(0.0f, -1.0f, 0.0f);
     JPH::Vec3 localGravity = myRot.Conjugated() * worldGravity;
     obs[idx++] = localGravity.GetX();
     obs[idx++] = localGravity.GetY();
     obs[idx++] = localGravity.GetZ();
     
-    // Angular Momentum (3 dims): myAngVel * coreMass
+    // Angular Momentum (3 dims)
     constexpr float coreMass = 13.0f;
     obs[idx++] = myAngVel.GetX() * coreMass;
     obs[idx++] = myAngVel.GetY() * coreMass;
     obs[idx++] = myAngVel.GetZ() * coreMass;
     
-    // Arena Center Dist (2 dims): X and Z normalized
+    // Arena Center Dist (2 dims)
     obs[idx++] = static_cast<float>(myPos.GetX()) / 100.0f;
     obs[idx++] = static_cast<float>(myPos.GetZ()) / 100.0f;
     
-    // Time-to-Collision (1 dim): dist / max(closingSpeed, 0.1f)
+    // Time-to-Collision (1 dim)
     float dist = static_cast<float>((oppPos - myPos).Length());
-    float timeToCollision = dist / std::max(std::abs(closingSpeed), 0.1f);
+    float closing_speed = -relVel.Dot(toOpponent);
+    float timeToCollision = dist / std::max(std::abs(closing_speed), 0.1f);
     obs[idx++] = timeToCollision / 20.0f;
 
     // Padding for AVX2 alignment (4 elements)
@@ -375,7 +367,7 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     obs[idx++] = 0.0f;
     obs[idx++] = 0.0f;
 
-    // CRITICAL: Verify we wrote exactly 240 elements (including padding for AVX2 alignment)
+    // Verify dimension
     if (idx != 240) {
         std::cerr << "[FATAL] BuildObservationVector wrote " << idx << " elements, expected 240!" << std::endl;
         throw std::runtime_error("Observation dimension mismatch");

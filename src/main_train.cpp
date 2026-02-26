@@ -6,10 +6,6 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_glfw.h>
-#include <imgui/imgui_impl_opengl3.h>
-
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -20,265 +16,230 @@
 #include <algorithm>
 #include <cstring>
 
-#include "VectorizedEnv.h"
-#include "NeuralNetwork.h"
-#include "TD3Trainer.h"
-#include "Renderer.h"
-#include "LockFreeQueue.h"
-
-// Include nlohmann JSON library for telemetry serialization
-#include <nlohmann/json.hpp>
+#include "src/VectorizedEnv.h"
+#include "src/NeuralNetwork.h"
+#include "src/TD3Trainer.h"
+#include "src/Renderer.h"
+#include "src/OverlayUI.h"
 
 namespace fs = std::filesystem;
 
-struct TelemetryData
-{
-    alignas(32) float envStates[128 * 240 * 2];  // 128 envs * 240 obs dim * 2 robots
-    alignas(32) float globalReward[128 * 2];      // 128 envs * 2 rewards
-    alignas(32) float jointStress[128 * 13 * 2];  // 128 envs * 13 satellites * 2 robots
-    int numEnvs = 128;
-    int stepCount = 0;
+struct FreeCamera {
+    glm::vec3 position{15.0f, 10.0f, 15.0f};
+    glm::vec3 front{0.0f, 0.0f, -1.0f};
+    glm::vec3 up{0.0f, 1.0f, 0.0f};
+    float yaw = -135.0f;
+    float pitch = -30.0f;
+    float speed = 20.0f;
+    float sensitivity = 0.1f;
+    bool active = false;
 };
 
-using TelemetryQueue = LockFreeSPSCQueue<TelemetryData, 8>;
+FreeCamera gCam;
+double lastX, lastY;
+bool firstMouse = true;
 
-// Global telemetry queue for communication between training and telemetry threads
-TelemetryQueue gTelemetryQueue;
-std::atomic<bool> gTelemetryRunning(false);
-
-void TelemetryThreadFunction()
-{
-    gTelemetryRunning = true;
-    
-    while (gTelemetryRunning)
-    {
-        TelemetryData data;
-        if (gTelemetryQueue.Pop(data))
-        {
-            // Convert telemetry data to JSON
-            nlohmann::json jsonData;
-            jsonData["stepCount"] = data.stepCount;
-            jsonData["numEnvs"] = data.numEnvs;
-            
-            // Add environment states (first 10 values for brevity)
-            nlohmann::json envStatesJson = nlohmann::json::array();
-            for (int i = 0; i < std::min(10, data.numEnvs * 240 * 2); ++i)
-            {
-                envStatesJson.push_back(data.envStates[i]);
-            }
-            jsonData["envStates"] = envStatesJson;
-            
-            // Add rewards (first 10 values)
-            nlohmann::json rewardsJson = nlohmann::json::array();
-            for (int i = 0; i < std::min(10, data.numEnvs * 2); ++i)
-            {
-                rewardsJson.push_back(data.globalReward[i]);
-            }
-            jsonData["rewards"] = rewardsJson;
-            
-            // Add joint stress (first 10 values)
-            nlohmann::json jointStressJson = nlohmann::json::array();
-            for (int i = 0; i < std::min(10, data.numEnvs * 13 * 2); ++i)
-            {
-                jointStressJson.push_back(data.jointStress[i]);
-            }
-            jsonData["jointStress"] = jointStressJson;
-            
-            // In a real implementation, we would send this JSON data over a WebSocket
-            // For now, we'll just print a message to indicate the data is ready
-            // std::cout << "[Telemetry] Data prepared for step " << data.stepCount << std::endl;
-        }
-        
-        // Small delay to control telemetry frequency
-        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 Hz
-    }
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+    if (!gCam.active) return;
+    if (firstMouse) { lastX = xpos; lastY = ypos; firstMouse = false; }
+    float xoff = (float)(xpos - lastX) * gCam.sensitivity;
+    float yoff = (float)(lastY - ypos) * gCam.sensitivity;
+    lastX = xpos; lastY = ypos;
+    gCam.yaw += xoff; gCam.pitch += yoff;
+    gCam.pitch = std::clamp(gCam.pitch, -89.0f, 89.0f);
+    glm::vec3 dir;
+    dir.x = cos(glm::radians(gCam.yaw)) * cos(glm::radians(gCam.pitch));
+    dir.y = sin(glm::radians(gCam.pitch));
+    dir.z = sin(glm::radians(gCam.yaw)) * cos(glm::radians(gCam.pitch));
+    gCam.front = glm::normalize(dir);
 }
 
-struct TrainingConfig {
-    int numParallelEnvs = 2;
-    int checkpointInterval = 50000;
-    int maxSteps = 10000000;
-    std::string checkpointDir = "checkpoints";
-    std::string loadCheckpoint = "";
-};
-
-void EnsureDir(const std::string& path) {
-    if (!fs::exists(path)) {
-        fs::create_directories(path);
-    }
+void process_input(GLFWwindow* window, float dt) {
+    if (!gCam.active) return;
+    float vel = gCam.speed * dt;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) gCam.position += gCam.front * vel;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) gCam.position -= gCam.front * vel;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) gCam.position -= glm::normalize(glm::cross(gCam.front, gCam.up)) * vel;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) gCam.position += glm::normalize(glm::cross(gCam.front, gCam.up)) * vel;
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) gCam.position += gCam.up * vel;
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) gCam.position -= gCam.up * vel;
 }
+
+void EnsureDir(const std::string& path) { if (!fs::exists(path)) fs::create_directories(path); }
 
 int main(int argc, char* argv[]) {
-    TrainingConfig config;
-    
-    // Start telemetry thread
-    std::thread telemetryThread(TelemetryThreadFunction);
-    
-    // 1. Initialize Window and Context
+    // 0. Persistent Checkpoint Setup
+    const char* home = std::getenv("HOME");
+    std::string checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints";
+    EnsureDir(checkpointDir);
+    std::cout << "[JOLTrl] Safe Checkpoint Zone: " << checkpointDir << std::endl;
+
     if (!glfwInit()) return -1;
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "JOLTrl Hybrid Overseer", nullptr, nullptr);
-    if (!window) {
-        glfwTerminate();
-        return -1;
-    }
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "JOLTrl - Full Training Suite", nullptr, nullptr);
+    if (!window) return -1;
     glfwMakeContextCurrent(window);
-    
-    // UNLOCK FRAMERATE: Do not let Vsync block our training matrix
     glfwSwapInterval(0); 
-
-    if (glewInit() != GLEW_OK) return -1;
-
-    // --- THE "UNGODLY ABOMINATION" FIX ---
-    // Enforces 3D depth, but we MUST leave culling off because 
-    // the sphere meshes are wound clockwise!
+    glewInit();
     glEnable(GL_DEPTH_TEST);
-    // glDisable(GL_CULL_FACE); // Make sure this is completely gone or disabled!
-    // -------------------------------------
+    glfwSetCursorPosCallback(window, mouse_callback);
 
-    // 2. Initialize ImGui
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    CyberpunkUI ui;
+    ui.Init(window);
 
-    EnsureDir(config.checkpointDir);
-    EnsureDir("saved_models");
-    
-    // 3. Initialize Training Environment
-    VectorizedEnv vecEnv(config.numParallelEnvs);
+    int numEnvs = 1;
+    VectorizedEnv vecEnv(numEnvs);
     vecEnv.Init();
-    Renderer renderer(1280, 720);
     
+    Renderer renderer(1280, 720);
     int stateDim = vecEnv.GetObservationDim();
     int actionDim = vecEnv.GetActionDim();
-    int totalActionDim = actionDim * 2 * config.numParallelEnvs;
     
     TD3Config td3cfg;
-    td3cfg.hiddenDim = 256;
-    td3cfg.batchSize = 256;
-    td3cfg.startSteps = 10000;
-    
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
-    AlignedVector32<float> actions(totalActionDim, 0.0f);
-    std::mt19937 rng(42);
-    std::normal_distribution<float> noiseDist(0.0f, 1.0f);
+    float timeScale = 1.0f;
+    bool trainEnabled = true;
+    bool renderEnabled = true;
+    bool headlessTurbo = false;
     
-     auto last_time = std::chrono::high_resolution_clock::now();
-     int step_counter = 0;
-     double current_sps = 0.0;
-     int selectedEnvIdx = 0;
-     bool renderEnabled = true;
-     Camera camera;
+    auto last_time = std::chrono::high_resolution_clock::now();
+    long long totalSteps = 0;
+    float sps = 0;
+    int step_counter = 0;
 
-     std::cout << "[JOLTrl] Visualizer Matrix Engaged. Suppressing per-frame debug spam." << std::endl;
+    std::cout << "[JOLTrl] SINGLE-ENV TRAINING MATRIX ENGAGED." << std::endl;
 
-     while (!glfwWindowShouldClose(window)) {
-         
-         // 1. Generate kinetic jitter actions
-         AlignedVector32<float> actions(config.numParallelEnvs * 2 * 56);
-         for (float& a : actions) {
-             // Apply massive random forces to make them jump/move visibly
-             a = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-         }
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        auto now = std::chrono::high_resolution_clock::now();
+        float dt = std::chrono::duration<float>(now - last_time).count();
+        last_time = now;
 
-         // 2. Step the physics matrix silently
-         vecEnv.Step(actions);
-         vecEnv.ResetDoneEnvs();
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+            if (!gCam.active) { gCam.active = true; glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); firstMouse = true; }
+        } else {
+            if (gCam.active) { gCam.active = false; glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); }
+        }
+        process_input(window, dt);
 
-         // 3. SPS Calculation & Telemetry (1-second sliding window)
-         step_counter += config.numParallelEnvs;
-         auto now = std::chrono::high_resolution_clock::now();
-         std::chrono::duration<double> elapsed = now - last_time;
-         
-         // Only update UI and Terminal once per second to prevent I/O choking
-         if (elapsed.count() >= 1.0) {
-             current_sps = step_counter / elapsed.count();
-             
-             // THE RADAR PING: Let's see if Robot 0 is actually moving
-             const auto& obs = vecEnv.GetObservations();
-             if (obs.size() >= 3) {
-                 // Assuming obs[1] is the Y-axis (Altitude) of the chassis
-                 std::cout << "[TELEMETRY] SPS: " << (int)current_sps 
-                           << " | Env[0] Robot[0] Altitude (Y): " << obs[1] 
-                           << std::endl;
-             } else {
-                 std::cout << "[TELEMETRY] SPS: " << (int)current_sps << std::endl;
-             }
-             
-             step_counter = 0;
-             last_time = now;
-         }
+        // --- PHYSICS & TRAINING ---
+        if (trainEnabled && timeScale > 0.01f) {
+            const auto& obs = vecEnv.GetObservations();
+            
+            AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
+            
+            // Generate actions for both robots in the env
+            for (int e = 0; e < numEnvs; ++e) {
+                float* obs1 = (float*)obs.data() + (e * 2 * stateDim);
+                float* obs2 = (float*)obs.data() + (e * 2 * stateDim + stateDim);
+                float* act1 = robotActions.data() + (e * 2 * actionDim);
+                float* act2 = robotActions.data() + (e * 2 * actionDim + actionDim);
+                
+                trainer.SelectAction(obs1, act1);
+                trainer.SelectAction(obs2, act2);
+            }
+            
+            vecEnv.Step(robotActions);
+            
+            const auto& nextObs = vecEnv.GetObservations();
+            const auto& rewards = vecEnv.GetRewards();
+            const auto& dones = vecEnv.GetDones();
+            
+            // Store transitions
+            for (int e = 0; e < numEnvs; ++e) {
+                float* o1 = (float*)obs.data() + (e * 2 * stateDim);
+                float* no1 = (float*)nextObs.data() + (e * 2 * stateDim);
+                float* a1 = robotActions.data() + (e * 2 * actionDim);
+                buffer.Add(o1, a1, rewards[e * 2], no1, dones[e]);
+                
+                float* o2 = (float*)obs.data() + (e * 2 * stateDim + stateDim);
+                float* no2 = (float*)nextObs.data() + (e * 2 * stateDim + stateDim);
+                float* a2 = robotActions.data() + (e * 2 * actionDim + actionDim);
+                buffer.Add(o2, a2, rewards[e * 2 + 1], no2, dones[e]);
+            }
+            
+            if (buffer.Size() > td3cfg.batchSize) {
+                trainer.Train(buffer);
+            }
+            
+            // Periodic Save (Every 5 Minutes / 18000 steps)
+            if (totalSteps > 0 && totalSteps % 18000 == 0) {
+                std::string path = checkpointDir + "/model_step_" + std::to_string(totalSteps) + ".bin";
+                trainer.Save(path);
+                std::cout << "[JOLTrl] Safe Checkpoint Saved: " << path << std::endl;
+            }
+            
+            vecEnv.ResetDoneEnvs();
+            totalSteps += numEnvs;
+            step_counter += numEnvs;
+        }
 
-         // 4. Render Frame
-         // (If the screen is still grey, your camera origin is trapped inside the floor mesh!)
-         double currentTime = glfwGetTime();
-         static double lastRenderTime = currentTime;
-         if (currentTime - lastRenderTime >= (1.0 / 60.0)) {
-             lastRenderTime = currentTime;
-             glfwPollEvents();
+        // SPS Calculation
+        static auto lastSpsTime = now;
+        std::chrono::duration<float> spsElapsed = now - lastSpsTime;
+        if (spsElapsed.count() >= 1.0f) {
+            sps = step_counter / spsElapsed.count();
+            step_counter = 0;
+            lastSpsTime = now;
+        }
 
-               // Fixed camera position (no rotation)
-               glm::vec3 camPos(10.0f, 8.0f, 10.0f);
+        // --- RENDER ---
+        if (renderEnabled && !headlessTurbo) {
+            renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, 0, gCam.front);
+        } else {
+            glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        }
 
-             // Draw exactly 1 environment via the Dimensional Filter
-             if (renderEnabled) {
-                 renderer.Draw(vecEnv.GetGlobalPhysics(), camPos, selectedEnvIdx);
-             } else {
-                 glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
-                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-             }
+        // --- UI ---
+        ui.BeginFrame();
+        ImGui::Begin("Training Matrix - Overseer");
+        ImGui::Text("Silicon: TD3 + SPAN Tech");
+        ImGui::Text("Episode Length: 2 Minutes (7200 steps)");
+        ImGui::Separator();
+        ImGui::Text("Total Steps: %lld", totalSteps);
+        ImGui::Text("SPS: %.0f", sps);
+        
+        ImGui::Checkbox("Enable Training", &trainEnabled);
+        ImGui::Checkbox("Enable Rendering", &renderEnabled);
+        ImGui::Checkbox("HEADLESS TURBO (No Render/Sync)", &headlessTurbo);
+        
+        ImGui::SliderFloat("Time Scale", &timeScale, 0.0f, 5.0f);
+        
+        if (ImGui::CollapsingHeader("Incremental Power Tuner")) {
+            auto& r1 = vecEnv.GetEnv(0).GetRobot1Ref();
+            auto& r2 = vecEnv.GetEnv(0).GetRobot2Ref();
+            ImGui::SliderFloat("Rotation Speed", &r1.actionScale.rotationScale, 0.0f, 500.0f);
+            ImGui::SliderFloat("Stab Speed", &r1.actionScale.slideScale, 0.0f, 2000.0f);
+            r2.actionScale.rotationScale = r1.actionScale.rotationScale;
+            r2.actionScale.slideScale = r1.actionScale.slideScale;
+        }
 
-             // Draw ImGui Overlay
-             ImGui_ImplOpenGL3_NewFrame();
-             ImGui_ImplGlfw_NewFrame();
-             ImGui::NewFrame();
+        if (ImGui::CollapsingHeader("Physics Tuner")) {
+            JPH::PhysicsSettings settings = vecEnv.GetGlobalPhysics()->GetPhysicsSettings();
+            bool changed = false;
+            if (ImGui::SliderInt("Vel Steps", (int*)&settings.mNumVelocitySteps, 1, 20)) changed = true;
+            if (ImGui::SliderInt("Pos Steps", (int*)&settings.mNumPositionSteps, 1, 20)) changed = true;
+            if (ImGui::SliderFloat("Baumgarte", &settings.mBaumgarte, 0.0f, 1.0f)) changed = true;
+            if (changed) vecEnv.GetGlobalPhysics()->SetPhysicsSettings(settings);
+        }
 
-             ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-             ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
-             ImGui::Begin("JOLTrl Hybrid Overseer");
-             ImGui::Text("Silicon: Intel i5-10500");
-             ImGui::Text("Graphics: Intel HD 630");
-             ImGui::Separator();
-             ImGui::Text("Parallel Envs: %d", config.numParallelEnvs);
-             ImGui::Text("Total Steps: %d", step_counter);
-             ImGui::Text("Steps Per Second: %.0f", current_sps);
-             ImGui::Separator();
-             ImGui::Checkbox("Enable Rendering", &renderEnabled);
-             ImGui::SliderInt("Watch Env", &selectedEnvIdx, 0, config.numParallelEnvs - 1);
-             ImGui::End();
-
-             // Camera controls window
-             ImGui::SetNextWindowPos(ImVec2(10, 250), ImGuiCond_FirstUseEver);
-             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-             ImGui::SliderFloat("Distance", &camera.distance, 5.0f, 50.0f);
-             ImGui::SliderFloat("Pitch", &camera.pitch, -1.5f, 1.5f);
-             ImGui::SliderFloat("Yaw", &camera.yaw, -3.14f, 3.14f);
-             ImGui::End();
-
-             ImGui::Render();
-             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-             glfwSwapBuffers(window);
-         }
-     }
-    
-    trainer.Save("saved_models/model_final.bin");
-    
-    // Stop telemetry thread
-    gTelemetryRunning = false;
-    if (telemetryThread.joinable()) {
-        telemetryThread.join();
+        if (ImGui::Button("Manual Reset Scene")) vecEnv.Reset();
+        
+        ImGui::End();
+        ui.EndFrame();
+        glfwSwapBuffers(window);
+        
+        // If not turbo, cap framerate to ~60Hz for UI/Render sanity
+        if (!headlessTurbo && timeScale <= 1.0f) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
     }
+
+    trainer.Save(checkpointDir + "/model_final.bin");
     
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    ui.Shutdown();
     glfwTerminate();
-    
     return 0;
 }

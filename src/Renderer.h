@@ -28,7 +28,7 @@ public:
     Renderer(int width, int height);
     ~Renderer();
 
-    void Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex = 0);
+    void Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex = 0, const glm::vec3& cameraFront = glm::vec3(0.0f, 0.0f, -1.0f));
 
 private:
     GLuint CompileShader(GLenum type, const char* source);
@@ -45,6 +45,7 @@ private:
     GLuint mSphereEbo = 0;
     GLsizei mSphereIndexCount = 0;
 
+    GLint mAlphaLoc = -1;
     GLint mModelLoc = -1;
     GLint mViewLoc = -1;
     GLint mProjLoc = -1;

@@ -9,15 +9,11 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 
-
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
 // Global single instance of CombatContactListener
 CombatContactListener* gCombatContactListener = nullptr;
-
-const float kRoomSize = 12.0f;        // Single room is 12x12x12 meters
-const float kWallThickness = 1.0f;    // 1 meter thick walls
 
 VectorizedEnv::VectorizedEnv(int numEnvs)
     : mNumEnvs(numEnvs)
@@ -36,41 +32,41 @@ void VectorizedEnv::Init()
     gCombatContactListener = &CombatContactListener::Get();
     mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
 
-    // --- SINGLE 12x12x12 METER ROOM ---
+    // --- BUILD EXACTLY ONE 12x12x12 CUBE ROOM AT ORIGIN ---
     JPH::BodyInterface& body_interface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
     
-    // Floor (12x12, at bottom)
-    JPH::BoxShapeSettings floor_shape(JPH::Vec3(6.0f, 0.5f, 6.0f)); // half-extents: x=6, y=0.5, z=6
+    // Floor: 12x12 meters, 0.5m thick, at y=0 (bottom surface y=0, top surface y=0.5)
+    JPH::BoxShapeSettings floor_shape(JPH::Vec3(6.0f, 0.25f, 6.0f));
     JPH::RefConst<JPH::Shape> floor = floor_shape.Create().Get();
-    JPH::BodyCreationSettings floor_settings(floor, JPH::RVec3(0.0f, 0.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
+    JPH::BodyCreationSettings floor_settings(floor, JPH::RVec3(0.0f, 0.25f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
     body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
     
-    // Ceiling (at y=12)
+    // Ceiling: at y=12, bottom surface y=12
     JPH::BodyCreationSettings ceil_settings(floor, JPH::RVec3(0.0f, 12.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
     body_interface.CreateAndAddBody(ceil_settings, JPH::EActivation::DontActivate);
     
-    // Walls (12m tall, 0.5m thick)
-    JPH::BoxShapeSettings wall_x_shape(JPH::Vec3(0.5f, 6.0f, 6.0f)); // vertical walls on X sides (rotate them)
+    // Walls: 12m tall (y=0 to y=12), 0.5m thick, 12m wide
+    JPH::BoxShapeSettings wall_x_shape(JPH::Vec3(0.25f, 6.0f, 6.0f)); // Walls on X sides (rotate to align)
     JPH::RefConst<JPH::Shape> wall_x = wall_x_shape.Create().Get();
     
-    JPH::BoxShapeSettings wall_z_shape(JPH::Vec3(6.0f, 6.0f, 0.5f)); // vertical walls on Z sides
+    JPH::BoxShapeSettings wall_z_shape(JPH::Vec3(6.0f, 6.0f, 0.25f)); // Walls on Z sides
     JPH::RefConst<JPH::Shape> wall_z = wall_z_shape.Create().Get();
     
-    // East wall (x = 6)
-    JPH::BodyCreationSettings east_wall(wall_x, JPH::RVec3(6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(east_wall, JPH::EActivation::DontActivate);
-    
-    // West wall (x = -6)
-    JPH::BodyCreationSettings west_wall(wall_x, JPH::RVec3(-6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(west_wall, JPH::EActivation::DontActivate);
-    
-    // North wall (z = -6)
+    // North wall (z = -6.0)
     JPH::BodyCreationSettings north_wall(wall_z, JPH::RVec3(0.0f, 6.0f, -6.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
     body_interface.CreateAndAddBody(north_wall, JPH::EActivation::DontActivate);
     
-    // South wall (z = 6)
+    // South wall (z = +6.0)
     JPH::BodyCreationSettings south_wall(wall_z, JPH::RVec3(0.0f, 6.0f, 6.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
     body_interface.CreateAndAddBody(south_wall, JPH::EActivation::DontActivate);
+    
+    // East wall (x = +6.0) - rotate 90 degrees around Y
+    JPH::BodyCreationSettings east_wall(wall_x, JPH::RVec3(6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
+    body_interface.CreateAndAddBody(east_wall, JPH::EActivation::DontActivate);
+    
+    // West wall (x = -6.0) - rotate 90 degrees around Y
+    JPH::BodyCreationSettings west_wall(wall_x, JPH::RVec3(-6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
+    body_interface.CreateAndAddBody(west_wall, JPH::EActivation::DontActivate);
     // -------------------------------------------------
 
     mEnvs.resize(mNumEnvs);
@@ -172,4 +168,3 @@ VectorizedEnv::~VectorizedEnv()
         gCombatContactListener = nullptr;
     }
 }
-

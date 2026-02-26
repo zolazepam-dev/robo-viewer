@@ -63,6 +63,7 @@ uniform vec3 uViewPos;
 uniform vec3 uObjectColor;
 uniform float uMetallic;
 uniform float uRoughness;
+uniform float uAlpha;
 uniform Light uLights[4];
 uniform int uNumLights;
 
@@ -142,7 +143,7 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
     
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(color, uAlpha);
 }
 )";
 
@@ -297,6 +298,7 @@ Renderer::Renderer(int width, int height)
     mProjLoc = glGetUniformLocation(mProgram, "uProj");
     mViewPosLoc = glGetUniformLocation(mProgram, "uViewPos");
     mObjectColorLoc = glGetUniformLocation(mProgram, "uObjectColor");
+    mAlphaLoc = glGetUniformLocation(mProgram, "uAlpha");
     mMetallicLoc = glGetUniformLocation(mProgram, "uMetallic");
     mRoughnessLoc = glGetUniformLocation(mProgram, "uRoughness");
     mNumLightsLoc = glGetUniformLocation(mProgram, "uNumLights");
@@ -322,14 +324,14 @@ Renderer::~Renderer()
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
 
-void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex)
+void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront)
 {
     glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (physicsSystem == nullptr || mProgram == 0) return;
 
-    mView = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    mView = glm::lookAt(cameraPos, cameraPos + cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
     mViewPosition = cameraPos;
 
     glUseProgram(mProgram);
@@ -352,18 +354,13 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
     const JPH::ObjectLayer staticLayer = Layers::STATIC;
     const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
 
-    for (const JPH::BodyID& body_id : bodies) {
-        if (body_id.IsInvalid()) continue;
-
+    auto renderBody = [&](const JPH::BodyID& body_id, float forcedAlpha = -1.0f) {
         JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
-        
-        if (layer != staticLayer && layer != envBaseLayer) {
-            continue; 
-        }
+        if (layer != staticLayer && layer != envBaseLayer) return;
 
         JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
         const JPH::Shape* shape_ptr = shape.GetPtr();
-        if (shape_ptr == nullptr) continue;
+        if (shape_ptr == nullptr) return;
 
         glm::vec3 scale(1.0f);
         bool draw_sphere = false;
@@ -403,11 +400,16 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
         glm::vec3 objectColor;
         float metallic = 0.9f;
         float roughness = 0.1f;
+        float alpha = (forcedAlpha > 0.0f) ? forcedAlpha : 1.0f;
         
         if (layer == staticLayer) {
             objectColor = glm::vec3(0.4f, 0.4f, 0.4f);
             metallic = 0.1f;
             roughness = 0.9f;
+            // Floor is usually near y=0 or y=-1
+            if (transform.GetTranslation().GetY() < -0.1f) {
+                objectColor = glm::vec3(0.2f, 0.2f, 0.25f);
+            }
         } else if (body_index % 3 == 0) {
             objectColor = glm::vec3(0.9f, 0.2f, 0.1f);
             metallic = 0.8f;
@@ -425,6 +427,7 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
         glUniform3fv(mObjectColorLoc, 1, glm::value_ptr(objectColor));
         glUniform1f(mMetallicLoc, metallic);
         glUniform1f(mRoughnessLoc, roughness);
+        glUniform1f(mAlphaLoc, alpha);
 
         if (draw_sphere) {
             glBindVertexArray(mSphereVao);
@@ -433,8 +436,39 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
             glBindVertexArray(mCubeVao);
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
+    };
+
+    // Pass 1: Opaque
+    for (const JPH::BodyID& body_id : bodies) {
+        if (body_id.IsInvalid()) continue;
+        JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+        JPH::RVec3 pos = body_interface.GetCenterOfMassPosition(body_id);
+        
+        // Walls in room_demo are STATIC and usually have pos.y > 0
+        bool isWall = (layer == staticLayer && pos.GetY() > 0.1f);
+        if (!isWall) {
+            renderBody(body_id, 1.0f);
+        }
     }
 
+    // Pass 2: Transparent Walls
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE); // Don't write to depth buffer for transparent pass
+
+    for (const JPH::BodyID& body_id : bodies) {
+        if (body_id.IsInvalid()) continue;
+        JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+        JPH::RVec3 pos = body_interface.GetCenterOfMassPosition(body_id);
+        
+        bool isWall = (layer == staticLayer && pos.GetY() > 0.1f);
+        if (isWall) {
+            renderBody(body_id, 0.3f);
+        }
+    }
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
     glBindVertexArray(0);
     glUseProgram(0);
 }

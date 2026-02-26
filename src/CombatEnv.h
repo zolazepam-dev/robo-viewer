@@ -17,7 +17,7 @@ constexpr float ARENA_HALF = ARENA_SIZE * 0.5f;
 constexpr float ROBOT_SPAWN_OFFSET = 3.0f;
 constexpr float INITIAL_HP = 100.0f;
 constexpr float DAMAGE_MULTIPLIER = 5.0f;
-constexpr int MAX_EPISODE_STEPS = 120000;
+constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz
 
 constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
 constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
@@ -95,6 +95,8 @@ public:
 
     const CombatRobotData& GetRobot1() const { return mRobot1; }
     const CombatRobotData& GetRobot2() const { return mRobot2; }
+    CombatRobotData& GetRobot1Ref() { return mRobot1; }
+    CombatRobotData& GetRobot2Ref() { return mRobot2; }
     int GetStepCount() const { return mStepCount; }
     bool IsDone() const { return mDone; }
     int GetObservationDim() const { return mObservationDim; }
