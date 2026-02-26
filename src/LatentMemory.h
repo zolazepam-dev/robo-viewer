@@ -67,6 +67,8 @@ class alignas(32) ODE2VAEEncoder
 {
 public:
     ODE2VAEEncoder() = default;
+    ODE2VAEEncoder(const ODE2VAEEncoder& other) = default;
+    ODE2VAEEncoder& operator=(const ODE2VAEEncoder& other) = default;
     
     void Init(size_t obsDim, size_t latentDim, std::mt19937& rng);
     
@@ -102,6 +104,8 @@ class alignas(32) ODE2VAEDynamics
 {
 public:
     ODE2VAEDynamics() = default;
+    ODE2VAEDynamics(const ODE2VAEDynamics& other) = default;
+    ODE2VAEDynamics& operator=(const ODE2VAEDynamics& other) = default;
     
     void Init(size_t latentDim, size_t obsDim, std::mt19937& rng);
     
@@ -132,6 +136,8 @@ class alignas(32) LatentMemoryManager
 {
 public:
     LatentMemoryManager() = default;
+    LatentMemoryManager(const LatentMemoryManager& other) = default;
+    LatentMemoryManager& operator=(const LatentMemoryManager& other) = default;
     
     void Init(size_t obsDim, size_t latentDim, std::mt19937& rng);
     

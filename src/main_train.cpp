@@ -15,18 +15,87 @@
 #include <vector>
 #include <random>
 #include <filesystem>
+#include <thread>
+#include <atomic>
+#include <algorithm>
+#include <cstring>
 
 #include "VectorizedEnv.h"
 #include "NeuralNetwork.h"
 #include "TD3Trainer.h"
 #include "Renderer.h"
+#include "LockFreeQueue.h"
+
+// Include nlohmann JSON library for telemetry serialization
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
-Camera gCamera;
+struct TelemetryData
+{
+    alignas(32) float envStates[128 * 240 * 2];  // 128 envs * 240 obs dim * 2 robots
+    alignas(32) float globalReward[128 * 2];      // 128 envs * 2 rewards
+    alignas(32) float jointStress[128 * 13 * 2];  // 128 envs * 13 satellites * 2 robots
+    int numEnvs = 128;
+    int stepCount = 0;
+};
+
+using TelemetryQueue = LockFreeSPSCQueue<TelemetryData, 8>;
+
+// Global telemetry queue for communication between training and telemetry threads
+TelemetryQueue gTelemetryQueue;
+std::atomic<bool> gTelemetryRunning(false);
+
+void TelemetryThreadFunction()
+{
+    gTelemetryRunning = true;
+    
+    while (gTelemetryRunning)
+    {
+        TelemetryData data;
+        if (gTelemetryQueue.Pop(data))
+        {
+            // Convert telemetry data to JSON
+            nlohmann::json jsonData;
+            jsonData["stepCount"] = data.stepCount;
+            jsonData["numEnvs"] = data.numEnvs;
+            
+            // Add environment states (first 10 values for brevity)
+            nlohmann::json envStatesJson = nlohmann::json::array();
+            for (int i = 0; i < std::min(10, data.numEnvs * 240 * 2); ++i)
+            {
+                envStatesJson.push_back(data.envStates[i]);
+            }
+            jsonData["envStates"] = envStatesJson;
+            
+            // Add rewards (first 10 values)
+            nlohmann::json rewardsJson = nlohmann::json::array();
+            for (int i = 0; i < std::min(10, data.numEnvs * 2); ++i)
+            {
+                rewardsJson.push_back(data.globalReward[i]);
+            }
+            jsonData["rewards"] = rewardsJson;
+            
+            // Add joint stress (first 10 values)
+            nlohmann::json jointStressJson = nlohmann::json::array();
+            for (int i = 0; i < std::min(10, data.numEnvs * 13 * 2); ++i)
+            {
+                jointStressJson.push_back(data.jointStress[i]);
+            }
+            jsonData["jointStress"] = jointStressJson;
+            
+            // In a real implementation, we would send this JSON data over a WebSocket
+            // For now, we'll just print a message to indicate the data is ready
+            // std::cout << "[Telemetry] Data prepared for step " << data.stepCount << std::endl;
+        }
+        
+        // Small delay to control telemetry frequency
+        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 Hz
+    }
+}
 
 struct TrainingConfig {
-    int numParallelEnvs = 128; 
+    int numParallelEnvs = 2;
     int checkpointInterval = 50000;
     int maxSteps = 10000000;
     std::string checkpointDir = "checkpoints";
@@ -41,6 +110,9 @@ void EnsureDir(const std::string& path) {
 
 int main(int argc, char* argv[]) {
     TrainingConfig config;
+    
+    // Start telemetry thread
+    std::thread telemetryThread(TelemetryThreadFunction);
     
     // 1. Initialize Window and Context
     if (!glfwInit()) return -1;
@@ -93,7 +165,7 @@ int main(int argc, char* argv[]) {
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
-    std::vector<float> actions(totalActionDim, 0.0f);
+    AlignedVector32<float> actions(totalActionDim, 0.0f);
     std::mt19937 rng(42);
     std::normal_distribution<float> noiseDist(0.0f, 1.0f);
     
@@ -110,15 +182,18 @@ int main(int argc, char* argv[]) {
     int selectedEnvIdx = 0;
     bool renderEnabled = true;
 
+    // Initialize camera
+    Camera camera;
+
     std::cout << "[JOLTrl] Hybrid Overseer Online. Igniting Training Matrix..." << std::endl;
     
     // 4. The Master Loop
     while (totalSteps < config.maxSteps && !glfwWindowShouldClose(window)) {
         
-        // --- MACHINE LEARNING PHASE ---
-        if (totalSteps < td3cfg.startSteps) {
-            for (int i = 0; i < totalActionDim; ++i) actions[i] = noiseDist(rng);
-        } else {
+         // --- MACHINE LEARNING PHASE ---
+         if (totalSteps < td3cfg.startSteps) {
+             for (int i = 0; i < totalActionDim; ++i) actions[i] = noiseDist(rng);
+         } else {
             const auto& allObs = vecEnv.GetObservations();
             for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
                 const float* obs1 = allObs.data() + envIdx * stateDim * 2;
@@ -130,12 +205,30 @@ int main(int argc, char* argv[]) {
             }
         }
         
-        vecEnv.Step(actions);
-        vecEnv.ResetDoneEnvs();
+         vecEnv.Step(actions);
+         vecEnv.ResetDoneEnvs();
         
         const auto& allObs = vecEnv.GetObservations();
         const auto& allRewards = vecEnv.GetRewards();
         const auto& allDones = vecEnv.GetDones();
+        
+        // Prepare telemetry data
+        TelemetryData telemetryData;
+        telemetryData.stepCount = totalSteps;
+        telemetryData.numEnvs = config.numParallelEnvs;
+        
+        // Copy observation data (limited to fit in telemetry structure)
+        int obsCopySize = std::min(config.numParallelEnvs * stateDim * 2, 128 * 240 * 2);
+        std::memcpy(telemetryData.envStates, allObs.data(), obsCopySize * sizeof(float));
+        
+        // Copy reward data
+        int rewardCopySize = std::min(config.numParallelEnvs * 2, 128 * 2);
+        std::memcpy(telemetryData.globalReward, allRewards.data(), rewardCopySize * sizeof(float));
+        
+        // TODO: Copy joint stress data from force sensors
+        
+        // Push telemetry data to queue
+        gTelemetryQueue.Push(telemetryData);
         
         for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
             const float* obs1 = allObs.data() + envIdx * stateDim * 2;
@@ -163,11 +256,11 @@ int main(int argc, char* argv[]) {
             glfwPollEvents();
 
             // Simple orbital camera
-            gCamera.yaw += 0.005f;
+            camera.yaw += 0.005f;
             glm::vec3 camPos(
-                gCamera.distance * cos(gCamera.pitch) * sin(gCamera.yaw),
-                gCamera.distance * sin(gCamera.pitch),
-                gCamera.distance * cos(gCamera.pitch) * cos(gCamera.yaw)
+                camera.distance * cos(camera.pitch) * sin(camera.yaw),
+                camera.distance * sin(camera.pitch),
+                camera.distance * cos(camera.pitch) * cos(camera.yaw)
             );
 
             // Draw exactly 1 environment via the Dimensional Filter
@@ -223,6 +316,12 @@ int main(int argc, char* argv[]) {
     }
     
     trainer.Save("saved_models/model_final.bin");
+    
+    // Stop telemetry thread
+    gTelemetryRunning = false;
+    if (telemetryThread.joinable()) {
+        telemetryThread.join();
+    }
     
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

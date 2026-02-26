@@ -10,6 +10,9 @@
 
 #include "NeuralMath.h"
 #include "LatentMemory.h"
+#include "AlignedAllocator.h"
+
+using AlignedVector32f = std::vector<float, AlignedAllocator<float, 32>>;
 
 constexpr int VECTOR_REWARD_DIM = 4;
 
@@ -19,6 +22,10 @@ struct VectorReward
     float damage_taken = 0.0f;
     float airtime = 0.0f;
     float energy_used = 0.0f;
+
+    VectorReward() = default;
+    VectorReward(const VectorReward& other) = default;
+    VectorReward& operator=(const VectorReward& other) = default;
 
     float Dot(const std::array<float, 4>& preference) const
     {
@@ -54,13 +61,17 @@ static inline float MoLUDerivative(float x)
 
 struct ODE2VAENetwork
 {
-    std::vector<float> W_encoder;
-    std::vector<float> b_encoder;
-    std::vector<float> W_vel;
-    std::vector<float> b_vel;
+    AlignedVector32f W_encoder;
+    AlignedVector32f b_encoder;
+    AlignedVector32f W_vel;
+    AlignedVector32f b_vel;
     
     int obsDim;
     int latentDim;
+
+    ODE2VAENetwork() = default;
+    ODE2VAENetwork(const ODE2VAENetwork& other) = default;
+    ODE2VAENetwork& operator=(const ODE2VAENetwork& other) = default;
 
     void Init(int observationDim, int latentDim, std::mt19937& rng);
     void EncodeObservation(const float* obs, float* z_pos_out, float* z_vel_out);
@@ -73,6 +84,9 @@ void ForwardMoLU_Scalar(float* data, size_t size);
 class NeuralNetwork {
 public:
     NeuralNetwork(const std::vector<int>& layerSizes);
+    ~NeuralNetwork() = default;  // Explicitly define default destructor
+    NeuralNetwork(const NeuralNetwork& other) = default;  // Explicitly define default copy constructor
+    NeuralNetwork& operator=(const NeuralNetwork& other) = default;  // Explicitly define default assignment operator
     
     void Forward(const float* input, float* output);
     void Forward(const float* input, float* output, int batchSize);
@@ -82,13 +96,13 @@ public:
     void ForwardODE2VAE(const float* input, float* output, SecondOrderLatentMemory& memory, int envIdx);
     void ForwardODE2VAEVectorized(const float* inputs, float* outputs, int numEnvs);
     
-    std::vector<float>& GetWeights() { return mWeights; }
-    std::vector<float>& GetBiases() { return mBiases; }
-    const std::vector<float>& GetWeights() const { return mWeights; }
-    const std::vector<float>& GetBiases() const { return mBiases; }
+    AlignedVector32f& GetWeights() { return mWeights; }
+    AlignedVector32f& GetBiases() { return mBiases; }
+    const AlignedVector32f& GetWeights() const { return mWeights; }
+    const AlignedVector32f& GetBiases() const { return mBiases; }
     
-    void SetWeights(const std::vector<float>& weights) { mWeights = weights; }
-    void SetBiases(const std::vector<float>& biases) { mBiases = biases; }
+    void SetWeights(const AlignedVector32f& weights) { mWeights = weights; }
+    void SetBiases(const AlignedVector32f& biases) { mBiases = biases; }
     
     void CopyFrom(const NeuralNetwork& other);
     void SoftUpdate(const NeuralNetwork& other, float tau);
@@ -112,9 +126,9 @@ public:
     
 private:
     std::vector<int> mLayerSizes;
-    std::vector<float> mWeights;
-    std::vector<float> mBiases;
-    std::vector<float> mActivations;
+    AlignedVector32f mWeights;
+    AlignedVector32f mBiases;
+    AlignedVector32f mActivations;
     
     std::vector<int> mWeightOffsets;
     std::vector<int> mBiasOffsets;
@@ -130,20 +144,26 @@ private:
 
 struct KLPERTransition
 {
-    std::vector<float> state;
-    std::vector<float> action;
-    std::vector<float> behaviorLogProb;
+    AlignedVector32f state;
+    AlignedVector32f action;
+    AlignedVector32f behaviorLogProb;
     VectorReward reward;
-    std::vector<float> nextState;
+    AlignedVector32f nextState;
     bool done;
     float priority;
     float klDivergence;
     int index;
+
+    KLPERTransition() = default;
+    KLPERTransition(const KLPERTransition& other) = default;
+    KLPERTransition& operator=(const KLPERTransition& other) = default;
 };
 
 class KLPERBuffer {
 public:
     KLPERBuffer(int capacity, int stateDim, int actionDim);
+    KLPERBuffer(const KLPERBuffer& other) = default;
+    KLPERBuffer& operator=(const KLPERBuffer& other) = default;
     
     void Add(const float* state, const float* action, float behaviorLogProb,
              const VectorReward& reward, const float* nextState, bool done);
@@ -165,14 +185,14 @@ public:
     void SetBeta(float beta) { mBeta = beta; }
 
 private:
-    std::vector<float> mStates;
-    std::vector<float> mActions;
-    std::vector<float> mBehaviorLogProbs;
+    AlignedVector32f mStates;
+    AlignedVector32f mActions;
+    AlignedVector32f mBehaviorLogProbs;
     std::vector<VectorReward> mRewards;
-    std::vector<float> mNextStates;
-    std::vector<float> mDones;
-    std::vector<float> mPriorities;
-    std::vector<float> mKLDivergences;
+    AlignedVector32f mNextStates;
+    AlignedVector32f mDones;
+    AlignedVector32f mPriorities;
+    AlignedVector32f mKLDivergences;
     
     int mCapacity;
     int mStateDim;
@@ -183,7 +203,7 @@ private:
     float mBeta = 0.4f;
     float mMaxPriority = 1.0f;
     
-    std::vector<float> mSumTree;
+    AlignedVector32f mSumTree;
     std::vector<int> mMinTree;
     
     void UpdateTree(int idx, float priority);
@@ -193,6 +213,8 @@ private:
 class ReplayBuffer {
 public:
     ReplayBuffer(int capacity, int stateDim, int actionDim);
+    ReplayBuffer(const ReplayBuffer& other) = default;
+    ReplayBuffer& operator=(const ReplayBuffer& other) = default;
     
     void Add(const float* state, const float* action, const VectorReward& reward,
              const float* nextState, bool done);
@@ -210,11 +232,11 @@ public:
     bool IsReady(int batchSize) const { return mSize >= batchSize; }
     
 private:
-    std::vector<float> mStates;
-    std::vector<float> mActions;
-    std::vector<float> mRewards;
-    std::vector<float> mNextStates;
-    std::vector<float> mDones;
+    AlignedVector32f mStates;
+    AlignedVector32f mActions;
+    AlignedVector32f mRewards;
+    AlignedVector32f mNextStates;
+    AlignedVector32f mDones;
 
     std::vector<VectorReward> mVectorRewards;
     

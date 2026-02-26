@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <immintrin.h>
+#include "AlignedAllocator.h"
 
 void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng)
 {
@@ -273,7 +274,7 @@ void SpanNetwork::ForwardWithLatent(const float* input, float* output, SecondOrd
     float* zVel = latent.GetVelocity(envIdx);
     
     int combinedDim = mInputDim + latent.latentDim;
-    alignas(32) std::vector<float> combinedInput(combinedDim);
+    alignas(32) AlignedVector32<float> combinedInput(combinedDim);
     
     std::copy(input, input + mInputDim, combinedInput.begin());
     std::copy(zPos, zPos + latent.latentDim, combinedInput.begin() + mInputDim);
@@ -365,14 +366,14 @@ void SpanActorCritic::SelectAction(const float* state, float* action, float* log
 {
     mLatentMemory.StepLatentDynamics(state, 1);
     
-    float zPos[LATENT_DIM];
-    float zVel[LATENT_DIM];
-    mLatentMemory.GetLatentStates(zPos, zVel, 0);
+    AlignedVector32<float> zPos(LATENT_DIM);
+    AlignedVector32<float> zVel(LATENT_DIM);
+    mLatentMemory.GetLatentStates(zPos.data(), zVel.data(), 0);
     
     size_t combinedDim = mStateDim + mLatentDim;
-    alignas(32) std::vector<float> combined(combinedDim);
+    alignas(32) AlignedVector32<float> combined(combinedDim);
     std::copy(state, state + mStateDim, combined.begin());
-    std::copy(zPos, zPos + mLatentDim, combined.begin() + mStateDim);
+    std::copy(zPos.data(), zPos.data() + mLatentDim, combined.begin() + mStateDim);
     
     mActor.Forward(combined.data(), action);
     
@@ -413,8 +414,8 @@ void SpanActorCritic::SelectActionBatch(const float* states, float* actions, flo
 
 void SpanActorCritic::ComputeQValues(const float* state, const float* action, float* qValues)
 {
-    float zPos[LATENT_DIM];
-    mLatentMemory.GetLatentStates(zPos, nullptr, 0);
+    AlignedVector32<float> zPos(LATENT_DIM);
+    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     
     size_t idx = 0;
     for (size_t i = 0; i < mStateDim; ++i)
@@ -450,8 +451,8 @@ void SpanActorCritic::ComputeQValuesBatch(const float* states, const float* acti
 
 void SpanActorCritic::ComputeQ1(const float* state, const float* action, float* qValue)
 {
-    float zPos[LATENT_DIM];
-    mLatentMemory.GetLatentStates(zPos, nullptr, 0);
+    AlignedVector32<float> zPos(LATENT_DIM);
+    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     
     size_t idx = 0;
     for (size_t i = 0; i < mStateDim; ++i)
@@ -474,8 +475,8 @@ void SpanActorCritic::ComputeQ1(const float* state, const float* action, float* 
 
 void SpanActorCritic::ComputeQ2(const float* state, const float* action, float* qValue)
 {
-    float zPos[LATENT_DIM];
-    mLatentMemory.GetLatentStates(zPos, nullptr, 0);
+    AlignedVector32<float> zPos(LATENT_DIM);
+    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     
     size_t idx = 0;
     for (size_t i = 0; i < mStateDim; ++i)

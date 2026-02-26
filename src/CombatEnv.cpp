@@ -31,14 +31,12 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
     uint32_t envIdx2 = layer2 - Layers::MOVING_BASE;
 
     if (envIdx1 != envIdx2) return;
+    if (envIdx1 >= NUM_PARALLEL_ENVS) return;
 
     float impulseMag = manifold.mPenetrationDepth * manifold.mWorldSpaceNormal.Length();
     
-    if (envIdx1 < NUM_PARALLEL_ENVS)
-    {
-        int robotIdx = 0;
-        mForceReadings[envIdx1][robotIdx].impulseMagnitude[0] += impulseMag;
-    }
+    mForceReadingsPerEnv[envIdx1][0].impulseMagnitude[0] += impulseMag;
+    mForceReadingsPerEnv[envIdx1][1].impulseMagnitude[0] += impulseMag;
 }
 
 void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader)
@@ -46,6 +44,18 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mEnvIndex = envIndex;
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
+
+    // --- THE ARENA FLOOR ---
+    // Single shared static floor for this environment
+    JPH::BodyInterface& body_interface = mPhysicsSystem->GetBodyInterface();
+    
+    // Only create floor once (for env index 0) to avoid duplicate static bodies
+    if (envIndex == 0) {
+        JPH::BoxShapeSettings floor_shape_settings(JPH::Vec3(100.0f, 1.0f, 100.0f));
+        JPH::RefConst<JPH::Shape> floor_shape = floor_shape_settings.Create().Get();
+        JPH::BodyCreationSettings floor_settings(floor_shape, JPH::RVec3(0.0f, -1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
+        body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
+    }
 
     JPH::RVec3 pos1(-ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
     JPH::RVec3 pos2(ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
@@ -63,8 +73,8 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPrevEnergy2 = 0.0f;
     mAirAccumulator1 = 0.0f;
     mAirAccumulator2 = 0.0f;
-    mForceReadings1.Reset();
-    mForceReadings2.Reset();
+
+    CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 }
 
 void CombatEnv::Reset()
@@ -77,8 +87,8 @@ void CombatEnv::Reset()
     mPrevEnergy2 = 0.0f;
     mAirAccumulator1 = 0.0f;
     mAirAccumulator2 = 0.0f;
-    mForceReadings1.Reset();
-    mForceReadings2.Reset();
+
+    CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
     JPH::RVec3 pos1(-ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
     JPH::RVec3 pos2(ROBOT_SPAWN_OFFSET, 1.0f, 0.0f);
@@ -97,8 +107,7 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 StepResult CombatEnv::HarvestState()
 {
     StepResult result;
-    result.obs_robot1.resize(mObservationDim);
-    result.obs_robot2.resize(mObservationDim);
+    // Vectors already sized in StepResult constructor
 
     if (mDone) return result;
 
@@ -106,8 +115,12 @@ StepResult CombatEnv::HarvestState()
     CheckCollisions();
     UpdateForceSensors();
 
-    BuildObservationVector(result.obs_robot1, mRobot1, mRobot2, mForceReadings1);
-    BuildObservationVector(result.obs_robot2, mRobot2, mRobot1, mForceReadings2);
+    CombatContactListener& listener = CombatContactListener::Get();
+    const ForceSensorReading& forces1 = listener.GetForceReading(mEnvIndex, 0);
+    const ForceSensorReading& forces2 = listener.GetForceReading(mEnvIndex, 1);
+
+    BuildObservationVector(result.obs_robot1, mRobot1, mRobot2, forces1);
+    BuildObservationVector(result.obs_robot2, mRobot2, mRobot1, forces2);
 
     CalculateRewards(result);
 
@@ -190,18 +203,22 @@ void CombatEnv::CheckCollisions()
 
 void CombatEnv::UpdateForceSensors()
 {
+    CombatContactListener& listener = CombatContactListener::Get();
+    
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
+        // Update joint stress for robot 1
         if (mRobot1.satellites[i].rotationJoint != nullptr)
         {
             JPH::Vec3 lagrange = mRobot1.satellites[i].rotationJoint->GetTotalLambdaPosition();
-            mForceReadings1.jointStress[i] = lagrange.Length() * 0.001f;
+            listener.GetForceReading(mEnvIndex, 0).jointStress[i] = lagrange.Length() * 0.001f;
         }
-
+        
+        // Update joint stress for robot 2
         if (mRobot2.satellites[i].rotationJoint != nullptr)
         {
             JPH::Vec3 lagrange = mRobot2.satellites[i].rotationJoint->GetTotalLambdaPosition();
-            mForceReadings2.jointStress[i] = lagrange.Length() * 0.001f;
+            listener.GetForceReading(mEnvIndex, 1).jointStress[i] = lagrange.Length() * 0.001f;
         }
     }
 }
@@ -266,12 +283,6 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
         obs[idx++] = static_cast<float>(pos.GetZ());
     }
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        obs[idx++] = forces.impulseMagnitude[i];
-        obs[idx++] = forces.jointStress[i];
-    }
-
     obs[idx++] = robot.hp / 100.0f;
     obs[idx++] = opponent.hp / 100.0f;
     obs[idx++] = static_cast<float>((oppPos - myPos).Length()) / 20.0f;
@@ -288,23 +299,22 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     float oppSpeed = oppVel.Length();
     obs[idx++] = mySpeed / 10.0f;
     obs[idx++] = oppSpeed / 10.0f;
-    
+
     float speedRatio = (oppSpeed > 0.01f) ? (mySpeed / oppSpeed) : 1.0f;
     obs[idx++] = std::clamp(speedRatio, 0.0f, 5.0f) / 5.0f;
-    
+
     JPH::Vec3 relVel = oppVel - myVel;
     obs[idx++] = relVel.GetX() / 10.0f;
     obs[idx++] = relVel.GetY() / 10.0f;
     obs[idx++] = relVel.GetZ() / 10.0f;
-    
+
     float closingSpeed = -relVel.Dot(toOpponent);
     obs[idx++] = closingSpeed / 10.0f;
-    
+
     JPH::Vec3 crossProduct = myVel.Cross(oppVel);
     obs[idx++] = crossProduct.GetX() / 10.0f;
     obs[idx++] = crossProduct.GetY() / 10.0f;
-    obs[idx++] = crossProduct.GetZ() / 10.0f;
-    
+
     obs[idx++] = robot.totalDamageDealt / 100.0f;
     obs[idx++] = robot.totalDamageTaken / 100.0f;
     obs[idx++] = robot.episodeSteps / 1000.0f;
@@ -349,6 +359,18 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     float dist = static_cast<float>((oppPos - myPos).Length());
     float timeToCollision = dist / std::max(std::abs(closingSpeed), 0.1f);
     obs[idx++] = timeToCollision / 20.0f;
+
+    // Padding for AVX2 alignment (4 elements)
+    obs[idx++] = 0.0f;
+    obs[idx++] = 0.0f;
+    obs[idx++] = 0.0f;
+    obs[idx++] = 0.0f;
+
+    // CRITICAL: Verify we wrote exactly 240 elements (including padding for AVX2 alignment)
+    if (idx != 240) {
+        std::cerr << "[FATAL] BuildObservationVector wrote " << idx << " elements, expected 240!" << std::endl;
+        throw std::runtime_error("Observation dimension mismatch");
+    }
 }
 
 float CombatEnv::ComputeAirtime() const
@@ -400,4 +422,11 @@ void CombatEnv::CalculateRewards(StepResult& result)
     float proximityReward = -0.001f * (dist - 3.0f);
     result.reward1.damage_dealt += proximityReward;
     result.reward2.damage_dealt += proximityReward;
+}
+
+// Define static accessor for global CombatContactListener
+CombatContactListener& CombatContactListener::Get()
+{
+    static CombatContactListener instance;
+    return instance;
 }

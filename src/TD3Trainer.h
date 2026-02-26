@@ -35,6 +35,8 @@ class TD3Trainer
 {
 public:
     TD3Trainer(int stateDim, int actionDim, const TD3Config& config = TD3Config());
+    TD3Trainer(const TD3Trainer& other) = default;
+    TD3Trainer& operator=(const TD3Trainer& other) = default;
     
     void SelectAction(const float* state, float* action);
     void SelectActionEval(const float* state, float* action);
@@ -108,7 +110,9 @@ private:
     AlignedVector32<float> mBatchLogProbs;
     AlignedVector32<float> mTargetLogProbs;
     std::vector<int> mSampledIndices;
-    
+
+    AlignedVector32<float> mCriticInputBuffer;
+
     int mStepCount = 0;
     int mUpdateCount = 0;
 };

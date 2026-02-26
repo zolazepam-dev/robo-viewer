@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <immintrin.h>
 #include <limits>
+#include <vector>
+#include <cmath>
 
 void ODE2VAENetwork::Init(int observationDim, int latentDim, std::mt19937& rng)
 {
@@ -52,7 +54,7 @@ void ODE2VAENetwork::ComputeAcceleration(const float* z_pos, const float* z_vel,
                                           const float* obs, float* accel_out)
 {
     const int inputDim = latentDim * 2 + obsDim;
-    std::vector<float> combined(inputDim);
+    AlignedVector32f combined(inputDim);
     
     for (int i = 0; i < latentDim; ++i)
     {
@@ -235,10 +237,10 @@ void NeuralNetwork::ForwardODE2VAE(const float* input, float* output,
     float* z_pos = memory.GetPosition(envIdx);
     float* z_vel = memory.GetVelocity(envIdx);
     
-    float accel[LATENT_DIM];
-    mODE2VAE.ComputeAcceleration(z_pos, z_vel, input, accel);
+    AlignedVector32f accel(LATENT_DIM);
+    mODE2VAE.ComputeAcceleration(z_pos, z_vel, input, accel.data());
     
-    memory.StepDynamicsScalar(accel, envIdx);
+    memory.StepDynamicsScalar(accel.data(), envIdx);
     
     std::copy(z_pos, z_pos + mODE2VAE.latentDim, output);
 }
@@ -250,19 +252,19 @@ void NeuralNetwork::ForwardODE2VAEVectorized(const float* inputs, float* outputs
         return;
     }
 
-    alignas(32) float accelerations[LATENT_DIM * NUM_PARALLEL_ENVS];
-    
+    AlignedVector32f accelerations(LATENT_DIM * NUM_PARALLEL_ENVS);
+
     for (int env = 0; env < numEnvs; ++env)
     {
         const float* input = inputs + env * mLayerSizes[0];
         float* z_pos = mLatentMemory.GetPosition(env);
         float* z_vel = mLatentMemory.GetVelocity(env);
-        float* accel = accelerations + env * mODE2VAE.latentDim;
-        
+        float* accel = accelerations.data() + env * mODE2VAE.latentDim;
+
         mODE2VAE.ComputeAcceleration(z_pos, z_vel, input, accel);
     }
-    
-    mLatentMemory.StepDynamicsVectorized(accelerations);
+
+    mLatentMemory.StepDynamicsVectorized(accelerations.data());
     
     for (int env = 0; env < numEnvs; ++env)
     {

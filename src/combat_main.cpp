@@ -2,6 +2,7 @@
 #include <chrono>
 #include <vector>
 #include <random>
+#include <deque>
 
 #include <GL/glew.h>
 #define GLFW_INCLUDE_NONE
@@ -15,6 +16,8 @@
 #include "NeuralNetwork.h"
 #include "TD3Trainer.h"
 #include "Renderer.h"
+#include "PhysicsCore.h"
+#include "CombatRobot.h"
 
 Camera gCamera;
 
@@ -49,8 +52,15 @@ int main() {
     ImGui_ImplOpenGL3_Init("#version 330");
     
     // Create environment
-    CombatEnv env(true);
-    if (!env.Init()) { std::cerr << "CombatEnv Init failed" << std::endl; glfwTerminate(); return 1; } else { std::cout << "CombatEnv Init succeeded" << std::endl; }
+    CombatEnv env;
+    PhysicsCore physicsCore;
+    physicsCore.Init(1);  // Initialize for 1 environment
+    
+    CombatRobotLoader robotLoader;
+    
+    // Initialize the environment with required parameters
+    env.Init(0, &physicsCore.GetPhysicsSystem(), &robotLoader);
+    std::cout << "CombatEnv initialized successfully" << std::endl;
     
     int stateDim = env.GetObservationDim();
     int actionDim = ACTIONS_PER_ROBOT;
@@ -95,6 +105,12 @@ int main() {
     float hp1 = 100, hp2 = 100;
     float avgSPS = 0;
     
+    // Sliding window SPS tracking (1-second window)
+    std::deque<int> stepHistory;
+    std::deque<double> timeHistory;
+    double lastSpsUpdate = 0.0;
+    float currentSPS = 0.0f;
+    
     // UI state
     bool paused = false;
     float camSpeed = 0.02f;
@@ -102,9 +118,12 @@ int main() {
     // Get initial observations
     std::cout << "Getting initial observations..." << std::endl;
     // Don't call Reset() here - it was already called in Init()
-    StepResult initialResult = env.Step(actions.data(), actions.data() + actionDim);
-    state1 = initialResult.obs_robot1;
-    state2 = initialResult.obs_robot2;
+    // Use the correct method to get initial observations
+    env.Reset(); // Reset the environment to get initial state
+    StepResult initialResult = env.HarvestState(); // Get initial state
+    // Convert AlignedVector32 to std::vector
+    state1.assign(initialResult.obs_robot1.begin(), initialResult.obs_robot1.end());
+    state2.assign(initialResult.obs_robot2.begin(), initialResult.obs_robot2.end());
     std::cout << "Initial observations obtained!" << std::endl;
 
     while (!glfwWindowShouldClose(window) && totalSteps < 10000000) {
@@ -124,12 +143,17 @@ int main() {
             }
             
             // Step
-            StepResult result = env.Step(actions.data(), actions.data() + actionDim);
+            // Queue actions and harvest state
+            env.QueueActions(actions.data(), actions.data() + actionDim);
+            StepResult result = env.HarvestState();
             
-            state1 = result.obs_robot1;
-            state2 = result.obs_robot2;
-            lastReward1 = result.reward1;
-            lastReward2 = result.reward2;
+            // Convert AlignedVector32 to std::vector
+            state1.assign(result.obs_robot1.begin(), result.obs_robot1.end());
+            state2.assign(result.obs_robot2.begin(), result.obs_robot2.end());
+            // For rewards, we need to extract a scalar value from VectorReward
+            // Using the first component of the reward for now
+            lastReward1 = result.reward1.damage_dealt; // or another component
+            lastReward2 = result.reward2.damage_dealt; // or another component
             hp1 = result.obs_robot1[stateDim - 3];  // Second to last is robot hp
             hp2 = result.obs_robot2[stateDim - 3];
             
@@ -145,6 +169,24 @@ int main() {
             }
             
             totalSteps++;
+            
+            // Update sliding window SPS
+            double currentTime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - startTime).count();
+            stepHistory.push_back(totalSteps);
+            timeHistory.push_back(currentTime);
+            
+            // Remove entries older than 1 second
+            while (!timeHistory.empty() && currentTime - timeHistory.front() > 1.0) {
+                stepHistory.pop_front();
+                timeHistory.pop_front();
+            }
+            
+            // Calculate SPS from sliding window
+            if (stepHistory.size() >= 2) {
+                int stepsInWindow = stepHistory.back() - stepHistory.front();
+                double timeWindow = timeHistory.back() - timeHistory.front();
+                currentSPS = timeWindow > 0.0 ? static_cast<float>(stepsInWindow / timeWindow) : 0.0f;
+            }
         }
 
         // Render 3D
@@ -155,17 +197,8 @@ int main() {
         glClearColor(0.01f, 0.01f, 0.02f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        std::vector<JPH::BodyID> bodies;
-        const auto& r1 = env.GetRobot1();
-        const auto& r2 = env.GetRobot2();
-        bodies.push_back(r1.mainBodyId);
-        bodies.push_back(r2.mainBodyId);
-        for (int i = 0; i < NUM_SATELLITES; ++i) {
-            bodies.push_back(r1.satellites[i].coreBodyId);
-            bodies.push_back(r2.satellites[i].coreBodyId);
-        }
-        
-        renderer.Draw(&env.GetPhysicsSystem(), bodies, glm::vec3(camX, camY, camZ));
+        // Use the envIndex parameter for the renderer to draw the correct environment
+        renderer.Draw(&physicsCore.GetPhysicsSystem(), glm::vec3(camX, camY, camZ), 0);
         
         // ImGui UI
         ImGui_ImplOpenGL3_NewFrame();
@@ -187,8 +220,7 @@ int main() {
         ImGui::Text("Steps: %d", totalSteps);
         ImGui::Text("Episodes: %d", episodes);
         
-        float sps = elapsed > 0 ? (float)totalSteps / elapsed : 0;
-        ImGui::Text("SPS: %.1f", sps);
+        ImGui::Text("SPS: %.1f", currentSPS);
         ImGui::Text("Buffer: %d", buffer.Size());
         ImGui::Separator();
         ImGui::Text("Robot 1 HP: %.1f", hp1);

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include "AlignedAllocator.h"
 
 TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     : mStateDim(stateDim)
@@ -27,6 +28,9 @@ TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     mQ2Values.resize(batchSize * 4);
     mTargetQ.resize(batchSize);
     mGrads.resize(mModel.GetActor().GetNumWeights());
+
+    int criticInputDim = stateDim + actionDim + config.latentDim;
+    mCriticInputBuffer.resize(criticInputDim);
 }
 
 void TD3Trainer::SelectAction(const float* state, float* action)
@@ -136,12 +140,29 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
         }
     }
     
+    // Properly evaluate target Q-values with state+action+latent concatenation
+    int latentDim = mModel.GetLatentDim();
     for (int i = 0; i < mConfig.batchSize; ++i)
     {
+        // Get latent state (zero-initialized for now - proper latent tracking needed)
+        AlignedVector32<float> zPos(LATENT_DIM, 0.0f);
+        mModel.GetLatentMemory().GetLatentStates(zPos.data(), nullptr, 0);
+
+        // Concatenate: state + action + latent into mCriticInputBuffer
+        const float* nextState = mBatchNextStates.data() + i * mStateDim;
+        const float* nextAction = mNextActions.data() + i * mActionDim;
+
+        int idx = 0;
+        std::copy(nextState, nextState + mStateDim, mCriticInputBuffer.data());
+        idx += mStateDim;
+        std::copy(nextAction, nextAction + mActionDim, mCriticInputBuffer.data() + idx);
+        idx += mActionDim;
+        std::copy(zPos.data(), zPos.data() + latentDim, mCriticInputBuffer.data() + idx);
+
         float q1[4], q2[4];
-        mModel.GetCritic1Target().Forward(mBatchNextStates.data() + i * mStateDim, q1);
-        mModel.GetCritic2Target().Forward(mBatchNextStates.data() + i * mStateDim, q2);
-        
+        mModel.GetCritic1Target().Forward(mCriticInputBuffer.data(), q1);
+        mModel.GetCritic2Target().Forward(mCriticInputBuffer.data(), q2);
+
         float minQ = std::min(q1[0], q2[0]);
         mTargetQ[i] = mBatchRewards[i] + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }

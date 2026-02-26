@@ -6,13 +6,13 @@
 #include <cstring>
 #include <immintrin.h>
 
-constexpr size_t OBS_DIM = 208;
+constexpr size_t OBS_DIM = 240;  // Updated: 236 actual + 4 AVX2 padding
 constexpr size_t LATENT_DIM = 64;
-constexpr size_t ACTOR_INPUT_DIM = 336;
+constexpr size_t ACTOR_INPUT_DIM = OBS_DIM + LATENT_DIM;  // 240 + 64 = 304
 constexpr size_t ACTOR_HIDDEN_DIM = 512;
 constexpr size_t ACTOR_LAYERS = 3;
-constexpr size_t ACTION_DIM = 52;
-constexpr size_t CRITIC_INPUT_DIM = 388;
+constexpr size_t ACTION_DIM = 56;  // 13 satellites * 4 + 4 reaction wheels
+constexpr size_t CRITIC_INPUT_DIM = OBS_DIM + ACTION_DIM + LATENT_DIM;  // 240 + 56 + 64 = 360
 constexpr size_t CRITIC_HIDDEN_DIM = 1024;
 constexpr size_t CRITIC_LAYERS = 3;
 constexpr size_t REWARD_VECTOR_DIM = 4;
@@ -30,6 +30,12 @@ constexpr size_t OBS_DIM_ALIGNED = PAD_TO_AVX2(OBS_DIM);
 constexpr size_t LATENT_DIM_ALIGNED = PAD_TO_AVX2(LATENT_DIM);
 constexpr size_t ACTOR_HIDDEN_DIM_ALIGNED = PAD_TO_AVX2(ACTOR_HIDDEN_DIM);
 constexpr size_t CRITIC_HIDDEN_DIM_ALIGNED = PAD_TO_AVX2(CRITIC_HIDDEN_DIM);
+
+// AVX2 alignment requirements - enforce at compile time
+static_assert(OBS_DIM % AVX2_WIDTH == 0, "OBS_DIM must be multiple of 8 for AVX2");
+static_assert(ACTION_DIM % AVX2_WIDTH == 0, "ACTION_DIM must be multiple of 8 for AVX2");
+static_assert(ACTOR_INPUT_DIM % AVX2_WIDTH == 0, "ACTOR_INPUT_DIM must be multiple of 8 for AVX2");
+static_assert(CRITIC_INPUT_DIM % AVX2_WIDTH == 0, "CRITIC_INPUT_DIM must be multiple of 8 for AVX2");
 
 inline void AssertAligned32(const void* ptr) {
     assert(reinterpret_cast<std::uintptr_t>(ptr) % 32 == 0 && "Memory must be 32-byte aligned for AVX2");

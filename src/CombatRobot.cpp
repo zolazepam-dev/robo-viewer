@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 
 #include <nlohmann/json.hpp>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -18,6 +19,9 @@
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 
 #include "PhysicsCore.h"
+
+// Define the static member
+JPH::Ref<JPH::GroupFilterTable> CombatRobotLoader::mGroupFilter = nullptr;
 
 using json = nlohmann::json;
 
@@ -41,6 +45,11 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     uint32_t envIndex,
     int robotIndex)
 {
+    // Force sequential loading to prevent Jolt memory allocator collisions 
+    // and JPH::Ref counter corruption from concurrent thread execution.
+    static std::mutex sLoadMutex;
+    std::lock_guard<std::mutex> lock(sLoadMutex);
+    
     CombatRobotData robotData;
     robotData.envIndex = envIndex;
     robotData.robotIndex = robotIndex;
@@ -72,7 +81,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     
     JPH::SphereShapeSettings coreShapeSettings(coreRadius);
     coreShapeSettings.SetDensity(coreMass / (4.0f / 3.0f * 3.14159f * coreRadius * coreRadius * coreRadius));
-    JPH::RefConst<JPH::Shape> coreShape = coreShapeSettings.Create().Get();
+    
+    auto coreResult = coreShapeSettings.Create();
+    if (coreResult.HasError()) throw std::runtime_error("Core Shape Error: " + std::string(coreResult.GetError().c_str()));
+    JPH::RefConst<JPH::Shape> coreShape = coreResult.Get();
 
     JPH::BodyCreationSettings coreSettings(
         coreShape,
@@ -134,7 +146,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         
         JPH::SphereShapeSettings sphereSettings(satRadius);
         sphereSettings.SetDensity(satMass / (4.0f / 3.0f * 3.14159f * satRadius * satRadius * satRadius));
-        JPH::RefConst<JPH::Shape> satShape = sphereSettings.Create().Get();
+        
+        auto satResult = sphereSettings.Create();
+        if (satResult.HasError()) throw std::runtime_error("Sat Shape Error: " + std::string(satResult.GetError().c_str()));
+        JPH::RefConst<JPH::Shape> satShape = satResult.Get();
 
         JPH::BodyCreationSettings satSettings(
             satShape,
@@ -192,9 +207,13 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         const float spikeRadius = 0.02f;
         const float spikeMass = 0.5f;
         
-        JPH::CylinderShapeSettings spikeShapeSettings(spikeHalfHeight, spikeRadius);
+        // MUST specify a custom convex radius (e.g., 0.01f) that is strictly smaller than the spikeRadius (0.02f)
+        JPH::CylinderShapeSettings spikeShapeSettings(spikeHalfHeight, spikeRadius, 0.01f);
         spikeShapeSettings.SetDensity(spikeMass / (3.14159f * spikeRadius * spikeRadius * 2.0f * spikeHalfHeight));
-        JPH::RefConst<JPH::Shape> spikeShape = spikeShapeSettings.Create().Get();
+        
+        auto spikeResult = spikeShapeSettings.Create();
+        if (spikeResult.HasError()) throw std::runtime_error("Spike Shape Error: " + std::string(spikeResult.GetError().c_str()));
+        JPH::RefConst<JPH::Shape> spikeShape = spikeResult.Get();
 
         JPH::Vec3 direction = JPH::Vec3(
             std::cos(elevation) * std::cos(azimuth),

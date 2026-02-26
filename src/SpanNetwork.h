@@ -21,6 +21,8 @@ class alignas(32) TensorProductBSpline
 {
 public:
     TensorProductBSpline() = default;
+    TensorProductBSpline(const TensorProductBSpline& other) = default;
+    TensorProductBSpline& operator=(const TensorProductBSpline& other) = default;
     
     void Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng);
     
@@ -56,6 +58,8 @@ class alignas(32) SpanNetwork
 {
 public:
     SpanNetwork() = default;
+    SpanNetwork(const SpanNetwork& other) = default;
+    SpanNetwork& operator=(const SpanNetwork& other) = default;
     
     void Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt19937& rng);
     
@@ -90,6 +94,8 @@ class alignas(32) SpanActorCritic
 {
 public:
     SpanActorCritic() = default;
+    SpanActorCritic(const SpanActorCritic& other) = default;
+    SpanActorCritic& operator=(const SpanActorCritic& other) = default;
     
     void Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng);
     

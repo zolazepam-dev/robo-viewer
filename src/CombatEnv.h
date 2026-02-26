@@ -24,8 +24,8 @@ constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES
 
 struct StepResult
 {
-    static constexpr int OBS_DIM = 208;
-    
+    static constexpr int OBS_DIM = OBSERVATION_DIM;
+
     AlignedVector32<float> obs_robot1;
     AlignedVector32<float> obs_robot2;
     VectorReward reward1;
@@ -34,8 +34,10 @@ struct StepResult
     ForceSensorReading forces2;
     bool done = false;
     int winner = 0;
-    
+
     StepResult() : obs_robot1(OBS_DIM), obs_robot2(OBS_DIM) {}
+    StepResult(const StepResult& other) = default;
+    StepResult& operator=(const StepResult& other) = default;
 };
 
 class CombatContactListener : public JPH::ContactListener
@@ -43,30 +45,35 @@ class CombatContactListener : public JPH::ContactListener
 public:
     CombatContactListener() = default;
 
+    static CombatContactListener& Get();
+
     void OnContactAdded(const JPH::Body& body1, const JPH::Body& body2,
                         const JPH::ContactManifold& manifold, JPH::ContactSettings& settings) override;
     void OnContactPersisted(const JPH::Body& body1, const JPH::Body& body2,
                             const JPH::ContactManifold& manifold, JPH::ContactSettings& settings) override;
     void OnContactRemoved(const JPH::SubShapeIDPair& subShapePair) override;
 
-    void SetActiveEnv(uint32_t envIndex) { mActiveEnv = envIndex; }
-    const ForceSensorReading& GetForceReadings(uint32_t envIndex, int robotIdx) const
+    ForceSensorReading& GetForceReading(uint32_t envIdx, int robotIdx)
     {
-        return mForceReadings[envIndex][robotIdx];
+        return mForceReadingsPerEnv[envIdx][robotIdx];
     }
 
-    void ResetForceReadings(uint32_t envIndex)
+    const ForceSensorReading& GetForceReading(uint32_t envIdx, int robotIdx) const
     {
-        mForceReadings[envIndex][0].Reset();
-        mForceReadings[envIndex][1].Reset();
+        return mForceReadingsPerEnv[envIdx][robotIdx];
     }
 
-private:
-    std::array<std::array<ForceSensorReading, 2>, NUM_PARALLEL_ENVS> mForceReadings;
-    uint32_t mActiveEnv = 0;
+    void ResetForceReadings(uint32_t envIdx)
+    {
+        mForceReadingsPerEnv[envIdx][0].Reset();
+        mForceReadingsPerEnv[envIdx][1].Reset();
+    }
 
     void ExtractImpulseData(const JPH::Body& body1, const JPH::Body& body2,
                             const JPH::ContactManifold& manifold);
+
+private:
+    std::array<std::array<ForceSensorReading, 2>, NUM_PARALLEL_ENVS> mForceReadingsPerEnv;
 };
 
 class CombatEnv
@@ -91,8 +98,6 @@ public:
     int GetStepCount() const { return mStepCount; }
     bool IsDone() const { return mDone; }
     int GetObservationDim() const { return mObservationDim; }
-    const ForceSensorReading& GetForceReadings1() const { return mForceReadings1; }
-    const ForceSensorReading& GetForceReadings2() const { return mForceReadings2; }
 
 private:
     void CheckCollisions();
@@ -111,15 +116,12 @@ private:
     uint32_t mEnvIndex = 0;
     int mStepCount = 0;
     bool mDone = false;
-    int mObservationDim = OBSERVATION_BASE_DIM + FORCE_SENSOR_DIM;
+    int mObservationDim = OBSERVATION_DIM;
 
     float mPrevHp1 = INITIAL_HP;
     float mPrevHp2 = INITIAL_HP;
     float mPrevEnergy1 = 0.0f;
     float mPrevEnergy2 = 0.0f;
-
-    ForceSensorReading mForceReadings1;
-    ForceSensorReading mForceReadings2;
 
     float mAirAccumulator1 = 0.0f;
     float mAirAccumulator2 = 0.0f;

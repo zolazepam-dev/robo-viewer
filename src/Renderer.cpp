@@ -329,7 +329,7 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
 
     if (physicsSystem == nullptr || mProgram == 0) return;
 
-    mView = glm::lookAt(cameraPos, gCamera.target, glm::vec3(0.0f, 1.0f, 0.0f));
+    mView = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     mViewPosition = cameraPos;
 
     glUseProgram(mProgram);

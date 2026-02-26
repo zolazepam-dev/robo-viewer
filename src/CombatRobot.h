@@ -17,7 +17,7 @@ constexpr int ACTIONS_PER_SATELLITE = 4;
 constexpr int REACTION_WHEEL_DIM = 4;
 constexpr int ACTIONS_PER_ROBOT = NUM_SATELLITES * ACTIONS_PER_SATELLITE + REACTION_WHEEL_DIM;
 constexpr int NUM_LIDAR_RAYS = 10;
-constexpr int OBSERVATION_DIM = 208;
+constexpr int OBSERVATION_DIM = 240; // 236 actual + 4 padding for AVX2 alignment (32-byte boundary)
 
 struct ForceSensorReading
 {
@@ -157,5 +157,5 @@ private:
     void BlendResidualWithBase(CombatRobotData& robot);
     
     static const JPH::Vec3 mLidarDirections[NUM_LIDAR_RAYS];
-    JPH::RefConst<JPH::GroupFilterTable> mGroupFilter;
+    static JPH::Ref<JPH::GroupFilterTable> mGroupFilter;
 };

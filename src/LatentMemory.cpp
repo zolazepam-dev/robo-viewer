@@ -231,18 +231,18 @@ void LatentMemoryManager::Init(size_t obsDim, size_t latentDim, std::mt19937& rn
 
 void LatentMemoryManager::EncodeObservations(const float* observations, int numEnvs)
 {
-    alignas(32) float tempPos[LATENT_DIM];
-    alignas(32) float tempVel[LATENT_DIM];
-    
+    AlignedVector32<float> tempPos(LATENT_DIM);
+    AlignedVector32<float> tempVel(LATENT_DIM);
+
     for (int env = 0; env < numEnvs; ++env)
     {
-        mEncoder.Encode(observations + static_cast<size_t>(env) * mObsDim, tempPos, tempVel);
-        
+        mEncoder.Encode(observations + static_cast<size_t>(env) * mObsDim, tempPos.data(), tempVel.data());
+
         float* zPos = mMemory.GetPosition(static_cast<size_t>(env));
         float* zVel = mMemory.GetVelocity(static_cast<size_t>(env));
-        
-        std::memcpy(zPos, tempPos, mLatentDim * sizeof(float));
-        std::memcpy(zVel, tempVel, mLatentDim * sizeof(float));
+
+        std::memcpy(zPos, tempPos.data(), mLatentDim * sizeof(float));
+        std::memcpy(zVel, tempVel.data(), mLatentDim * sizeof(float));
     }
 }
 
@@ -266,8 +266,8 @@ void LatentMemoryManager::GetLatentStates(float* z_pos_out, float* z_vel_out, si
     const float* zPos = mMemory.GetPosition(envIdx);
     const float* zVel = mMemory.GetVelocity(envIdx);
     
-    std::memcpy(z_pos_out, zPos, mLatentDim * sizeof(float));
-    std::memcpy(z_vel_out, zVel, mLatentDim * sizeof(float));
+    if (z_pos_out) std::memcpy(z_pos_out, zPos, mLatentDim * sizeof(float));
+    if (z_vel_out) std::memcpy(z_vel_out, zVel, mLatentDim * sizeof(float));
 }
 
 void LatentMemoryManager::GetLatentStatesBatch(float* z_pos_out, float* z_vel_out, int numEnvs) const

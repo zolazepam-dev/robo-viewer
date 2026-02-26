@@ -4,9 +4,14 @@
 
 #include <iostream>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+
+// Global single instance of CombatContactListener
+CombatContactListener* gCombatContactListener = nullptr;
 
 VectorizedEnv::VectorizedEnv(int numEnvs)
     : mNumEnvs(numEnvs)
@@ -15,11 +20,16 @@ VectorizedEnv::VectorizedEnv(int numEnvs)
 
 void VectorizedEnv::Init()
 {
+
     if (!mPhysicsCore.Init(mNumEnvs))
     {
         std::cerr << "[JOLTrl] FATAL: Global PhysicsCore failed to initialize!" << std::endl;
         return;
     }
+
+    // Create and register the global CombatContactListener
+    gCombatContactListener = &CombatContactListener::Get();
+    mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
 
     // --- THE GLOBAL ARENA FLOOR ---
     // A single, massive 200x200 static plane for all 128 dimensions to share
@@ -48,6 +58,7 @@ void VectorizedEnv::Init()
 
     mObservationDim = mEnvs[0].GetObservationDim();
 
+    std::cout << "[JOLTrl] Resizing observation and reward arrays..." << std::endl;
     mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
     mAllRewards.resize(mNumEnvs * 2, 0.0f);
     mAllDones.resize(mNumEnvs, false);
@@ -55,13 +66,17 @@ void VectorizedEnv::Init()
     AssertAligned32(mAllObservations.data());
     AssertAligned32(mAllRewards.data());
 
+    std::cout << "[JOLTrl] Calling Reset(-1)..." << std::endl;
     Reset(-1);
+    std::cout << "[JOLTrl] Reset(-1) completed." << std::endl;
 
+    // Call broadphase optimization after a small delay to ensure all bodies are added
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     mPhysicsCore.GetPhysicsSystem().OptimizeBroadPhase();
     std::cout << "[JOLTrl] Global BroadPhase optimized. Engine ready." << std::endl;
 }
 
-void VectorizedEnv::Step(const std::vector<float>& actions)
+void VectorizedEnv::Step(const AlignedVector32<float>& actions)
 {
     const int actionDim = ACTIONS_PER_ROBOT;
 
@@ -83,7 +98,7 @@ void VectorizedEnv::Step(const std::vector<float>& actions)
         if (mAllDones[i]) continue;
 
         StepResult result = mEnvs[i].HarvestState();
- int obsOffset = i * mObservationDim * 2;
+        int obsOffset = i * mObservationDim * 2;
         std::copy(result.obs_robot1.begin(), result.obs_robot1.end(), mAllObservations.begin() + obsOffset);
         std::copy(result.obs_robot2.begin(), result.obs_robot2.end(),
                   mAllObservations.begin() + obsOffset + mObservationDim);
@@ -121,3 +136,12 @@ void VectorizedEnv::ResetDoneEnvs()
         }
     }
 }
+VectorizedEnv::~VectorizedEnv()
+{
+    if (gCombatContactListener)
+    {
+        mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
+        gCombatContactListener = nullptr;
+    }
+}
+

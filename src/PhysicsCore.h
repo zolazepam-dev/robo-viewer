@@ -42,6 +42,18 @@ public:
         return BroadPhaseLayers::DYNAMIC;
     }
 
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+    virtual const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const override
+    {
+        switch ((JPH::BroadPhaseLayer::Type)inLayer)
+        {
+        case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::STATIC: return "Static";
+        case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::DYNAMIC: return "Dynamic";
+        default: return "Invalid";
+        }
+    }
+#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
+
 private:
     uint32_t mNumEnvs;
 };

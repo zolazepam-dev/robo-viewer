@@ -1,10 +1,12 @@
+// STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
-#include <Jolt/Jolt.h>
-#include <Jolt/RegisterTypes.h>    // ADD THIS
-#include <Jolt/Core/Factory.h>     // ADD THIS
+#include <Jolt/RegisterTypes.h>
+#include <Jolt/Core/Factory.h>
 #include "PhysicsCore.h"
 
+#include <cstdint>
 #include <iostream>
+#include <mutex>
 #include <pthread.h>
 #include <sched.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -41,8 +43,12 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     // Pinning the Jolt thread pool to hardware cores
     std::cout << "[JOLTrl] Pinned " << joltWorkerThreads << " Jolt worker threads to bare metal." << std::endl;
 
-    JPH::Factory::sInstance = new JPH::Factory();
-    JPH::RegisterTypes();
+    // Thread-safe Jolt initialization using static local initialization (C++11 guarantees)
+    static std::once_flag joltInitFlag;
+    std::call_once(joltInitFlag, []() {
+        JPH::Factory::sInstance = new JPH::Factory();
+        JPH::RegisterTypes();
+    });
 
     mBroadPhaseLayerInterface = new BPLayerInterfaceImpl(mNumEnvs);
     mObjectVsBroadPhaseLayerFilter = new ObjectVsBroadPhaseLayerFilterImpl();
@@ -50,9 +56,9 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     // Scale physics system capacities for Dimensional Ghosting
     const uint32_t bodiesPerEnv = 60; // 2 robots * 27 bodies + safety margin
-    const uint32_t maxBodies = std::max<uint32_t>(1024, mNumEnvs * bodiesPerEnv + 10);
-    const uint32_t numBodyMutexes = 0; // We manage threading via the JobSystem
-    const uint32_t maxBodyPairs = maxBodies * 8; // Account for 13-satellite collisions
+    const uint32_t maxBodies = std::max<uint32_t>(1024, mNumEnvs * bodiesPerEnv + 256);
+    const uint32_t numBodyMutexes = std::max<uint32_t>(1, mNumEnvs / 4); // Mutex per ~4 envs
+    const uint32_t maxBodyPairs = std::min<uint32_t>(65536, maxBodies * 4); // Cap at 64K
     const uint32_t maxContactConstraints = maxBodyPairs;
 
     mPhysicsSystem = new JPH::PhysicsSystem();
@@ -99,8 +105,13 @@ void PhysicsCore::Shutdown()
     delete mBroadPhaseLayerInterface;
     mBroadPhaseLayerInterface = nullptr;
 
-    delete JPH::Factory::sInstance;
-    JPH::Factory::sInstance = nullptr;
+    // Only delete the factory if we created it and it's not null
+    if (JPH::Factory::sInstance != nullptr)
+    {
+        JPH::Factory* factory = JPH::Factory::sInstance;
+        JPH::Factory::sInstance = nullptr;
+        delete factory;
+    }
 
     delete mJobSystem;
     mJobSystem = nullptr;

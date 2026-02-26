@@ -33,3 +33,5 @@ saved_models/
 # OS files
 .DS_Store
 Thumbs.db
+node_modules/
+session-ses_*.md
