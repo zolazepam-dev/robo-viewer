@@ -1,26 +1,19 @@
 #!/bin/bash
+# Dedicated build script for micro_board to bypass Bazel sandbox limitations with morphologica incbin
 
-# Build microboard directly with g++ (bypassing bazel font issues)
+set -e
 
-echo "=== Building MicroBoard with Morphologica ==="
+echo "Building micro_board with C++20..."
 
-cd /home/cammyz/robo-viewer
+# Detect freetype include path
+FREETYPE_INC=$(pkg-config --cflags freetype2)
 
-# Get morphologica include path
-MORPH_PATH="/home/cammyz/robo-viewer/morphologica"
-FONT_PATH="/home/cammyz/robo-viewer/morphologica/fonts"
+# Compile micro_board.cpp directly
+g++ -std=c++20 -O3 micro_board.cpp \
+    -Imorphologica \
+    $FREETYPE_INC \
+    -DMORPH_FONTS_DIR=\"fonts\" \
+    -lGL -lfreetype -lpthread -lglfw -lGLEW \
+    -o micro_board_gui
 
-g++ micro_board.cpp -o micro_board_gui -std=c++20 \
-    -I${MORPH_PATH} \
-    -I/usr/include/freetype2 \
-    -DMORPH_FONTS_DIR=\"${FONT_PATH}\" \
-    -lGL -lglfw -lfreetype -lpthread \
-    -O3
-
-if [ $? -eq 0 ]; then
-    echo "Build successful!"
-    echo "Run with: ./micro_board_gui or pipe CSV data to it"
-else
-    echo "Build failed"
-    exit 1
-fi
+echo "Successfully built micro_board_gui"

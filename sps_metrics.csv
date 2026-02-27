@@ -1,0 +1,13 @@
+Step,Tag,Value
+1,Current_SPS,600
+2,Body_Reuse,1200
+3,Solver_Reduction,1600
+4,Memcpy_Optimization,2000
+5,AVX2_Network,2400
+6,Timestep_Adjust,2800
+7,Combined_Target,3000
+10,Memory_Bandwidth,65
+20,CPU_Utilization,45
+30,Physics_Overhead,80
+40,Neural_Inference,25
+50,Render_Overhead,15

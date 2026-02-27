@@ -232,7 +232,23 @@ cc_binary(
 
 cc_binary(
     name = "micro_board",
-    srcs = ["micro_board.cpp"],
+    srcs = [
+        "micro_board.cpp",
+        "fonts/ttf-bitstream-vera/Vera.ttf",
+        "fonts/ttf-bitstream-vera/VeraIt.ttf",
+        "fonts/ttf-bitstream-vera/VeraBd.ttf",
+        "fonts/ttf-bitstream-vera/VeraBI.ttf",
+        "fonts/ttf-bitstream-vera/VeraMono.ttf",
+        "fonts/ttf-bitstream-vera/VeraMoIt.ttf",
+        "fonts/ttf-bitstream-vera/VeraMoBd.ttf",
+        "fonts/ttf-bitstream-vera/VeraMoBI.ttf",
+        "fonts/ttf-bitstream-vera/VeraSe.ttf",
+        "fonts/ttf-bitstream-vera/VeraSeBd.ttf",
+        "fonts/dejavu/DejaVuSans.ttf",
+        "fonts/dejavu/DejaVuSans-Oblique.ttf",
+        "fonts/dejavu/DejaVuSans-Bold.ttf",
+        "fonts/dejavu/DejaVuSans-BoldOblique.ttf",
+    ],
     deps = [
         ":local_morphologica",
         "@glfw",
@@ -245,8 +261,7 @@ cc_binary(
         "-O3",
         "-I/usr/include/freetype2",
         "-Imorphologica",
-        "-Imorphologica/fonts",
-        "'-DMORPH_FONTS_DIR=\"fonts\"'",
+        "-DMORPH_FONTS_DIR=\\\"fonts\\\"",
     ],
 )
 

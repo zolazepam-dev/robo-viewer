@@ -51,7 +51,7 @@ CombatRobotData InternalRobotLoader::LoadInternalRobot(
     file >> config;
 
     float shellRadius = config["shell"].value("radius", 2.0f);
-    float thickness = 0.15f;
+    float thickness = config["shell"].value("thickness", 0.3f); // Use config or default to thicker
     float shellMass = config["shell"].value("mass", 25.0f);
 
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
@@ -109,95 +109,81 @@ CombatRobotData InternalRobotLoader::LoadInternalRobot(
     // Create static compound shape for the icosahedron shell
     JPH::StaticCompoundShapeSettings compoundSettings;
 
+    // Create an inner shell radius for perfect mitering
+    float innerRadius = shellRadius - thickness;
+
     for (int f = 0; f < 20; ++f) {
-        // Get the three vertices of this face
-        JPH::Vec3 v0 = verts[faces[f][0]];
-        JPH::Vec3 v1 = verts[faces[f][1]];
-        JPH::Vec3 v2 = verts[faces[f][2]];
+        // Get vertices for this face
+        JPH::Vec3 v0_out = verts[faces[f][0]];
+        JPH::Vec3 v1_out = verts[faces[f][1]];
+        JPH::Vec3 v2_out = verts[faces[f][2]];
 
-        // Calculate face center
-        JPH::Vec3 faceCenter = (v0 + v1 + v2) / 3.0f;
+        // Calculate corresponding inner vertices (perfectly aligned with the center)
+        JPH::Vec3 v0_in = v0_out * (innerRadius / shellRadius);
+        JPH::Vec3 v1_in = v1_out * (innerRadius / shellRadius);
+        JPH::Vec3 v2_in = v2_out * (innerRadius / shellRadius);
 
-        // Calculate face normal (pointing outward)
-        JPH::Vec3 edge1 = v1 - v0;
-        JPH::Vec3 edge2 = v2 - v0;
-        JPH::Vec3 normal = edge1.Cross(edge2).Normalized();
+        // Define the 6 points for the triangular wedge (prism)
+        std::vector<JPH::Vec3> wedgePoints = {
+            v0_out, v1_out, v2_out,
+            v0_in, v1_in, v2_in
+        };
 
-        // Calculate basis vectors for the triangle plane
-        JPH::Vec3 basisX = edge1.Normalized();
-        JPH::Vec3 basisZ = normal;
-        JPH::Vec3 basisY = basisZ.Cross(basisX).Normalized();
+        // Create a ConvexHullShape for this wedge
+        JPH::ConvexHullShapeSettings wedgeSettings(wedgePoints.data(), wedgePoints.size());
+        JPH::ShapeSettings::ShapeResult wedgeResult = wedgeSettings.Create();
+        if (!wedgeResult.IsValid()) {
+            std::cerr << "[InternalRobot] Failed to create wedge shape for face " << f << std::endl;
+            continue;
+        }
+        JPH::RefConst<JPH::Shape> wedgeShape = wedgeResult.Get();
 
-        // Re-calculate basisX to ensure orthogonality
-        basisX = basisY.Cross(basisZ).Normalized();
-
-        // Build rotation matrix from basis vectors
-        JPH::Mat44 rotationMatrix(
-            JPH::Vec4(basisX, 0),
-            JPH::Vec4(basisY, 0),
-            JPH::Vec4(basisZ, 0),
-            JPH::Vec4(0, 0, 0, 1)
-        );
-        JPH::Quat rotation = JPH::Quat::sFromTo(JPH::Vec3::sAxisZ(), normal);
-
-        // Calculate triangle dimensions for panel sizing
-        // The panel needs to cover the entire triangle with slight overlap
-        float edgeLength = (v1 - v0).Length();
-
-        // Triangle height (distance from base to opposite vertex)
-        float triangleHeight = std::sqrt(3.0f) / 2.0f * edgeLength;
-
-        // Create triangular panel using a box shape
-        // Scale up slightly (1.08x) to ensure overlap at edges
-        float panelWidth = edgeLength * 1.08f;
-        float panelHeight = triangleHeight * 1.08f;
-        float panelThickness = thickness;
-
-        // Create box shape for the panel
-        JPH::BoxShapeSettings panelShapeSettings(JPH::Vec3(panelWidth * 0.5f, panelHeight * 0.5f, panelThickness * 0.5f));
-        JPH::RefConst<JPH::Shape> panelShape = panelShapeSettings.Create().Get();
-
-        // Position panel slightly outward from face center
-        JPH::Vec3 panelPos = faceCenter + normal * (panelThickness * 0.5f);
-
-        // Add to compound shape
-        compoundSettings.AddShape(panelPos, rotation, panelShape);
+        // Add to compound shape (pos and rot are 0 because points are in global/local model space)
+        compoundSettings.AddShape(JPH::Vec3::sZero(), JPH::Quat::sIdentity(), wedgeShape);
     }
 
-    JPH::RefConst<JPH::Shape> shellShape = compoundSettings.Create().Get();
+    JPH::ShapeSettings::ShapeResult shellResult = compoundSettings.Create();
+    if (!shellResult.IsValid()) {
+        std::cerr << "[InternalRobot] FATAL: Failed to create icosahedron shell shape" << std::endl;
+        return robotData;
+    }
+    JPH::RefConst<JPH::Shape> shellShape = shellResult.Get();
 
     // Create shell body at robot position
     JPH::BodyCreationSettings shellSettings(shellShape, position, JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, ghostLayer);
     shellSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
     shellSettings.mMassPropertiesOverride.mMass = shellMass;
-    shellSettings.mRestitution = 0.05f;
-    shellSettings.mFriction = 0.1f;
-    shellSettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
+    shellSettings.mRestitution = 0.1f;
+    shellSettings.mFriction = 0.2f;
+    shellSettings.mMotionQuality = JPH::EMotionQuality::LinearCast; // CCD Enabled
 
     JPH::Body* shellBody = bodyInterface.CreateBody(shellSettings);
+    if (shellBody == nullptr) {
+        std::cerr << "[InternalRobot] FATAL: Failed to create shell body" << std::endl;
+        return robotData;
+    }
     robotData.mainBodyId = shellBody->GetID();
     bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
 
     // --- INTERNAL ENGINES ---
     for (int i = 0; i < 3; ++i) {
         float engineRadius = config["engines"][i].value("radius", 0.25f);
-         float engineMass = config["engines"][i].value("mass", 0.8f); // lighter engines for less "kick"
+        float engineMass = config["engines"][i].value("mass", 1.5f); // Heavier engines for better collision stability
 
         JPH::SphereShapeSettings engShapeSettings(engineRadius);
         JPH::RefConst<JPH::Shape> engShape = engShapeSettings.Create().Get();
         
-        // Position engines very close to the center to minimize escape risk
-        JPH::RVec3 engPos = position + JPH::RVec3((i - 1) * 0.1f, 0.0f, 0.0f);
+        // Position engines slightly spread out from center
+        JPH::RVec3 engPos = position + JPH::RVec3((i - 1) * 0.2f, 0.0f, 0.0f);
         
         JPH::BodyCreationSettings engSettings(engShape, engPos, JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, ghostLayer);
         engSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
         engSettings.mMassPropertiesOverride.mMass = engineMass;
         
-        // CRITICAL: Continuous Collision Detection (CCD)
-        // This prevents the fast-moving internal spheres from tunneling through the shell walls
+        // CRITICAL: CCD for engines
         engSettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
         
-        engSettings.mRestitution = 0.3f; // Reduced restitution to prevent bouncing out
+        engSettings.mRestitution = 0.2f;
         engSettings.mFriction = 0.1f;
         
         JPH::Body* engBody = bodyInterface.CreateBody(engSettings);
@@ -216,14 +202,12 @@ void InternalRobotLoader::ApplyInternalActions(
     if (robot.mainBodyId.IsInvalid()) return;
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
     
-      const float maxForce = 20.0f; // Drastically reduced to prevent engine escape - was 50.0f
+    // WIRE UP GUI: Use the dynamic scale from the robot configuration
+    const float maxForce = robot.actionScale.slideScale; 
     float energySum = 0.0f;
 
-        JPH::RVec3 shellPos = bodyInterface.GetPosition(robot.mainBodyId);
-        // Calculate containment radius from spherical shell dimensions
-        float shellRadius = 2.0f; // Fixed shell radius from config defaults
-        float thickness = 0.8f; // Fixed shell thickness
-        float containmentRadius = shellRadius; // Inner radius of the spherical shell
+    JPH::RVec3 shellPos = bodyInterface.GetPosition(robot.mainBodyId);
+    float containmentRadius = 1.8f; // Soft boundary slightly inside the 2.0m shell
 
     for (int i = 0; i < 3; ++i) {
         if (robot.satellites[i].coreBodyId.IsInvalid()) continue;
@@ -232,21 +216,24 @@ void InternalRobotLoader::ApplyInternalActions(
         JPH::Vec3 relPos = JPH::Vec3(engPos - shellPos);
         float dist = relPos.Length();
 
-        // --- DEBUG MONITORING ---
-        if (dist > containmentRadius) {
-            std::cout << "[InternalRobot] ALERT: Engine " << i << " escaped! Dist: " << dist << ". Applying recall force." << std::endl;
-            // Physical Recall Force (Magnetic Containment) - Significantly increased
-            JPH::Vec3 recall = -relPos.Normalized() * 10000.0f;
-            bodyInterface.AddForce(robot.satellites[i].coreBodyId, recall);
+        // --- PREVENTATIVE CONTAINMENT (Magnetic Well) ---
+        // Apply a spring force pulling back to center if they move too far
+        if (dist > 0.1f) {
+            float springK = 500.0f;
+            if (dist > containmentRadius) springK = 5000.0f; // Stiff recall
+            
+            JPH::Vec3 containmentForce = -relPos.Normalized() * (dist * springK);
+            bodyInterface.AddForce(robot.satellites[i].coreBodyId, containmentForce);
         }
 
+        // --- ACTION FORCE ---
         JPH::Vec3 force(actions[i * 3 + 0] * maxForce, actions[i * 3 + 1] * maxForce, actions[i * 3 + 2] * maxForce);
         bodyInterface.AddForce(robot.satellites[i].coreBodyId, force);
-        energySum += (std::abs(force.GetX()) + std::abs(force.GetY()) + std::abs(force.GetZ()));
+        energySum += force.Length();
     }
 
-    // Reaction Wheels
-    const float reactionTorqueScale = 6000.0f;
+    // Reaction Wheels (Main Body Rotation)
+    const float reactionTorqueScale = robot.actionScale.rotationScale;
     JPH::Vec3 reactionTorque(actions[52] * reactionTorqueScale, actions[53] * reactionTorqueScale, actions[54] * reactionTorqueScale);
     bodyInterface.AddTorque(robot.mainBodyId, reactionTorque);
 

@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <vector>
 #include <random>
@@ -99,6 +100,13 @@ int main(int argc, char* argv[]) {
     // Initializing vectorized environments
     VectorizedEnv vecEnv(numEnvs);
     vecEnv.Init();
+
+    // Prepare Telemetry File for micro_board
+    std::string telemetryPath = checkpointDir + "/telemetry.csv";
+    std::ofstream telemetryFile(telemetryPath, std::ios::trunc);
+    if (telemetryFile.is_open()) {
+        telemetryFile << "Step,Tag,Value\n"; // Header
+    }
     
     Renderer renderer(1280, 720);
     int stateDim = vecEnv.GetObservationDim(); // Should be 256
@@ -266,7 +274,27 @@ int main(int argc, char* argv[]) {
 
         static auto lastSpsTime = now;
         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
-        if (spsElapsed.count() >= 1.0f) { sps = step_counter / spsElapsed.count(); step_counter = 0; lastSpsTime = now; }
+        if (spsElapsed.count() >= 1.0f) { 
+            sps = step_counter / spsElapsed.count(); 
+            step_counter = 0; 
+            lastSpsTime = now; 
+            
+            // CSV Telemetry output for micro_board
+            if (trainEnabled) {
+                std::cout << totalSteps << ",SPS," << sps << "\n";
+                std::cout << totalSteps << ",Reward1," << currentRew1 << "\n";
+                std::cout << totalSteps << ",Reward2," << currentRew2 << "\n";
+                std::cout << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
+
+                if (telemetryFile.is_open()) {
+                    telemetryFile << totalSteps << ",SPS," << sps << "\n";
+                    telemetryFile << totalSteps << ",Reward1," << currentRew1 << "\n";
+                    telemetryFile << totalSteps << ",Reward2," << currentRew2 << "\n";
+                    telemetryFile << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
+                    telemetryFile.flush(); // Ensure micro_board sees it immediately
+                }
+            }
+        }
 
         if (renderEnabled && !headlessTurbo) {
             renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, renderEnvIdx, gCam.front);
@@ -333,16 +361,44 @@ int main(int argc, char* argv[]) {
         if (ImGui::Button("Load Final Checkpoint")) {
             trainer.Load(checkpointDir + "/model_final.bin");
         }
+        ImGui::SameLine();
+        if (ImGui::Button("SAVE MODEL NOW")) {
+            std::string manualSave = checkpointDir + "/manual_save.bin";
+            trainer.Save(manualSave);
+            std::cout << "[GUI] Model saved to: " << manualSave << std::endl;
+        }
+
+        if (ImGui::Button("LAUNCH 3D METRICS GRAPH")) {
+            // Use the absolute path to the binary to avoid Bazel locking issues
+            std::string cmd = "./bazel-bin/micro_board " + telemetryPath + " &";
+            std::cout << "[GUI] Launching 3D Graph: " << cmd << std::endl;
+            int ret = system(cmd.c_str());
+            if (ret != 0) std::cerr << "[GUI] Error launching micro_board" << std::endl;
+        }
         
         ImGui::SliderFloat("Time Scale", &timeScale, 0.0f, 5.0f);
         
-        if (ImGui::CollapsingHeader("Incremental Power Tuner")) {
-            auto& r1 = vecEnv.GetEnv(0).GetRobot1Ref();
-            auto& r2 = vecEnv.GetEnv(0).GetRobot2Ref();
-            ImGui::SliderFloat("Rotation Speed", &r1.actionScale.rotationScale, 0.0f, 500.0f);
-            ImGui::SliderFloat("Stab Speed", &r1.actionScale.slideScale, 0.0f, 2000.0f);
-            r2.actionScale.rotationScale = r1.actionScale.rotationScale;
-            r2.actionScale.slideScale = r1.actionScale.slideScale;
+        if (ImGui::CollapsingHeader("Internal Engine Tuner")) {
+            auto& baseR1 = vecEnv.GetEnv(0).GetRobot1Ref();
+            float rotScale = baseR1.actionScale.rotationScale;
+            float engScale = baseR1.actionScale.slideScale;
+            
+            bool changed = false;
+            if (ImGui::SliderFloat("Reaction Wheel Power", &rotScale, 0.0f, 15000.0f)) changed = true;
+            if (ImGui::SliderFloat("Internal Engine Power", &engScale, 0.0f, 500.0f)) changed = true;
+            
+            // If tuned, broadcast to ALL robots in ALL environments
+            if (changed) {
+                std::cout << "[GUI] Tuning Applied: ReactionWheel=" << rotScale << " | Engine=" << engScale << " (Broadcast to " << numEnvs << " envs)" << std::endl;
+                for (int i = 0; i < numEnvs; ++i) {
+                    auto& r1 = vecEnv.GetEnv(i).GetRobot1Ref();
+                    auto& r2 = vecEnv.GetEnv(i).GetRobot2Ref();
+                    r1.actionScale.rotationScale = rotScale;
+                    r1.actionScale.slideScale = engScale;
+                    r2.actionScale.rotationScale = rotScale;
+                    r2.actionScale.slideScale = engScale;
+                }
+            }
         }
 
         if (ImGui::CollapsingHeader("Physics Tuner (Expansive)")) {
