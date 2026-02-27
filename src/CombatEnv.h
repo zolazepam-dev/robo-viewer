@@ -91,7 +91,7 @@ public:
     void Reset();
 
     void QueueActions(const float* actions1, const float* actions2);
-    StepResult HarvestState();
+    void HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done);
 
     const CombatRobotData& GetRobot1() const { return mRobot1; }
     const CombatRobotData& GetRobot2() const { return mRobot2; }
@@ -103,11 +103,11 @@ public:
 
 private:
     void CheckCollisions();
-    void CalculateRewards(StepResult& result);
+    void CalculateRewards(float& r1, float& r2);
     float ComputeAirtime() const;
     float ComputeEnergyUsed(const float* actions, int actionDim) const;
     void UpdateForceSensors();
-    void BuildObservationVector(AlignedVector32<float>& obs, const CombatRobotData& robot,
+    void BuildObservationVector(float* obs, const CombatRobotData& robot,
                                  const CombatRobotData& opponent, const ForceSensorReading& forces);
 
     JPH::PhysicsSystem* mPhysicsSystem = nullptr;

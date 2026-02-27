@@ -232,21 +232,6 @@ cc_binary(
 
 cc_binary(
     name = "micro_board",
-    srcs = ["micro_board.cpp"],
-    deps = [
-        "@morphologica",
-        "@glfw",
-        "@glm",
-        "@glew//:glew_static",
-    ],
-    linkopts = ["-lGL", "-lfreetype", "-lpthread"],
-    copts = [
-        "-std=c++20",
-        "-O3",
-        "-mavx2",
-        "-mfma",
-        "-march=native",
-        "-I/usr/include/freetype2",
-        "-DMORPH_FONTS_DIR=\"morphologica/fonts\"",
-    ],
+    srcs = ["micro_board_simple.cpp"],
+    copts = ["-std=c++17", "-O3"],
 )

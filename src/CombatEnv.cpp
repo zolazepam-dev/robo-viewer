@@ -167,10 +167,12 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
         InternalRobotLoader::ApplyInternalActions(mRobot2, actions2, mPhysicsSystem);
 }
 
-StepResult CombatEnv::HarvestState()
+void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done)
 {
-    StepResult result;
-    if (mDone) return result;
+    if (mDone) {
+        done = true;
+        return;
+    }
 
     mStepCount++;
     CheckCollisions();
@@ -180,17 +182,16 @@ StepResult CombatEnv::HarvestState()
     const ForceSensorReading& forces1 = listener.GetForceReading(mEnvIndex, 0);
     const ForceSensorReading& forces2 = listener.GetForceReading(mEnvIndex, 1);
 
-    BuildObservationVector(result.obs_robot1, mRobot1, mRobot2, forces1);
-    BuildObservationVector(result.obs_robot2, mRobot2, mRobot1, forces2);
+    BuildObservationVector(obs1, mRobot1, mRobot2, forces1);
+    BuildObservationVector(obs2, mRobot2, mRobot1, forces2);
 
-    CalculateRewards(result);
+    CalculateRewards(*reward1, *reward2);
 
     if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= MAX_EPISODE_STEPS) {
         mDone = true;
-        result.done = true;
     }
-
-    return result;
+    
+    done = mDone;
 }
 
 void CombatEnv::CheckCollisions()
