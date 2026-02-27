@@ -1,0 +1,22 @@
+--- a/Jolt/Core/JobSystemThreadPool.h	2024-04-05 09:07:10.000000000 -0400
++++ b/Jolt/Core/JobSystemThreadPool.h	2026-02-27 13:07:38.429099732 -0500
+@@ -46,6 +46,10 @@
+ 	/// Change the max concurrency after initialization
+ 	void					SetNumThreads(int inNumThreads)					{ StopThreads(); StartThreads(inNumThreads); }
+ 
++	/// Threads running jobs - made public for thread pinning purposes in JOLTrl
++	Array<thread>			mThreads;
++
+ protected:
+ 	// See JobSystem
+ 	virtual void			QueueJob(Job *inJob) override;
+@@ -70,9 +74,6 @@
+ 	using AvailableJobs = FixedSizeFreeList<Job>;
+ 	AvailableJobs			mJobs;
+ 
+-	/// Threads running jobs
+-	Array<thread>			mThreads;
+-
+ 	// The job queue
+ 	static constexpr uint32 cQueueLength = 1024;
+ 	static_assert(IsPowerOf2(cQueueLength));								// We do bit operations and require queue length to be a power of 2

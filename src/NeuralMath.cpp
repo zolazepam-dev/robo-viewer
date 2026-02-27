@@ -66,24 +66,40 @@ void ForwardMoLU_AVX2(float* data, size_t size)
 
 void ForwardTanh_AVX2(float* data, size_t size)
 {
+    AssertAligned32(data);
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
+    
+    const __m256 one = _mm256_set1_ps(1.0f);
+    const __m256 clampHi = _mm256_set1_ps(10.0f);
+    const __m256 clampLo = _mm256_set1_ps(-10.0f);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_loadu_ps(data + i);
+        __m256 x = _mm256_load_ps(data + i);
+        x = _mm256_min_ps(x, clampHi);
+        x = _mm256_max_ps(x, clampLo);
         
-        alignas(32) float xArr[8];
-        _mm256_store_ps(xArr, x);
-        alignas(32) float thArr[8];
-        for (int j = 0; j < 8; ++j)
-        {
-            thArr[j] = tanhf(std::clamp(xArr[j], -10.0f, 10.0f));
-        }
-        __m256 th = _mm256_load_ps(thArr);
+        __m256 x2 = _mm256_mul_ps(x, x);
         
-        _mm256_storeu_ps(data + i, th);
+        // Pade approximation for tanh(x)
+        const __m256 pade_a = _mm256_set1_ps(0.275f);
+        const __m256 pade_b = _mm256_set1_ps(0.664f);
+        
+        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
+        num = _mm256_mul_ps(x, num);
+        
+        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
+        
+        // Fast reciprocal with Newton-Raphson
+        __m256 rcp = _mm256_rcp_ps(den);
+        __m256 rcp2 = _mm256_mul_ps(rcp, rcp);
+        __m256 correction = _mm256_fnmadd_ps(den, rcp2, rcp);
+        rcp = _mm256_add_ps(rcp, correction);
+        
+        __m256 result = _mm256_mul_ps(num, rcp);
+        _mm256_store_ps(data + i, result);
     }
     
     for (; i < size; ++i)
@@ -95,6 +111,7 @@ void ForwardTanh_AVX2(float* data, size_t size)
 
 void ForwardReLU_AVX2(float* data, size_t size)
 {
+    AssertAligned32(data);
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     const __m256 zero = _mm256_setzero_ps();
@@ -102,9 +119,8 @@ void ForwardReLU_AVX2(float* data, size_t size)
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_loadu_ps(data + i);
-        __m256 result = _mm256_max_ps(zero, x);
-        _mm256_storeu_ps(data + i, result);
+        __m256 x = _mm256_load_ps(data + i);
+        _mm256_store_ps(data + i, _mm256_max_ps(zero, x));
     }
     
     for (; i < size; ++i)
@@ -115,40 +131,37 @@ void ForwardReLU_AVX2(float* data, size_t size)
 
 void ForwardSigmoid_AVX2(float* data, size_t size)
 {
+    AssertAligned32(data);
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
     
+    const __m256 half = _mm256_set1_ps(0.5f);
     const __m256 one = _mm256_set1_ps(1.0f);
-    const __m256 clampHi = _mm256_set1_ps(20.0f);
-    const __m256 clampLo = _mm256_set1_ps(-20.0f);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_loadu_ps(data + i);
-        x = _mm256_min_ps(x, clampHi);
-        x = _mm256_max_ps(x, clampLo);
+        // sigmoid(x) = 0.5 * tanh(0.5 * x) + 0.5
+        __m256 x = _mm256_load_ps(data + i);
+        __m256 half_x = _mm256_mul_ps(x, half);
         
-        __m256 neg_x = _mm256_sub_ps(_mm256_setzero_ps(), x);
+        // Inlined tanh for performance
+        __m256 x2 = _mm256_mul_ps(half_x, half_x);
+        const __m256 pade_a = _mm256_set1_ps(0.275f);
+        const __m256 pade_b = _mm256_set1_ps(0.664f);
+        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
+        num = _mm256_mul_ps(half_x, num);
+        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
+        __m256 rcp = _mm256_rcp_ps(den);
+        __m256 th = _mm256_mul_ps(num, rcp);
         
-        alignas(32) float temp[8];
-        _mm256_store_ps(temp, neg_x);
-        for (int j = 0; j < 8; ++j)
-        {
-            temp[j] = expf(temp[j]);
-        }
-        __m256 exp_neg_x = _mm256_load_ps(temp);
-        
-        __m256 denom = _mm256_add_ps(one, exp_neg_x);
-        __m256 result = _mm256_div_ps(one, denom);
-        
-        _mm256_storeu_ps(data + i, result);
+        __m256 result = _mm256_fmadd_ps(half, th, half);
+        _mm256_store_ps(data + i, result);
     }
     
     for (; i < size; ++i)
     {
-        float x = std::clamp(data[i], -20.0f, 20.0f);
-        data[i] = 1.0f / (1.0f + expf(-x));
+        data[i] = 1.0f / (1.0f + expf(-data[i]));
     }
 }
 

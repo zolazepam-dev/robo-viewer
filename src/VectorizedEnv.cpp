@@ -104,8 +104,8 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
         if (mAllDones[i]) continue;
         StepResult result = mEnvs[i].HarvestState();
         int obsOffset = i * mObservationDim * 2;
-        std::copy(result.obs_robot1.begin(), result.obs_robot1.end(), mAllObservations.begin() + obsOffset);
-        std::copy(result.obs_robot2.begin(), result.obs_robot2.end(), mAllObservations.begin() + obsOffset + mObservationDim);
+        std::memcpy(mAllObservations.data() + obsOffset, result.obs_robot1.data(), result.obs_robot1.size() * sizeof(float));
+        std::memcpy(mAllObservations.data() + obsOffset + mObservationDim, result.obs_robot2.data(), result.obs_robot2.size() * sizeof(float));
         mAllRewards[i * 2] = result.reward1.Scalar();
         mAllRewards[i * 2 + 1] = result.reward2.Scalar();
         mAllDones[i] = result.done;

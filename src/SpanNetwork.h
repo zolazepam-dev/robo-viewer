@@ -105,6 +105,7 @@ public:
     
     void SelectAction(const float* state, float* action, float* logProb, bool addNoise = true, int envIdx = 0);
     void SelectActionBatch(const float* states, float* actions, float* logProbs, int batchSize, bool addNoise = true);
+    void SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices, bool addNoise = true);
     
     void ComputeQValues(const float* state, const float* action, float* qValues);
     void ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize);

@@ -87,7 +87,7 @@ public:
             gv->ylabel = tag;
 
             gv->finalize();
-            v.addVisualModel(std::move(gv)); // Hand ownership to the window
+            v.addVisualModel(gv); // Hand ownership to the window
 
             // Create the 3D cascade effect
             x_offset += 1.5f;   // Shift right slightly

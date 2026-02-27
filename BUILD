@@ -19,7 +19,7 @@ cc_binary(
         "@imgui//backends:renderer-opengl3",
     ],
     linkopts = ["-lGL", "-lpthread"],
-    copts = ["-std=c++20", "-mavx2", "-mfma", "-O3"],
+    copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
 )
 
 cc_binary(
@@ -42,7 +42,7 @@ cc_binary(
     ],
     linkopts = ["-lGL", "-lpthread", "-flto"],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -63,7 +63,7 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -78,7 +78,7 @@ cc_binary(
     deps = [
         "@nlohmann_json//:json",
     ],
-    copts = ["-std=c++20"],
+    copts = ["-std=c++17"],
 )
 
 cc_binary(
@@ -87,7 +87,7 @@ cc_binary(
     deps = [
         "@jolt//:jolt",
     ],
-    copts = ["-std=c++20"],
+    copts = ["-std=c++17"],
 )
 
 cc_binary(
@@ -100,7 +100,7 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -122,7 +122,7 @@ cc_binary(
     ],
     linkopts = ["-lpthread", "-flto"],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -137,7 +137,7 @@ cc_binary(
     name = "system_test",
     srcs = ["//src:system_test.cpp"],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -155,7 +155,7 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -170,7 +170,7 @@ cc_binary(
     deps = [
         "@nlohmann_json//:json",
     ],
-    copts = ["-std=c++20"],
+    copts = ["-std=c++17"],
 )
 
 cc_binary(
@@ -188,7 +188,7 @@ cc_binary(
     ],
     linkopts = ["-lGL", "-lpthread"],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -204,7 +204,7 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -222,11 +222,11 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
-        "-march=native"
+        "-march=native",
     ],
 )
 
@@ -246,5 +246,7 @@ cc_binary(
         "-mavx2",
         "-mfma",
         "-march=native",
+        "-I/usr/include/freetype2",
+        "-DMORPH_FONTS_DIR=\"morphologica/fonts\"",
     ],
 )

@@ -1,1 +1,8 @@
+build --copt=-std=c++17
+build --copt=-O3
+build --copt=-mavx2
+build --copt=-mfma
+build --copt=-march=native
+build --copt=-ffast-math
+build --copt=-fno-strict-aliasing
 build --copt=-DGLEW_NO_GLU

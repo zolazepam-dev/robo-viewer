@@ -171,21 +171,38 @@ int main(int argc, char* argv[]) {
             int numEnvs = vecEnv.GetNumEnvs();
             AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
             
-            // Generate actions for all robots in all envs
+            // Collect all robot 1 observations and environment indices
+            static AlignedVector32<float> obs1Batch;
+            static std::vector<int> indices1;
+            obs1Batch.resize(numEnvs * stateDim);
+            indices1.resize(numEnvs);
+            
             for (int i = 0; i < numEnvs; ++i) {
-                // Each environment has 2 robots. 
-                // We use envIdx * 2 and envIdx * 2 + 1 as latent slots to keep them distinct.
-                trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim), robotActions.data() + (i * 2 * actionDim), i * 2);
-                
-                if (leaguePlayEnabled) {
-                    opponentTrainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
-                } else {
-                    trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
-                }
+                std::memcpy(obs1Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim), stateDim * sizeof(float));
+                indices1[i] = i * 2;
+            }
+            trainer.SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
+            
+            // Collect all robot 2 observations and environment indices
+            static AlignedVector32<float> obs2Batch;
+            static std::vector<int> indices2;
+            obs2Batch.resize(numEnvs * stateDim);
+            indices2.resize(numEnvs);
+            
+            for (int i = 0; i < numEnvs; ++i) {
+                std::memcpy(obs2Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim + stateDim), stateDim * sizeof(float));
+                indices2[i] = i * 2 + 1;
+            }
+            
+            if (leaguePlayEnabled) {
+                opponentTrainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
+            } else {
+                trainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
             }
             
             for (int i = 0; i < numEnvs; ++i) {
-                vecEnv.GetEnv(i).QueueActions(robotActions.data() + (i * 2 * actionDim), robotActions.data() + (i * 2 * actionDim + actionDim));
+                // Adjust indexing for robotActions because we batched them separately
+                vecEnv.GetEnv(i).QueueActions(robotActions.data() + (i * actionDim), robotActions.data() + (numEnvs * actionDim + i * actionDim));
             }
             
             PhysicsCore* core = vecEnv.GetPhysicsCore();

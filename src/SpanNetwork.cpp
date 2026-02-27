@@ -4,6 +4,7 @@
 #include <immintrin.h>
 #include <vector>
 #include <random>
+#include <ctime>
 #include "AlignedAllocator.h"
 
 void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng)
@@ -193,7 +194,7 @@ void SpanNetwork::Forward(const float* input, float* output)
     
     for (size_t i = 0; i < mLayers.size(); ++i)
     {
-        mLayers[i].Forward(currentInput, currentOutput);
+        mLayers[i].ForwardAVX2(currentInput, currentOutput);
         
         if (i < mLayers.size() - 1)
         {
@@ -205,7 +206,7 @@ void SpanNetwork::Forward(const float* input, float* output)
         currentOutput = temp;
     }
     
-    std::copy(currentOutput, currentOutput + mOutputDim, output);
+    std::memcpy(output, currentOutput, mOutputDim * sizeof(float));
 }
 
 void SpanNetwork::ForwardBatch(const float* input, float* output, int batchSize)
@@ -374,12 +375,39 @@ void SpanActorCritic::SelectAction(const float* state, float* action, float* log
     }
 }
 
-void SpanActorCritic::SelectActionBatch(const float* states, float* actions, float* logProbs, int batchSize, bool addNoise)
+void SpanActorCritic::SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices, bool addNoise)
 {
+    // 1. Update latent dynamics for all environments in batch
+    mLatentMemory.StepLatentDynamics(states, batchSize);
+    
+    // 2. Prepare combined input [state | latent]
+    size_t combinedDim = mStateDim + mLatentDim;
+    AlignedVector32<float> combined(batchSize * combinedDim);
+    
     for (int b = 0; b < batchSize; ++b)
     {
-        SelectAction(states + b * mStateDim, actions + b * mActionDim,
-                     logProbs ? logProbs + b : nullptr, addNoise);
+        int envIdx = envIndices[b];
+        const float* state = states + b * mStateDim;
+        float* zPos = mLatentMemory.GetMemory().GetPosition(envIdx);
+        
+        std::memcpy(combined.data() + b * combinedDim, state, mStateDim * sizeof(float));
+        std::memcpy(combined.data() + b * combinedDim + mStateDim, zPos, mLatentDim * sizeof(float));
+    }
+    
+    // 3. Batch forward through actor
+    mActor.ForwardBatch(combined.data(), actions, batchSize);
+    
+    // 4. Post-process actions
+    ForwardMoLU_AVX2(actions, batchSize * mActionDim);
+    
+    if (addNoise)
+    {
+        std::normal_distribution<float> noiseDist(0.0f, 0.1f);
+        std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)));
+        for (size_t i = 0; i < batchSize * mActionDim; ++i)
+        {
+            actions[i] = std::clamp(actions[i] + noiseDist(localRng), -1.0f, 1.0f);
+        }
     }
 }
 

@@ -19,11 +19,12 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 
 http_archive(
     name = "jolt",
-    # FIX: Added '@' to strictly route this to your main workspace folder
     build_file = "@//third_party:jolt.BUILD",
     sha256 = "5231953d1b1d5b9cb617facf86341a11337e1cd04456949af6911b917a1646cb",
     strip_prefix = "JoltPhysics-5.0.0",
     url = "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.0.0.tar.gz",
+    patches = ["@//patches:jolt_job_system_threads.patch"],
+    patch_args = ["-p1"],
 )
 
 # --- Morphologica for visualization ---

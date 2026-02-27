@@ -67,43 +67,20 @@ void CombatEnv::Reset()
 {
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     
-    // 1. Remove old bodies if they exist
-    auto removeRobot = [&](CombatRobotData& robot) {
-        if (!robot.mainBodyId.IsInvalid()) {
-            bodyInterface.RemoveBody(robot.mainBodyId);
-            bodyInterface.DestroyBody(robot.mainBodyId);
-            robot.mainBodyId = JPH::BodyID();
-        }
-        for (int i = 0; i < NUM_SATELLITES; ++i) {
-            if (!robot.satellites[i].coreBodyId.IsInvalid()) {
-                bodyInterface.RemoveBody(robot.satellites[i].coreBodyId);
-                bodyInterface.DestroyBody(robot.satellites[i].coreBodyId);
-                robot.satellites[i].coreBodyId = JPH::BodyID();
-            }
-            if (!robot.satellites[i].spikeBodyId.IsInvalid()) {
-                bodyInterface.RemoveBody(robot.satellites[i].spikeBodyId);
-                bodyInterface.DestroyBody(robot.satellites[i].spikeBodyId);
-                robot.satellites[i].spikeBodyId = JPH::BodyID();
-            }
-        }
-    };
-
-    removeRobot(mRobot1);
-    removeRobot(mRobot2);
-
-    // Remove old KOTH visual
-    if (!mKothVisualId.IsInvalid()) {
-        bodyInterface.RemoveBody(mKothVisualId);
-        bodyInterface.DestroyBody(mKothVisualId);
-        mKothVisualId = JPH::BodyID();
-    }
-
     mStepCount = 0;
     mDone = false;
     mPrevHp1 = INITIAL_HP;
     mPrevHp2 = INITIAL_HP;
     mPrevEnergy1 = 0.0f;
     mPrevEnergy2 = 0.0f;
+    mRobot1.hp = INITIAL_HP;
+    mRobot2.hp = INITIAL_HP;
+    mRobot1.totalDamageDealt = 0.0f;
+    mRobot1.totalDamageTaken = 0.0f;
+    mRobot2.totalDamageDealt = 0.0f;
+    mRobot2.totalDamageTaken = 0.0f;
+    mRobot1.totalEnergyUsed = 0.0f;
+    mRobot2.totalEnergyUsed = 0.0f;
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
     // Randomize KOTH point
@@ -112,20 +89,67 @@ void CombatEnv::Reset()
     std::uniform_real_distribution<float> distY(2.0f, 12.0f);
     mKothPoint = JPH::RVec3(distXZ(rng), distY(rng), distXZ(rng));
 
-    // Create Visual Sphere for KOTH
-    JPH::SphereShapeSettings kothShape(0.8f);
-    JPH::BodyCreationSettings kothSettings(kothShape.Create().Get(), mKothPoint, JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::GHOST_BASE + mEnvIndex);
-    mKothVisualId = bodyInterface.CreateAndAddBody(kothSettings, JPH::EActivation::DontActivate);
+    // Update KOTH visual position if it exists, otherwise create it
+    if (!mKothVisualId.IsInvalid()) {
+        bodyInterface.SetPositionAndRotation(mKothVisualId, mKothPoint, JPH::Quat::sIdentity(), JPH::EActivation::DontActivate);
+    } else {
+        JPH::SphereShapeSettings kothShape(0.8f);
+        JPH::BodyCreationSettings kothSettings(kothShape.Create().Get(), mKothPoint, JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::GHOST_BASE + mEnvIndex);
+        mKothVisualId = bodyInterface.CreateAndAddBody(kothSettings, JPH::EActivation::DontActivate);
+    }
 
-    // 2. Load fresh robots at the high spawn point
+    // 2. Reset existing robots instead of destroying/recreating
     JPH::RVec3 pos1(-10.0f, 5.0f, 0.0f);
     JPH::RVec3 pos2(10.0f, 5.0f, 0.0f);
-
-    mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
-    mRobot1.type = RobotType::INTERNAL_ENGINE;
     
-    mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
-    mRobot2.type = RobotType::INTERNAL_ENGINE;
+    if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
+        // First time initialization: load robots
+        mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
+        mRobot1.type = RobotType::INTERNAL_ENGINE;
+        
+        mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
+        mRobot2.type = RobotType::INTERNAL_ENGINE;
+    } else {
+        // Reset robot 1
+        bodyInterface.SetPositionAndRotation(mRobot1.mainBodyId, pos1, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
+        bodyInterface.SetLinearVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
+        bodyInterface.SetAngularVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
+        for (int i = 0; i < NUM_SATELLITES; ++i) {
+            if (!mRobot1.satellites[i].coreBodyId.IsInvalid()) {
+                // For internal engine robots, reset engine positions to initial relative positions
+                if (mRobot1.type == RobotType::INTERNAL_ENGINE && i < 3) {
+                    JPH::RVec3 engPos = pos1 + JPH::RVec3((i - 1) * 0.1f, 0.0f, 0.0f);
+                    bodyInterface.SetPositionAndRotation(mRobot1.satellites[i].coreBodyId, engPos, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
+                }
+                bodyInterface.SetLinearVelocity(mRobot1.satellites[i].coreBodyId, JPH::Vec3::sZero());
+                bodyInterface.SetAngularVelocity(mRobot1.satellites[i].coreBodyId, JPH::Vec3::sZero());
+            }
+            if (!mRobot1.satellites[i].spikeBodyId.IsInvalid()) {
+                bodyInterface.SetLinearVelocity(mRobot1.satellites[i].spikeBodyId, JPH::Vec3::sZero());
+                bodyInterface.SetAngularVelocity(mRobot1.satellites[i].spikeBodyId, JPH::Vec3::sZero());
+            }
+        }
+        
+        // Reset robot 2
+        bodyInterface.SetPositionAndRotation(mRobot2.mainBodyId, pos2, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
+        bodyInterface.SetLinearVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
+        bodyInterface.SetAngularVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
+        for (int i = 0; i < NUM_SATELLITES; ++i) {
+            if (!mRobot2.satellites[i].coreBodyId.IsInvalid()) {
+                // For internal engine robots, reset engine positions to initial relative positions
+                if (mRobot2.type == RobotType::INTERNAL_ENGINE && i < 3) {
+                    JPH::RVec3 engPos = pos2 + JPH::RVec3((i - 1) * 0.1f, 0.0f, 0.0f);
+                    bodyInterface.SetPositionAndRotation(mRobot2.satellites[i].coreBodyId, engPos, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
+                }
+                bodyInterface.SetLinearVelocity(mRobot2.satellites[i].coreBodyId, JPH::Vec3::sZero());
+                bodyInterface.SetAngularVelocity(mRobot2.satellites[i].coreBodyId, JPH::Vec3::sZero());
+            }
+            if (!mRobot2.satellites[i].spikeBodyId.IsInvalid()) {
+                bodyInterface.SetLinearVelocity(mRobot2.satellites[i].spikeBodyId, JPH::Vec3::sZero());
+                bodyInterface.SetAngularVelocity(mRobot2.satellites[i].spikeBodyId, JPH::Vec3::sZero());
+            }
+        }
+    }
 }
 
 void CombatEnv::QueueActions(const float* actions1, const float* actions2)

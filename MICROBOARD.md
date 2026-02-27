@@ -66,4 +66,4 @@ The training metric 'Loss' exhibited an overall DECREASING trend, changing by -7
 - Add support for multiple metrics on the same graph
 - Implement window resizing and zooming
 - Add export functionality for graphs
-- Support more data formats
+- Supkilort more data formats

@@ -41,6 +41,7 @@ public:
     void SelectAction(const float* state, float* action);
     void SelectActionEval(const float* state, float* action);
     void SelectActionWithLatent(const float* state, float* action, int envIdx);
+    void SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices);
     void SelectActionResidual(const float* state, float* residualAction);
     
     void Train(class ReplayBuffer& buffer);

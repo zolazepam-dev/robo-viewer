@@ -40,8 +40,31 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
         joltWorkerThreads
     );
 
-    // Pinning the Jolt thread pool to hardware cores
-    std::cout << "[JOLTrl] Pinned " << joltWorkerThreads << " Jolt worker threads to bare metal." << std::endl;
+    // CPU cores (threads) to pin Jolt workers to (excluding Core 0's threads 0 & 6)
+    const int kPinnedThreads[] = {1, 2, 3, 4, 5, 7, 8, 9, 10, 11};
+    const int kNumPinnedThreads = sizeof(kPinnedThreads) / sizeof(kPinnedThreads[0]);
+    
+    JPH_ASSERT(joltWorkerThreads <= kNumPinnedThreads, "Requested more worker threads than available CPU cores for pinning!");
+
+    // Pin each Jolt worker thread to a specific CPU core
+    for (uint32_t i = 0; i < joltWorkerThreads; ++i) {
+        int targetCore = kPinnedThreads[i];
+        
+        // Get native thread handle from std::thread
+        pthread_t threadHandle = mJobSystem->mThreads[i].native_handle();
+        
+        // Set CPU affinity
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(targetCore, &cpuset);
+        
+        int result = pthread_setaffinity_np(threadHandle, sizeof(cpu_set_t), &cpuset);
+        if (result != 0) {
+            std::cerr << "[JOLTrl] WARNING: Failed to pin Jolt worker thread " << i << " to core " << targetCore << " (err: " << result << ")" << std::endl;
+        } else {
+            std::cout << "[JOLTrl] Pinned Jolt worker thread " << i << " to CPU core " << targetCore << std::endl;
+        }
+    }
 
     // Thread-safe Jolt initialization using static local initialization (C++11 guarantees)
     static std::once_flag joltInitFlag;
@@ -76,9 +99,9 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     JPH::PhysicsSettings physicsSettings;
 
-    // RL Optimization: Balanced stability and speed
-    physicsSettings.mNumVelocitySteps = 4;
-    physicsSettings.mNumPositionSteps = 2;
+    // RL Optimization: Max speed with minimal stability tradeoff
+    physicsSettings.mNumVelocitySteps = 2;
+    physicsSettings.mNumPositionSteps = 1;
     physicsSettings.mBaumgarte = 0.2f;
 
     mPhysicsSystem->SetPhysicsSettings(physicsSettings);

@@ -45,6 +45,11 @@ void TD3Trainer::SelectActionWithLatent(const float* state, float* action, int e
     mModel.SelectAction(state, action, &logProb, true, envIdx); 
 }
 
+void TD3Trainer::SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices)
+{
+    mModel.SelectActionBatchWithLatent(states, actions, batchSize, envIndices, true);
+}
+
 void TD3Trainer::SelectActionEval(const float* state, float* action)
 {
     float logProb;
