@@ -14,9 +14,8 @@ public:
     VectorizedEnv(const VectorizedEnv& other) = default;
     VectorizedEnv& operator=(const VectorizedEnv& other) = default;
 
-    void Init();
-
-    void Step(const AlignedVector32<float>& actions);
+        void Init(bool initRobots = true);
+        void Step(const AlignedVector32<float>& actions);
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();
 
@@ -30,6 +29,7 @@ public:
     int GetActionDim() const { return mActionDim; }
 
     JPH::PhysicsSystem* GetGlobalPhysics() { return &mPhysicsCore.GetPhysicsSystem(); }
+    PhysicsCore* GetPhysicsCore() { return &mPhysicsCore; }
 
 private:
     PhysicsCore mPhysicsCore;
@@ -37,7 +37,7 @@ private:
     std::vector<CombatEnv> mEnvs;
 
     int mNumEnvs;
-    int mObservationDim = 240; // 236 active sensors + 4 alignment padding
+    int mObservationDim = OBSERVATION_DIM; 
     int mActionDim = 56;
     
     AlignedVector32<float> mAllObservations;

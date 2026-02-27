@@ -38,3 +38,9 @@ The complete training setup with both agents, free camera, and live tuning of ph
 ```bash
 bazel run //:viewer
 ```
+
+## Room Geometry Debugger
+Renders ONLY the training room geometry used in the main suite. No robots, no training.
+```bash
+bazel run //debug_room_viewer:debug_room_viewer
+```

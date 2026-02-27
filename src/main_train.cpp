@@ -25,26 +25,30 @@
 namespace fs = std::filesystem;
 
 struct FreeCamera {
-    glm::vec3 position{15.0f, 10.0f, 15.0f};
+    glm::vec3 position{0.0f, 15.0f, 40.0f};
     glm::vec3 front{0.0f, 0.0f, -1.0f};
     glm::vec3 up{0.0f, 1.0f, 0.0f};
-    float yaw = -135.0f;
-    float pitch = -30.0f;
-    float speed = 20.0f;
+    float yaw = -90.0f;
+    float pitch = -20.0f;
+    float speed = 30.0f;
     float sensitivity = 0.1f;
     bool active = false;
 };
 
+// GLOBAL CAMERA - NO SHADOWING
 FreeCamera gCam;
-double lastX, lastY;
-bool firstMouse = true;
+double gLastX, gLastY;
+bool gFirstMouse = true;
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-    if (!gCam.active) return;
-    if (firstMouse) { lastX = xpos; lastY = ypos; firstMouse = false; }
-    float xoff = (float)(xpos - lastX) * gCam.sensitivity;
-    float yoff = (float)(lastY - ypos) * gCam.sensitivity;
-    lastX = xpos; lastY = ypos;
+    if (!gCam.active) {
+        gLastX = xpos; gLastY = ypos;
+        return;
+    }
+    if (gFirstMouse) { gLastX = xpos; gLastY = ypos; gFirstMouse = false; }
+    float xoff = (float)(xpos - gLastX) * gCam.sensitivity;
+    float yoff = (float)(gLastY - ypos) * gCam.sensitivity;
+    gLastX = xpos; gLastY = ypos;
     gCam.yaw += xoff; gCam.pitch += yoff;
     gCam.pitch = std::clamp(gCam.pitch, -89.0f, 89.0f);
     glm::vec3 dir;
@@ -68,14 +72,12 @@ void process_input(GLFWwindow* window, float dt) {
 void EnsureDir(const std::string& path) { if (!fs::exists(path)) fs::create_directories(path); }
 
 int main(int argc, char* argv[]) {
-    // 0. Persistent Checkpoint Setup
     const char* home = std::getenv("HOME");
     std::string checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints";
     EnsureDir(checkpointDir);
-    std::cout << "[JOLTrl] Safe Checkpoint Zone: " << checkpointDir << std::endl;
 
     if (!glfwInit()) return -1;
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "JOLTrl - Full Training Suite", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "JOLTrl - Pro Training Suite", nullptr, nullptr);
     if (!window) return -1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(0); 
@@ -86,20 +88,21 @@ int main(int argc, char* argv[]) {
     CyberpunkUI ui;
     ui.Init(window);
 
-    int numEnvs = 1;
-    VectorizedEnv vecEnv(numEnvs);
+    // Single environment for viewing
+    VectorizedEnv vecEnv(1);
     vecEnv.Init();
     
     Renderer renderer(1280, 720);
-    int stateDim = vecEnv.GetObservationDim();
-    int actionDim = vecEnv.GetActionDim();
+    int stateDim = vecEnv.GetObservationDim(); // Should be 256
+    int actionDim = vecEnv.GetActionDim();      // Should be 56
     
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
     float timeScale = 1.0f;
-    bool trainEnabled = true;
+    float physicsHz = 120.0f;
+    bool trainEnabled = false; // Start paused
     bool renderEnabled = true;
     bool headlessTurbo = false;
     
@@ -107,8 +110,12 @@ int main(int argc, char* argv[]) {
     long long totalSteps = 0;
     float sps = 0;
     int step_counter = 0;
+    float currentRew1 = 0.0f;
+    float currentRew2 = 0.0f;
+    VectorReward lastVR1, lastVR2;
 
-    std::cout << "[JOLTrl] SINGLE-ENV TRAINING MATRIX ENGAGED." << std::endl;
+    // Fixed: Ensure global cam is used
+    gCam.front = glm::normalize(glm::vec3(0, 2, 0) - gCam.position);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -117,74 +124,67 @@ int main(int argc, char* argv[]) {
         last_time = now;
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-            if (!gCam.active) { gCam.active = true; glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); firstMouse = true; }
+            if (!gCam.active) { 
+                gCam.active = true; 
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); 
+                gFirstMouse = true; 
+            }
         } else {
-            if (gCam.active) { gCam.active = false; glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); }
+            if (gCam.active) { 
+                gCam.active = false; 
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); 
+            }
         }
         process_input(window, dt);
 
-        // --- PHYSICS & TRAINING ---
         if (trainEnabled && timeScale > 0.01f) {
             const auto& obs = vecEnv.GetObservations();
-            
-            AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
+            AlignedVector32<float> robotActions(2 * actionDim);
             
             // Generate actions for both robots in the env
-            for (int e = 0; e < numEnvs; ++e) {
-                float* obs1 = (float*)obs.data() + (e * 2 * stateDim);
-                float* obs2 = (float*)obs.data() + (e * 2 * stateDim + stateDim);
-                float* act1 = robotActions.data() + (e * 2 * actionDim);
-                float* act2 = robotActions.data() + (e * 2 * actionDim + actionDim);
+            // Robot 1 uses latent slot 0, Robot 2 uses latent slot 1
+            trainer.SelectActionWithLatent((float*)obs.data(), robotActions.data(), 0);
+            trainer.SelectActionWithLatent((float*)obs.data() + stateDim, robotActions.data() + actionDim, 1);
+            
+            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
+                vecEnv.GetEnv(i).QueueActions(robotActions.data() + (i * 2 * actionDim), robotActions.data() + (i * 2 * actionDim + actionDim));
+            }
+            
+            PhysicsCore* core = vecEnv.GetPhysicsCore();
+            core->GetPhysicsSystem().Update(1.0f / physicsHz, 1, core->GetTempAllocator(), core->GetJobSystem());
+            
+            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
+                StepResult res = vecEnv.GetEnv(i).HarvestState();
                 
-                trainer.SelectAction(obs1, act1);
-                trainer.SelectAction(obs2, act2);
-            }
-            
-            vecEnv.Step(robotActions);
-            
-            const auto& nextObs = vecEnv.GetObservations();
-            const auto& rewards = vecEnv.GetRewards();
-            const auto& dones = vecEnv.GetDones();
-            
-            // Store transitions
-            for (int e = 0; e < numEnvs; ++e) {
-                float* o1 = (float*)obs.data() + (e * 2 * stateDim);
-                float* no1 = (float*)nextObs.data() + (e * 2 * stateDim);
-                float* a1 = robotActions.data() + (e * 2 * actionDim);
-                buffer.Add(o1, a1, rewards[e * 2], no1, dones[e]);
+                if (i == 0) {
+                    currentRew1 = res.reward1.Scalar();
+                    currentRew2 = res.reward2.Scalar();
+                    lastVR1 = res.reward1;
+                    lastVR2 = res.reward2;
+                }
+
+                // Transition 1
+                buffer.Add((float*)obs.data() + (i*2*stateDim), robotActions.data() + (i*2*actionDim), res.reward1.Scalar(), res.obs_robot1.data(), res.done);
+                // Transition 2
+                buffer.Add((float*)obs.data() + (i*2*stateDim+stateDim), robotActions.data() + (i*2*actionDim+actionDim), res.reward2.Scalar(), res.obs_robot2.data(), res.done);
                 
-                float* o2 = (float*)obs.data() + (e * 2 * stateDim + stateDim);
-                float* no2 = (float*)nextObs.data() + (e * 2 * stateDim + stateDim);
-                float* a2 = robotActions.data() + (e * 2 * actionDim + actionDim);
-                buffer.Add(o2, a2, rewards[e * 2 + 1], no2, dones[e]);
+                if (res.done) vecEnv.Reset(i);
             }
             
-            if (buffer.Size() > td3cfg.batchSize) {
-                trainer.Train(buffer);
-            }
+            if (buffer.Size() > td3cfg.batchSize) trainer.Train(buffer);
             
-            // Periodic Save (Every 5 Minutes / 18000 steps)
             if (totalSteps > 0 && totalSteps % 18000 == 0) {
-                std::string path = checkpointDir + "/model_step_" + std::to_string(totalSteps) + ".bin";
-                trainer.Save(path);
-                std::cout << "[JOLTrl] Safe Checkpoint Saved: " << path << std::endl;
+                trainer.Save(checkpointDir + "/model_step_" + std::to_string(totalSteps) + ".bin");
             }
             
-            vecEnv.ResetDoneEnvs();
-            totalSteps += numEnvs;
-            step_counter += numEnvs;
+            totalSteps += 1;
+            step_counter += 1;
         }
 
-        // SPS Calculation
         static auto lastSpsTime = now;
         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
-        if (spsElapsed.count() >= 1.0f) {
-            sps = step_counter / spsElapsed.count();
-            step_counter = 0;
-            lastSpsTime = now;
-        }
+        if (spsElapsed.count() >= 1.0f) { sps = step_counter / spsElapsed.count(); step_counter = 0; lastSpsTime = now; }
 
-        // --- RENDER ---
         if (renderEnabled && !headlessTurbo) {
             renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, 0, gCam.front);
         } else {
@@ -192,18 +192,41 @@ int main(int argc, char* argv[]) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         }
 
-        // --- UI ---
         ui.BeginFrame();
-        ImGui::Begin("Training Matrix - Overseer");
-        ImGui::Text("Silicon: TD3 + SPAN Tech");
-        ImGui::Text("Episode Length: 2 Minutes (7200 steps)");
+        ImGui::Begin("Full Training Overseer");
+        ImGui::Text("Silicon: TD3 + 2nd Order Latent");
         ImGui::Separator();
-        ImGui::Text("Total Steps: %lld", totalSteps);
-        ImGui::Text("SPS: %.0f", sps);
+        ImGui::Text("STATUS: %s", trainEnabled ? "TRAINING" : "PAUSED");
+        ImGui::Text("SPS: %.0f | Total Steps: %lld", sps, totalSteps);
         
+        {
+            auto& r1 = vecEnv.GetEnv(0).GetRobot1();
+            auto& r2 = vecEnv.GetEnv(0).GetRobot2();
+            
+            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f | Scalar Rew: %.3f", r1.hp, currentRew1);
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR1.damage_dealt, lastVR1.damage_taken);
+                ImGui::Text("Air: %.3f | Energy: %.3f", lastVR1.airtime, lastVR1.energy_used);
+                ImGui::EndTooltip();
+            }
+
+            ImGui::TextColored(ImVec4(1, 0, 1, 1), "Robot 2 HP: %.1f | Scalar Rew: %.3f", r2.hp, currentRew2);
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR2.damage_dealt, lastVR2.damage_taken);
+                ImGui::Text("Air: %.3f | Energy: %.3f", lastVR2.airtime, lastVR2.energy_used);
+                ImGui::EndTooltip();
+            }
+        }
+        ImGui::Separator();
+
         ImGui::Checkbox("Enable Training", &trainEnabled);
-        ImGui::Checkbox("Enable Rendering", &renderEnabled);
-        ImGui::Checkbox("HEADLESS TURBO (No Render/Sync)", &headlessTurbo);
+        ImGui::Checkbox("HEADLESS TURBO", &headlessTurbo);
+        
+        if (ImGui::Button("Load Final Checkpoint")) {
+            trainer.Load(checkpointDir + "/model_final.bin");
+        }
         
         ImGui::SliderFloat("Time Scale", &timeScale, 0.0f, 5.0f);
         
@@ -216,29 +239,25 @@ int main(int argc, char* argv[]) {
             r2.actionScale.slideScale = r1.actionScale.slideScale;
         }
 
-        if (ImGui::CollapsingHeader("Physics Tuner")) {
+        if (ImGui::CollapsingHeader("Physics Tuner (Expansive)")) {
             JPH::PhysicsSettings settings = vecEnv.GetGlobalPhysics()->GetPhysicsSettings();
             bool changed = false;
-            if (ImGui::SliderInt("Vel Steps", (int*)&settings.mNumVelocitySteps, 1, 20)) changed = true;
-            if (ImGui::SliderInt("Pos Steps", (int*)&settings.mNumPositionSteps, 1, 20)) changed = true;
+            ImGui::SliderFloat("Simulation Hz", &physicsHz, 60.0f, 1000.0f, "%.0f Hz");
+            if (ImGui::SliderInt("Velocity Steps", (int*)&settings.mNumVelocitySteps, 1, 50)) changed = true;
+            if (ImGui::SliderInt("Position Steps", (int*)&settings.mNumPositionSteps, 1, 50)) changed = true;
             if (ImGui::SliderFloat("Baumgarte", &settings.mBaumgarte, 0.0f, 1.0f)) changed = true;
+            if (ImGui::SliderFloat("Penetration Slop", &settings.mPenetrationSlop, 0.0f, 0.1f)) changed = true;
+            if (ImGui::SliderFloat("Speculative Dist", &settings.mSpeculativeContactDistance, 0.0f, 0.1f)) changed = true;
             if (changed) vecEnv.GetGlobalPhysics()->SetPhysicsSettings(settings);
         }
 
-        if (ImGui::Button("Manual Reset Scene")) vecEnv.Reset();
-        
+        if (ImGui::Button("Manual Reset All")) vecEnv.Reset();
         ImGui::End();
         ui.EndFrame();
         glfwSwapBuffers(window);
-        
-        // If not turbo, cap framerate to ~60Hz for UI/Render sanity
-        if (!headlessTurbo && timeScale <= 1.0f) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
     }
 
     trainer.Save(checkpointDir + "/model_final.bin");
-    
     ui.Shutdown();
     glfwTerminate();
     return 0;

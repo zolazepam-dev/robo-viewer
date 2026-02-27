@@ -76,9 +76,9 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     JPH::PhysicsSettings physicsSettings;
 
-    // RL Optimization: High stability for complex multi-body robots
-    physicsSettings.mNumVelocitySteps = 10;
-    physicsSettings.mNumPositionSteps = 8;
+    // RL Optimization: Balanced stability and speed
+    physicsSettings.mNumVelocitySteps = 4;
+    physicsSettings.mNumPositionSteps = 2;
     physicsSettings.mBaumgarte = 0.2f;
 
     mPhysicsSystem->SetPhysicsSettings(physicsSettings);

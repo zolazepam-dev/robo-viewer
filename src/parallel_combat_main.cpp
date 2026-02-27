@@ -293,7 +293,19 @@ int main(int argc, char* argv[]) {
         float progress = (float)totalSteps / config.maxSteps;
         ImGui::ProgressBar(progress, ImVec2(-1, 0));
         
-        float sps = elapsed > 0 ? (float)(totalSteps - startStep) / elapsed : 0;
+        // Calculate recent SPS (last 1 second)
+        static auto lastSPSCheck = startTime;
+        static int lastSPSCount = startStep;
+        auto now = std::chrono::high_resolution_clock::now();
+        auto spsElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastSPSCheck).count();
+        
+        float sps = 0.0f;
+        if (spsElapsed >= 1) {
+            sps = (totalSteps - lastSPSCount) / (float)spsElapsed;
+            lastSPSCheck = now;
+            lastSPSCount = totalSteps;
+        }
+        
         ImGui::Text("SPS: %.1f", sps);
         ImGui::Text("Parallel Envs: %d", config.numParallelEnvs);
         ImGui::Text("Buffer: %d / %d", buffer.Size(), td3cfg.bufferSize);
@@ -302,7 +314,11 @@ int main(int argc, char* argv[]) {
         
         float currentAvg = 0.0f;
         int count = std::min(rewardIdx, 100);
-        for (int i = 0; i < count; ++i) currentAvg += avgRewards[i];
+        for (int i = 0; i < count; ++i) {
+            int idx = (rewardIdx - count + i) % 100;
+            if (idx < 0) idx += 100; // Handle negative indices
+            currentAvg += avgRewards[idx];
+        }
         currentAvg /= count > 0 ? count : 1;
         ImGui::Text("Avg Reward (100): %.2f", currentAvg);
         ImGui::Text("Best Avg Reward: %.2f", bestAvgReward);

@@ -39,16 +39,16 @@ void TD3Trainer::SelectAction(const float* state, float* action)
     mModel.SelectAction(state, action, &logProb, true);
 }
 
+void TD3Trainer::SelectActionWithLatent(const float* state, float* action, int envIdx)
+{
+    float logProb;
+    mModel.SelectAction(state, action, &logProb, true, envIdx); 
+}
+
 void TD3Trainer::SelectActionEval(const float* state, float* action)
 {
     float logProb;
     mModel.SelectAction(state, action, &logProb, false);
-}
-
-void TD3Trainer::SelectActionWithLatent(const float* state, float* action, int envIdx)
-{
-    float logProb;
-    mModel.SelectAction(state, action, &logProb, true);
 }
 
 void TD3Trainer::SelectActionResidual(const float* state, float* residualAction)
@@ -170,15 +170,18 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
 
 void TD3Trainer::UpdateCriticWithVectorRewards(ReplayBuffer& buffer)
 {
-    std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
+    static std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
     
+    // Use batch forward pass for actor
+    mModel.GetActorTarget().ForwardBatch(mBatchNextStates.data(), mNextActions.data(), mConfig.batchSize);
+    
+    // Apply MoLU activation to all actions
+    ForwardMoLU_AVX2(mNextActions.data(), mActionDim * mConfig.batchSize);
+    
+    // Add noise to all actions
     for (int i = 0; i < mConfig.batchSize; ++i)
     {
         float* nextAction = mNextActions.data() + i * mActionDim;
-        mModel.GetActorTarget().Forward(mBatchNextStates.data() + i * mStateDim, nextAction);
-        
-        ForwardMoLU_AVX2(nextAction, mActionDim);
-        
         for (int j = 0; j < mActionDim; ++j)
         {
             float noise = std::clamp(noiseDist(mRng), -mConfig.noiseClip, mConfig.noiseClip);
@@ -186,14 +189,42 @@ void TD3Trainer::UpdateCriticWithVectorRewards(ReplayBuffer& buffer)
         }
     }
     
+    // Use batch forward pass for critics
+    AlignedVector32<float> q1Batch(mConfig.batchSize * 4);
+    AlignedVector32<float> q2Batch(mConfig.batchSize * 4);
+    
+    // We need to combine states and actions for critic input - this requires a temporary buffer
+    AlignedVector32<float> criticInput(mConfig.batchSize * (mStateDim + mActionDim + mModel.GetLatentDim()));
     for (int i = 0; i < mConfig.batchSize; ++i)
     {
-        float q1[4], q2[4];
-        mModel.ComputeQValues(mBatchNextStates.data() + i * mStateDim,
-                              mNextActions.data() + i * mActionDim, q1);
+        size_t idx = 0;
+        const float* state = mBatchNextStates.data() + i * mStateDim;
+        const float* action = mNextActions.data() + i * mActionDim;
         
+        // Get latent state for this environment
+        AlignedVector32<float> zPos(LATENT_DIM);
+        mModel.GetLatentMemory().GetLatentStates(zPos.data(), nullptr, 0); // TODO: per-environment latent?
+        
+        // Copy state
+        std::copy(state, state + mStateDim, criticInput.data() + i * (mStateDim + mActionDim + mModel.GetLatentDim()));
+        idx += mStateDim;
+        // Copy action
+        std::copy(action, action + mActionDim, criticInput.data() + i * (mStateDim + mActionDim + mModel.GetLatentDim()) + mStateDim);
+        idx += mActionDim;
+        // Copy latent
+        std::copy(zPos.data(), zPos.data() + mModel.GetLatentDim(), 
+                 criticInput.data() + i * (mStateDim + mActionDim + mModel.GetLatentDim()) + mStateDim + mActionDim);
+    }
+    
+    mModel.GetCritic1Target().ForwardBatch(criticInput.data(), q1Batch.data(), mConfig.batchSize);
+    mModel.GetCritic2Target().ForwardBatch(criticInput.data(), q2Batch.data(), mConfig.batchSize);
+    
+    for (int i = 0; i < mConfig.batchSize; ++i)
+    {
         float scalarReward = ComputeScalarReward(mBatchVectorRewards[i]);
-        float minQ = std::min(q1[0], q2[0]);
+        float q1 = q1Batch[i * 4];
+        float q2 = q2Batch[i * 4];
+        float minQ = std::min(q1, q2);
         mTargetQ[i] = scalarReward + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }
 }

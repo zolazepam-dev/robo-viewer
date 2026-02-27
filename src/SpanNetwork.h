@@ -4,6 +4,8 @@
 #include <random>
 #include <cstdint>
 #include <cmath>
+#include <algorithm>
+#include <cstring>
 
 #include "NeuralMath.h"
 #include "LatentMemory.h"
@@ -50,6 +52,8 @@ private:
     AlignedVector32<float> mKnots;
     AlignedVector32<float> mControlPoints;
     
+    AlignedVector32<float> mBasisFunctionsBuffer;
+    std::vector<int> mSpanIndicesBuffer;
     AlignedVector32<float> mBasisBuffer;
     AlignedVector32<float> mTempOutput;
 };
@@ -99,7 +103,7 @@ public:
     
     void Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng);
     
-    void SelectAction(const float* state, float* action, float* logProb, bool addNoise = true);
+    void SelectAction(const float* state, float* action, float* logProb, bool addNoise = true, int envIdx = 0);
     void SelectActionBatch(const float* states, float* actions, float* logProbs, int batchSize, bool addNoise = true);
     
     void ComputeQValues(const float* state, const float* action, float* qValues);

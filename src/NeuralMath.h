@@ -6,13 +6,13 @@
 #include <cstring>
 #include <immintrin.h>
 
-constexpr size_t OBS_DIM = 240;  // Updated: 236 actual + 4 AVX2 padding
+constexpr size_t OBS_DIM = 256;  // Expanded to include ALL sensors
 constexpr size_t LATENT_DIM = 64;
-constexpr size_t ACTOR_INPUT_DIM = OBS_DIM + LATENT_DIM;  // 240 + 64 = 304
+constexpr size_t ACTOR_INPUT_DIM = OBS_DIM + LATENT_DIM;  // 256 + 64 = 320
 constexpr size_t ACTOR_HIDDEN_DIM = 512;
 constexpr size_t ACTOR_LAYERS = 3;
-constexpr size_t ACTION_DIM = 56;  // 13 satellites * 4 + 4 reaction wheels
-constexpr size_t CRITIC_INPUT_DIM = OBS_DIM + ACTION_DIM + LATENT_DIM;  // 240 + 56 + 64 = 360
+constexpr size_t ACTION_DIM = 32;  // 6 satellites * 4 + 4 reaction wheels = 28, padded to 32 for AVX2
+constexpr size_t CRITIC_INPUT_DIM = OBS_DIM + ACTION_DIM + LATENT_DIM;  // 256 + 32 + 64 = 352
 constexpr size_t CRITIC_HIDDEN_DIM = 1024;
 constexpr size_t CRITIC_LAYERS = 3;
 constexpr size_t REWARD_VECTOR_DIM = 4;

@@ -1,5 +1,6 @@
 #include <Jolt/Jolt.h>
 #include "CombatEnv.h"
+#include "InternalRobot.h"
 
 #include <cmath>
 #include <iostream>
@@ -41,13 +42,12 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
         if (envIdx1 != envIdx2) return;
         envIdx = envIdx1;
     } else {
-        return; // Static-static collisions are ignored
+        return;
     }
 
     if (envIdx >= NUM_PARALLEL_ENVS) return;
 
     float impulseMag = manifold.mPenetrationDepth * manifold.mWorldSpaceNormal.Length();
-    
     mForceReadingsPerEnv[envIdx][0].impulseMagnitude[0] += impulseMag;
     mForceReadingsPerEnv[envIdx][1].impulseMagnitude[0] += impulseMag;
 }
@@ -58,24 +58,20 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
 
-    // Fixed spawn: robots at (-2, 2.5, 0) and (2, 2.5, 0) in the single room
-    JPH::RVec3 pos1(-2.0f, 2.5f, 0.0f);
-    JPH::RVec3 pos2(2.0f, 2.5f, 0.0f);
+    // Fixed non-overlapping spawn
+    JPH::RVec3 pos1(-10.0f, 2.0f, 0.0f);
+    JPH::RVec3 pos2(10.0f, 2.0f, 0.0f);
 
-    std::cout << " [LoadRobot1] " << std::flush;
-    mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
-    std::cout << " [LoadRobot2] " << std::flush;
-    mRobot2 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
+    mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
+    mRobot1.type = RobotType::INTERNAL_ENGINE;
+    
+    mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
+    mRobot2.type = RobotType::INTERNAL_ENGINE;
 
     mStepCount = 0;
     mDone = false;
     mPrevHp1 = INITIAL_HP;
     mPrevHp2 = INITIAL_HP;
-    mPrevEnergy1 = 0.0f;
-    mPrevEnergy2 = 0.0f;
-    mAirAccumulator1 = 0.0f;
-    mAirAccumulator2 = 0.0f;
-
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 }
 
@@ -85,32 +81,36 @@ void CombatEnv::Reset()
     mDone = false;
     mPrevHp1 = INITIAL_HP;
     mPrevHp2 = INITIAL_HP;
-    mPrevEnergy1 = 0.0f;
-    mPrevEnergy2 = 0.0f;
-    mAirAccumulator1 = 0.0f;
-    mAirAccumulator2 = 0.0f;
-
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
-    // Same fixed spawn positions
-    JPH::RVec3 pos1(-2.0f, 2.5f, 0.0f);
-    JPH::RVec3 pos2(2.0f, 2.5f, 0.0f);
+    JPH::RVec3 pos1(-10.0f, 2.0f, 0.0f);
+    JPH::RVec3 pos2(10.0f, 2.0f, 0.0f);
 
-    mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
-    mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
+    mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
+    mRobot1.type = RobotType::INTERNAL_ENGINE;
+    
+    mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
+    mRobot2.type = RobotType::INTERNAL_ENGINE;
 }
 
 void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 {
     if (mDone) return;
-    mRobotLoader->ApplyActions(mRobot1, actions1, mPhysicsSystem);
-    mRobotLoader->ApplyActions(mRobot2, actions2, mPhysicsSystem);
+    
+    if (mRobot1.type == RobotType::SATELLITE)
+        mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
+    else
+        InternalRobotLoader::ApplyInternalActions(mRobot1, actions1, mPhysicsSystem);
+
+    if (mRobot2.type == RobotType::SATELLITE)
+        mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
+    else
+        InternalRobotLoader::ApplyInternalActions(mRobot2, actions2, mPhysicsSystem);
 }
 
 StepResult CombatEnv::HarvestState()
 {
     StepResult result;
-
     if (mDone) return result;
 
     mStepCount++;
@@ -126,41 +126,10 @@ StepResult CombatEnv::HarvestState()
 
     CalculateRewards(result);
 
-    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f)
-    {
+    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= MAX_EPISODE_STEPS) {
         mDone = true;
         result.done = true;
-
-        if (mRobot1.hp <= 0.0f && mRobot2.hp <= 0.0f)
-        {
-            result.winner = 0;
-        }
-        else if (mRobot2.hp <= 0.0f)
-        {
-            result.winner = 1;
-            result.reward1.damage_dealt += 10.0f;
-            result.reward2.damage_taken += 10.0f;
-        }
-        else
-        {
-            result.winner = 2;
-            result.reward2.damage_dealt += 10.0f;
-            result.reward1.damage_taken += 10.0f;
-        }
     }
-
-    if (mStepCount >= MAX_EPISODE_STEPS)
-    {
-        mDone = true;
-        result.done = true;
-        result.reward1.energy_used += 1.0f;
-        result.reward2.energy_used += 1.0f;
-    }
-
-    mPrevHp1 = mRobot1.hp;
-    mPrevHp2 = mRobot2.hp;
-    mPrevEnergy1 = mRobot1.totalEnergyUsed;
-    mPrevEnergy2 = mRobot2.totalEnergyUsed;
 
     return result;
 }
@@ -168,66 +137,69 @@ StepResult CombatEnv::HarvestState()
 void CombatEnv::CheckCollisions()
 {
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-    const float collisionThreshold = 0.55f;
+    const float spikeThreshold = 0.55f;
+    const float engineThreshold = 1.0f; // Larger radius for engine slam
 
-    JPH::RVec3 r2Pos = bodyInterface.GetPosition(mRobot2.mainBodyId);
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 spikePos = bodyInterface.GetPosition(mRobot1.satellites[i].spikeBodyId);
-        float dist = static_cast<float>((spikePos - r2Pos).Length());
-
-        if (dist < collisionThreshold)
-        {
-            JPH::Vec3 spikeVel = bodyInterface.GetLinearVelocity(mRobot1.satellites[i].spikeBodyId);
-            float damage = spikeVel.Length() * DAMAGE_MULTIPLIER * 0.001f;
-            mRobot2.hp -= damage;
-            mRobot1.totalDamageDealt += damage;
-            mRobot2.totalDamageTaken += damage;
+    auto applyDamage = [&](CombatRobotData& attacker, CombatRobotData& victim) {
+        if (attacker.mainBodyId.IsInvalid() || victim.mainBodyId.IsInvalid()) return;
+        
+        JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
+        
+        if (attacker.type == RobotType::SATELLITE) {
+            for (int i = 0; i < NUM_SATELLITES; ++i) {
+                if (attacker.satellites[i].spikeBodyId.IsInvalid()) continue;
+                JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
+                if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
+                    JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].spikeBodyId);
+                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.001f;
+                    victim.hp -= damage;
+                    attacker.totalDamageDealt += damage;
+                    victim.totalDamageTaken += damage;
+                }
+            }
+        } else if (attacker.type == RobotType::INTERNAL_ENGINE) {
+            // Internal engines deal damage when they are near the opponent 
+            // (effectively slamming through their own shell into the opponent)
+            for (int i = 0; i < 3; ++i) {
+                if (attacker.satellites[i].coreBodyId.IsInvalid()) continue;
+                JPH::RVec3 engPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
+                if ((engPos - victimPos).LengthSq() < engineThreshold * engineThreshold) {
+                    JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
+                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.002f; // Heavier slam
+                    victim.hp -= damage;
+                    attacker.totalDamageDealt += damage;
+                    victim.totalDamageTaken += damage;
+                }
+            }
         }
-    }
+    };
 
-    JPH::RVec3 r1Pos = bodyInterface.GetPosition(mRobot1.mainBodyId);
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 spikePos = bodyInterface.GetPosition(mRobot2.satellites[i].spikeBodyId);
-        float dist = static_cast<float>((spikePos - r1Pos).Length());
-
-        if (dist < collisionThreshold)
-        {
-            JPH::Vec3 spikeVel = bodyInterface.GetLinearVelocity(mRobot2.satellites[i].spikeBodyId);
-            float damage = spikeVel.Length() * DAMAGE_MULTIPLIER * 0.001f;
-            mRobot1.hp -= damage;
-            mRobot2.totalDamageDealt += damage;
-            mRobot1.totalDamageTaken += damage;
-        }
-    }
+    applyDamage(mRobot1, mRobot2);
+    applyDamage(mRobot2, mRobot1);
 }
 
 void CombatEnv::UpdateForceSensors()
 {
     CombatContactListener& listener = CombatContactListener::Get();
-    
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        // Update joint stress for robot 1
-        if (mRobot1.satellites[i].rotationJoint != nullptr)
-        {
-            JPH::Vec3 lagrange = mRobot1.satellites[i].rotationJoint->GetTotalLambdaPosition();
-            listener.GetForceReading(mEnvIndex, 0).jointStress[i] = lagrange.Length() * 0.001f;
+    auto updateStress = [&](CombatRobotData& r, int rIdx) {
+        if (r.mainBodyId.IsInvalid()) return;
+        for (int i = 0; i < NUM_SATELLITES; ++i) {
+            if (r.satellites[i].rotationJoint) {
+                listener.GetForceReading(mEnvIndex, rIdx).jointStress[i] = r.satellites[i].rotationJoint->GetTotalLambdaPosition().Length() * 0.001f;
+            }
         }
-        
-        // Update joint stress for robot 2
-        if (mRobot2.satellites[i].rotationJoint != nullptr)
-        {
-            JPH::Vec3 lagrange = mRobot2.satellites[i].rotationJoint->GetTotalLambdaPosition();
-            listener.GetForceReading(mEnvIndex, 1).jointStress[i] = lagrange.Length() * 0.001f;
-        }
-    }
+    };
+    updateStress(mRobot1, 0);
+    updateStress(mRobot2, 1);
 }
 
 void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const CombatRobotData& robot,
                                         const CombatRobotData& opponent, const ForceSensorReading& forces)
 {
+    if (robot.mainBodyId.IsInvalid() || opponent.mainBodyId.IsInvalid()) {
+        std::fill(obs.begin(), obs.end(), 0.0f);
+        return;
+    }
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     int idx = 0;
 
@@ -236,198 +208,116 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     JPH::Vec3 myAngVel = bodyInterface.GetAngularVelocity(robot.mainBodyId);
     JPH::Quat myRot = bodyInterface.GetRotation(robot.mainBodyId);
 
-    obs[idx++] = static_cast<float>(myPos.GetX());
-    obs[idx++] = static_cast<float>(myPos.GetY());
-    obs[idx++] = static_cast<float>(myPos.GetZ());
-    obs[idx++] = myVel.GetX();
-    obs[idx++] = myVel.GetY();
-    obs[idx++] = myVel.GetZ();
-    obs[idx++] = myAngVel.GetX();
-    obs[idx++] = myAngVel.GetY();
-    obs[idx++] = myAngVel.GetZ();
+    obs[idx++] = (float)myPos.GetX(); obs[idx++] = (float)myPos.GetY(); obs[idx++] = (float)myPos.GetZ();
+    obs[idx++] = myVel.GetX(); obs[idx++] = myVel.GetY(); obs[idx++] = myVel.GetZ();
+    obs[idx++] = myAngVel.GetX(); obs[idx++] = myAngVel.GetY(); obs[idx++] = myAngVel.GetZ();
 
     JPH::RVec3 oppPos = bodyInterface.GetPosition(opponent.mainBodyId);
     JPH::Vec3 oppVel = bodyInterface.GetLinearVelocity(opponent.mainBodyId);
     JPH::RVec3 relPos = oppPos - myPos;
 
-    obs[idx++] = static_cast<float>(relPos.GetX());
-    obs[idx++] = static_cast<float>(relPos.GetY());
-    obs[idx++] = static_cast<float>(relPos.GetZ());
-    obs[idx++] = oppVel.GetX();
-    obs[idx++] = oppVel.GetY();
-    obs[idx++] = oppVel.GetZ();
+    obs[idx++] = (float)relPos.GetX(); obs[idx++] = (float)relPos.GetY(); obs[idx++] = (float)relPos.GetZ();
+    obs[idx++] = oppVel.GetX(); obs[idx++] = oppVel.GetY(); obs[idx++] = oppVel.GetZ();
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 pos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
-        JPH::Vec3 vel = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
-        obs[idx++] = static_cast<float>(pos.GetX());
-        obs[idx++] = static_cast<float>(pos.GetY());
-        obs[idx++] = static_cast<float>(pos.GetZ());
-        obs[idx++] = vel.GetX();
-        obs[idx++] = vel.GetY();
-        obs[idx++] = vel.GetZ();
+    // Satellite / Engine states
+    for (int i = 0; i < NUM_SATELLITES; ++i) {
+        if (!robot.satellites[i].coreBodyId.IsInvalid()) {
+            JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
+            JPH::Vec3 v = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
+            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
+            obs[idx++] = v.GetX(); obs[idx++] = v.GetY(); obs[idx++] = v.GetZ();
+        } else {
+            for (int k = 0; k < 6; ++k) obs[idx++] = 0.0f;
+        }
     }
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 pos = bodyInterface.GetPosition(robot.satellites[i].spikeBodyId);
-        obs[idx++] = static_cast<float>(pos.GetX());
-        obs[idx++] = static_cast<float>(pos.GetY());
-        obs[idx++] = static_cast<float>(pos.GetZ());
+    // My Spikes
+    for (int i = 0; i < NUM_SATELLITES; ++i) {
+        if (!robot.satellites[i].spikeBodyId.IsInvalid()) {
+            JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].spikeBodyId);
+            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
+        } else {
+            for (int k = 0; k < 3; ++k) obs[idx++] = 0.0f;
+        }
     }
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 pos = bodyInterface.GetPosition(opponent.satellites[i].spikeBodyId);
-        obs[idx++] = static_cast<float>(pos.GetX());
-        obs[idx++] = static_cast<float>(pos.GetY());
-        obs[idx++] = static_cast<float>(pos.GetZ());
+    // Opponent Spikes
+    for (int i = 0; i < NUM_SATELLITES; ++i) {
+        if (!opponent.satellites[i].spikeBodyId.IsInvalid()) {
+            JPH::RVec3 p = bodyInterface.GetPosition(opponent.satellites[i].spikeBodyId);
+            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
+        } else {
+            for (int k = 0; k < 3; ++k) obs[idx++] = 0.0f;
+        }
     }
+
+    mRobotLoader->PerformLidarScan(const_cast<CombatRobotData&>(robot), mPhysicsSystem);
+    for (int i = 0; i < NUM_LIDAR_RAYS; ++i) obs[idx++] = robot.lidarDistances[i] / 20.0f;
 
     obs[idx++] = robot.hp / 100.0f;
     obs[idx++] = opponent.hp / 100.0f;
-    obs[idx++] = static_cast<float>((oppPos - myPos).Length()) / 20.0f;
+    obs[idx++] = (float)(oppPos - myPos).Length() / 20.0f;
+    obs[idx++] = myRot.RotateAxisY().Dot((oppPos - myPos).Normalized());
+    obs[idx++] = (robot.hp - opponent.hp) / 100.0f;
     
-    JPH::Vec3 myForward = myRot.RotateAxisY();
-    JPH::Vec3 toOpponent = (oppPos - myPos).Normalized();
-    float facingDot = myForward.Dot(toOpponent);
-    obs[idx++] = facingDot;
-    
-    float healthDiff = (robot.hp - opponent.hp) / 100.0f;
-    obs[idx++] = healthDiff;
-    
-    float mySpeed = myVel.Length();
-    float oppSpeed = oppVel.Length();
-    obs[idx++] = mySpeed / 10.0f;
-    obs[idx++] = oppSpeed / 10.0f;
+    // Forces
+    for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.impulseMagnitude[i];
+    for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.jointStress[i];
 
-    float speedRatio = (oppSpeed > 0.01f) ? (mySpeed / oppSpeed) : 1.0f;
-    obs[idx++] = std::clamp(speedRatio, 0.0f, 5.0f) / 5.0f;
-
-    JPH::Vec3 relVel = oppVel - myVel;
-    obs[idx++] = relVel.GetX() / 10.0f;
-    obs[idx++] = relVel.GetY() / 10.0f;
-    obs[idx++] = relVel.GetZ() / 10.0f;
-
-    float closingSpeed = -relVel.Dot(toOpponent);
-    obs[idx++] = closingSpeed / 10.0f;
-
-    JPH::Vec3 crossProduct = myVel.Cross(oppVel);
-    obs[idx++] = crossProduct.GetX() / 10.0f;
-    obs[idx++] = crossProduct.GetY() / 10.0f;
-
-    obs[idx++] = robot.totalDamageDealt / 100.0f;
-    obs[idx++] = robot.totalDamageTaken / 100.0f;
-    obs[idx++] = robot.episodeSteps / 1000.0f;
-    
-    // Force sensors (26 dims)
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        obs[idx++] = forces.impulseMagnitude[i];
+    // Current Mass Observations (for the new mass-shifting feature)
+    obs[idx++] = bodyInterface.GetShape(robot.mainBodyId)->GetMassProperties().mMass / 50.0f;
+    for (int i = 0; i < 3; ++i) {
+        if (!robot.satellites[i].coreBodyId.IsInvalid()) {
+            obs[idx++] = bodyInterface.GetShape(robot.satellites[i].coreBodyId)->GetMassProperties().mMass / 10.0f;
+        } else {
+            obs[idx++] = 0.0f;
+        }
     }
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        obs[idx++] = forces.jointStress[i];
-    }
-    
-    // Altimeter (13 dims)
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        JPH::RVec3 satPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
-        obs[idx++] = static_cast<float>(satPos.GetY()) / 10.0f;
-    }
-    
-    // Local Gravity (3 dims)
-    JPH::Vec3 worldGravity(0.0f, -1.0f, 0.0f);
-    JPH::Vec3 localGravity = myRot.Conjugated() * worldGravity;
-    obs[idx++] = localGravity.GetX();
-    obs[idx++] = localGravity.GetY();
-    obs[idx++] = localGravity.GetZ();
-    
-    // Angular Momentum (3 dims)
-    constexpr float coreMass = 13.0f;
-    obs[idx++] = myAngVel.GetX() * coreMass;
-    obs[idx++] = myAngVel.GetY() * coreMass;
-    obs[idx++] = myAngVel.GetZ() * coreMass;
-    
-    // Arena Center Dist (2 dims)
-    obs[idx++] = static_cast<float>(myPos.GetX()) / 100.0f;
-    obs[idx++] = static_cast<float>(myPos.GetZ()) / 100.0f;
-    
-    // Time-to-Collision (1 dim)
-    float dist = static_cast<float>((oppPos - myPos).Length());
-    float closing_speed = -relVel.Dot(toOpponent);
-    float timeToCollision = dist / std::max(std::abs(closing_speed), 0.1f);
-    obs[idx++] = timeToCollision / 20.0f;
 
-    // Padding for AVX2 alignment (4 elements)
-    obs[idx++] = 0.0f;
-    obs[idx++] = 0.0f;
-    obs[idx++] = 0.0f;
-    obs[idx++] = 0.0f;
-
-    // Verify dimension
-    if (idx != 240) {
-        std::cerr << "[FATAL] BuildObservationVector wrote " << idx << " elements, expected 240!" << std::endl;
-        throw std::runtime_error("Observation dimension mismatch");
-    }
-}
-
-float CombatEnv::ComputeAirtime() const
-{
-    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-    
-    float airtime = 0.0f;
-    JPH::RVec3 pos1 = bodyInterface.GetPosition(mRobot1.mainBodyId);
-    if (pos1.GetY() > 1.0f) airtime += 0.01f;
-    
-    JPH::RVec3 pos2 = bodyInterface.GetPosition(mRobot2.mainBodyId);
-    if (pos2.GetY() > 1.0f) airtime += 0.01f;
-    
-    return airtime;
-}
-
-float CombatEnv::ComputeEnergyUsed(const float* actions, int actionDim) const
-{
-    float energy = 0.0f;
-    for (int i = 0; i < actionDim; ++i)
-    {
-        energy += std::abs(actions[i]) * 0.001f;
-    }
-    return -energy;
+    while (idx < 256) obs[idx++] = 0.0f;
 }
 
 void CombatEnv::CalculateRewards(StepResult& result)
 {
+    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+    
+    // 1. Proximity Reward (encourages engagement)
+    float dist = static_cast<float>((bodyInterface.GetPosition(mRobot2.mainBodyId) - bodyInterface.GetPosition(mRobot1.mainBodyId)).Length());
+    
+    // Smooth proximity: positive when close, negative when far. Sweet spot around 2.0m-5.0m
+    float prox1 = 0.0f;
+    if (dist < 20.0f) {
+        prox1 = 0.1f * (1.0f - (dist / 5.0f)); 
+    } else {
+        prox1 = -0.5f; // Hard penalty for fleeing
+    }
+
+    // 2. Damage Rewards (The primary objective)
+    // We use the delta damage since last step
     float dmgDealt1 = mRobot1.totalDamageDealt;
-    float dmgDealt2 = mRobot2.totalDamageDealt;
     float dmgTaken1 = mRobot1.totalDamageTaken;
+    float dmgDealt2 = mRobot2.totalDamageDealt;
     float dmgTaken2 = mRobot2.totalDamageTaken;
 
-    result.reward1.damage_dealt = dmgDealt1 * 0.1f;
-    result.reward1.damage_taken = -dmgTaken1 * 0.05f;
-    result.reward1.airtime = ComputeAirtime() * 0.01f;
-    result.reward1.energy_used = -mRobot1.totalEnergyUsed * 0.001f;
+    result.reward1.damage_dealt = dmgDealt1;
+    result.reward1.damage_taken = -dmgTaken1;
+    
+    result.reward2.damage_dealt = dmgDealt2;
+    result.reward2.damage_taken = -dmgTaken2;
 
-    result.reward2.damage_dealt = dmgDealt2 * 0.1f;
-    result.reward2.damage_taken = -dmgTaken2 * 0.05f;
-    result.reward2.airtime = ComputeAirtime() * 0.01f;
-    result.reward2.energy_used = -mRobot2.totalEnergyUsed * 0.001f;
+    // 3. Efficiency & Survival
+    result.reward1.energy_used = -mRobot1.totalEnergyUsed * 0.01f;
+    result.reward2.energy_used = -mRobot2.totalEnergyUsed * 0.01f;
 
-    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-    JPH::RVec3 pos1 = bodyInterface.GetPosition(mRobot1.mainBodyId);
-    JPH::RVec3 pos2 = bodyInterface.GetPosition(mRobot2.mainBodyId);
-    float dist = static_cast<float>((pos2 - pos1).Length());
+    // 4. Airtime / Movement bonus
+    JPH::Vec3 vel1 = bodyInterface.GetLinearVelocity(mRobot1.mainBodyId);
+    JPH::Vec3 vel2 = bodyInterface.GetLinearVelocity(mRobot2.mainBodyId);
+    result.reward1.airtime = vel1.Length() * 0.01f;
+    result.reward2.airtime = vel2.Length() * 0.01f;
 
-    float proximityReward = -0.001f * (dist - 3.0f);
-    result.reward1.damage_dealt += proximityReward;
-    result.reward2.damage_dealt += proximityReward;
+    // Add proximity as a "shape" to damage_dealt for now so it's visible in simple scalar
+    result.reward1.damage_dealt += prox1;
+    result.reward2.damage_dealt += prox1; // Mirror for symmetry
 }
 
-// Define static accessor for global CombatContactListener
-CombatContactListener& CombatContactListener::Get()
-{
-    static CombatContactListener instance;
-    return instance;
-}
+CombatContactListener& CombatContactListener::Get() { static CombatContactListener instance; return instance; }

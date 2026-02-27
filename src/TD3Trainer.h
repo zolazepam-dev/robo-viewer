@@ -15,8 +15,8 @@
 
 struct TD3Config
 {
-    int hiddenDim = 256;
-    int latentDim = 64;
+    int hiddenDim = 64;
+    int latentDim = 16;
     float actorLR = 3e-4f;
     float criticLR = 3e-4f;
     float gamma = 0.99f;
@@ -25,9 +25,9 @@ struct TD3Config
     float noiseClip = 0.5f;
     float explNoise = 0.1f;
     int policyDelay = 2;
-    int batchSize = 256;
+    int batchSize = 16;
     int bufferSize = 1000000;
-    int startSteps = 10000;
+    int startSteps = 500;
     int snapshotInterval = 10000;
 };
 

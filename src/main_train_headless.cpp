@@ -9,7 +9,6 @@
 #include <random>
 #include <filesystem>
 #include <string>
-#include <thread>
 
 #include "VectorizedEnv.h"
 #include "NeuralNetwork.h"
@@ -68,7 +67,8 @@ int main(int argc, char* argv[]) {
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
-    std::vector<float> actions(totalActionDim, 0.0f);
+    AlignedVector32<float> actions(totalActionDim, 0.0f);
+    
     std::mt19937 rng(42);
     std::normal_distribution<float> noiseDist(0.0f, 1.0f);
     
@@ -86,10 +86,10 @@ int main(int argc, char* argv[]) {
     std::cout << "[JOLTrl] Headless Training Matrix Online. Starting training loop..." << std::endl;
     std::cout << "[JOLTrl] actionDim=" << actionDim << " totalActionDim=" << totalActionDim << " stateDim=" << stateDim << std::endl;
 
-    // The Master Loop (Headless)
     while (totalSteps < config.maxSteps) {
-
-        // --- MACHINE LEARNING PHASE ---
+        auto loopStart = std::chrono::high_resolution_clock::now();
+        
+        auto actionStart = std::chrono::high_resolution_clock::now();
         if (totalSteps < td3cfg.startSteps) {
             for (int i = 0; i < totalActionDim; ++i) actions[i] = noiseDist(rng);
         } else {
@@ -103,10 +103,16 @@ int main(int argc, char* argv[]) {
                 trainer.SelectAction(obs2, act2);
             }
         }
+        auto actionEnd = std::chrono::high_resolution_clock::now();
+        auto actionTime = std::chrono::duration_cast<std::chrono::microseconds>(actionEnd - actionStart).count();
 
+        auto stepStart = std::chrono::high_resolution_clock::now();
         vecEnv.Step(actions);
         vecEnv.ResetDoneEnvs();
+        auto stepEnd = std::chrono::high_resolution_clock::now();
+        auto stepTime = std::chrono::duration_cast<std::chrono::microseconds>(stepEnd - stepStart).count();
 
+        auto bufferStart = std::chrono::high_resolution_clock::now();
         const auto& allObs = vecEnv.GetObservations();
         const auto& allRewards = vecEnv.GetRewards();
         const auto& allDones = vecEnv.GetDones();
@@ -126,23 +132,45 @@ int main(int argc, char* argv[]) {
             rewardIdx++;
             if (allDones[envIdx]) episodes++;
         }
-        
+        auto bufferEnd = std::chrono::high_resolution_clock::now();
+        auto bufferTime = std::chrono::duration_cast<std::chrono::microseconds>(bufferEnd - bufferStart).count();
+
+        auto trainStart = std::chrono::high_resolution_clock::now();
         if (buffer.Size() >= td3cfg.startSteps) trainer.Train(buffer);
+        auto trainEnd = std::chrono::high_resolution_clock::now();
+        auto trainTime = std::chrono::duration_cast<std::chrono::microseconds>(trainEnd - trainStart).count();
+
         totalSteps++;
         
-        // Print statistics periodically
+        auto loopEnd = std::chrono::high_resolution_clock::now();
+        auto loopTime = std::chrono::duration_cast<std::chrono::microseconds>(loopEnd - loopStart).count();
+        
+        if (totalSteps % 100 == 0) {
+            std::cout << "[Timing] Step " << totalSteps 
+                      << " | Loop: " << loopTime << "us" 
+                      << " | Action: " << actionTime << "us"
+                      << " | Step: " << stepTime << "us"
+                      << " | Buffer: " << bufferTime << "us"
+                      << " | Train: " << trainTime << "us" << std::endl;
+        }
+        
         auto currentTime = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastStatsTime).count();
         
-        if (elapsed >= 5) { // Print stats every 5 seconds
+        if (elapsed >= 5) { 
             auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
             sps = (totalSteps - lastSteps) / (float)elapsed;
             lastSteps = totalSteps;
             lastStatsTime = currentTime;
             
             currentAvg = 0;
-            for(int i=0; i<std::min(rewardIdx, 100); i++) currentAvg += avgRewards[i];
-            if (rewardIdx > 0) currentAvg /= std::min(rewardIdx, 100);
+            int count = std::min(rewardIdx, 100);
+            for(int i=0; i<count; i++) {
+                int idx = (rewardIdx - count + i) % 100;
+                if (idx < 0) idx += 100; 
+                currentAvg += avgRewards[idx];
+            }
+            if (rewardIdx > 0) currentAvg /= count;
             
             std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
                       << " | SPS: " << (int)sps 

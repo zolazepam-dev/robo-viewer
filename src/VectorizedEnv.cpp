@@ -20,116 +20,94 @@ VectorizedEnv::VectorizedEnv(int numEnvs)
 {
 }
 
-void VectorizedEnv::Init()
+void VectorizedEnv::Init(bool initRobots)
 {
+    std::cout << "[VectorizedEnv::Init] Start" << std::endl;
+    
     if (!mPhysicsCore.Init(mNumEnvs))
     {
         std::cerr << "[JOLTrl] FATAL: Global PhysicsCore failed to initialize!" << std::endl;
         return;
     }
 
+    std::cout << "[VectorizedEnv::Init] PhysicsCore initialized" << std::endl;
+
     // Create and register the global CombatContactListener
     gCombatContactListener = &CombatContactListener::Get();
     mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
 
-    // --- BUILD EXACTLY ONE 12x12x12 CUBE ROOM AT ORIGIN ---
+    std::cout << "[VectorizedEnv::Init] Contact listener registered" << std::endl;
+
+    // --- BUILD THE SINGLE SOURCE OF TRUTH ARENA (36x36x36) ---
     JPH::BodyInterface& body_interface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
     
-    // Floor: 12x12 meters, 0.5m thick, at y=0 (bottom surface y=0, top surface y=0.5)
-    JPH::BoxShapeSettings floor_shape(JPH::Vec3(6.0f, 0.25f, 6.0f));
+    // Floor: 36x36 meters, 2.0m thick
+    JPH::BoxShapeSettings floor_shape(JPH::Vec3(18.0f, 1.0f, 18.0f));
     JPH::RefConst<JPH::Shape> floor = floor_shape.Create().Get();
-    JPH::BodyCreationSettings floor_settings(floor, JPH::RVec3(0.0f, 0.25f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(floor_settings, JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     
-    // Ceiling: at y=12, bottom surface y=12
-    JPH::BodyCreationSettings ceil_settings(floor, JPH::RVec3(0.0f, 12.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(ceil_settings, JPH::EActivation::DontActivate);
+    // Ceiling
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 36.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     
-    // Walls: 12m tall (y=0 to y=12), 0.5m thick, 12m wide
-    JPH::BoxShapeSettings wall_x_shape(JPH::Vec3(0.25f, 6.0f, 6.0f)); // Walls on X sides (rotate to align)
-    JPH::RefConst<JPH::Shape> wall_x = wall_x_shape.Create().Get();
+    // Walls: 2.0m thick
+    JPH::BoxShapeSettings wall_shape(JPH::Vec3(18.0f, 18.0f, 1.0f));
+    JPH::RefConst<JPH::Shape> wall = wall_shape.Create().Get();
     
-    JPH::BoxShapeSettings wall_z_shape(JPH::Vec3(6.0f, 6.0f, 0.25f)); // Walls on Z sides
-    JPH::RefConst<JPH::Shape> wall_z = wall_z_shape.Create().Get();
+    // North/South (z = +/- 18.0 + offset)
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, -19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, 19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     
-    // North wall (z = -6.0)
-    JPH::BodyCreationSettings north_wall(wall_z, JPH::RVec3(0.0f, 6.0f, -6.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(north_wall, JPH::EActivation::DontActivate);
-    
-    // South wall (z = +6.0)
-    JPH::BodyCreationSettings south_wall(wall_z, JPH::RVec3(0.0f, 6.0f, 6.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(south_wall, JPH::EActivation::DontActivate);
-    
-    // East wall (x = +6.0) - rotate 90 degrees around Y
-    JPH::BodyCreationSettings east_wall(wall_x, JPH::RVec3(6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(east_wall, JPH::EActivation::DontActivate);
-    
-    // West wall (x = -6.0) - rotate 90 degrees around Y
-    JPH::BodyCreationSettings west_wall(wall_x, JPH::RVec3(-6.0f, 6.0f, 0.0f), JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f)), JPH::EMotionType::Static, Layers::STATIC);
-    body_interface.CreateAndAddBody(west_wall, JPH::EActivation::DontActivate);
+    // East/West (x = +/- 18.0 + offset, rotated)
+    JPH::Quat rot90 = JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f));
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(-19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     // -------------------------------------------------
 
-    mEnvs.resize(mNumEnvs);
-    std::cout << "[JOLTrl] Initializing " << mNumEnvs << " environments..." << std::endl;
-    for (int i = 0; i < mNumEnvs; ++i)
-    {
-        std::cout << "[JOLTrl] Init env " << i << "..." << std::flush;
-        mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader);
-        std::cout << " done" << std::endl;
+    std::cout << "[VectorizedEnv::Init] Arena built" << std::endl;
+
+    if (initRobots) {
+        std::cout << "[VectorizedEnv::Init] Initializing " << mNumEnvs << " environments" << std::endl;
+        mEnvs.resize(mNumEnvs);
+        for (int i = 0; i < mNumEnvs; ++i)
+        {
+            std::cout << "[VectorizedEnv::Init] Initializing environment " << i << std::endl;
+            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader);
+            std::cout << "[VectorizedEnv::Init] Environment " << i << " initialized" << std::endl;
+        }
+
+        std::cout << "[VectorizedEnv::Init] All environments initialized" << std::endl;
+
+        mObservationDim = mEnvs[0].GetObservationDim();
+        mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
+        mAllRewards.resize(mNumEnvs * 2, 0.0f);
+        mAllDones.resize(mNumEnvs, false);
     }
-    std::cout << "[JOLTrl] All environments initialized." << std::endl;
 
-    mObservationDim = mEnvs[0].GetObservationDim();
-
-    std::cout << "[JOLTrl] Resizing observation and reward arrays..." << std::endl;
-    mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
-    mAllRewards.resize(mNumEnvs * 2, 0.0f);
-    mAllDones.resize(mNumEnvs, false);
-    
-    AssertAligned32(mAllObservations.data());
-    AssertAligned32(mAllRewards.data());
-
-    std::cout << "[JOLTrl] Calling Reset(-1)..." << std::endl;
-    Reset(-1);
-    std::cout << "[JOLTrl] Reset(-1) completed." << std::endl;
-
-    // Call broadphase optimization after a small delay to ensure all bodies are added
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::cout << "[VectorizedEnv::Init] Optimizing broad phase" << std::endl;
     mPhysicsCore.GetPhysicsSystem().OptimizeBroadPhase();
-    std::cout << "[JOLTrl] Global BroadPhase optimized. Engine ready." << std::endl;
+    std::cout << "[VectorizedEnv::Init] Complete" << std::endl;
 }
 
 void VectorizedEnv::Step(const AlignedVector32<float>& actions)
 {
     const int actionDim = ACTIONS_PER_ROBOT;
-
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
-
-        const float* actions1 = actions.data() + (i * 2 * actionDim);
-        const float* actions2 = actions1 + actionDim;
-
-        mEnvs[i].QueueActions(actions1, actions2);
+        mEnvs[i].QueueActions(actions.data() + (i * 2 * actionDim), actions.data() + (i * 2 * actionDim + actionDim));
     }
 
-    // The Global Matrix Crunch (1/120f guarantees RL stability)
-    mPhysicsCore.Step(1.0f / 120.0f);
+    mPhysicsCore.Step(1.0f / 60.0f);
 
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
-
         StepResult result = mEnvs[i].HarvestState();
         int obsOffset = i * mObservationDim * 2;
         std::copy(result.obs_robot1.begin(), result.obs_robot1.end(), mAllObservations.begin() + obsOffset);
-        std::copy(result.obs_robot2.begin(), result.obs_robot2.end(),
-                  mAllObservations.begin() + obsOffset + mObservationDim);
-
-        int rewardOffset = i * 2;
-        mAllRewards[rewardOffset] = result.reward1.Scalar();
-        mAllRewards[rewardOffset + 1] = result.reward2.Scalar();
-
+        std::copy(result.obs_robot2.begin(), result.obs_robot2.end(), mAllObservations.begin() + obsOffset + mObservationDim);
+        mAllRewards[i * 2] = result.reward1.Scalar();
+        mAllRewards[i * 2 + 1] = result.reward2.Scalar();
         mAllDones[i] = result.done;
     }
 }

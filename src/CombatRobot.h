@@ -12,12 +12,12 @@
 #include <array>
 #include <cmath>
 
-constexpr int NUM_SATELLITES = 13;
+constexpr int NUM_SATELLITES = 6;
 constexpr int ACTIONS_PER_SATELLITE = 4;
 constexpr int REACTION_WHEEL_DIM = 4;
-constexpr int ACTIONS_PER_ROBOT = NUM_SATELLITES * ACTIONS_PER_SATELLITE + REACTION_WHEEL_DIM;
+constexpr int ACTIONS_PER_ROBOT = 56; // Matching VectorizedEnv: 6*4=24 for satellites, then reaction wheels and bursts at end
 constexpr int NUM_LIDAR_RAYS = 10;
-constexpr int OBSERVATION_DIM = 240; // 236 actual + 4 padding for AVX2 alignment (32-byte boundary)
+constexpr int OBSERVATION_DIM = 256; // Expanded for all sensors + padding
 
 struct ForceSensorReading
 {
@@ -76,12 +76,18 @@ struct SatelliteData
 
 struct ResidualActionScale
 {
-    float rotationScale = 100.0f;
-    float slideScale = 500.0f;
+    float rotationScale = 25.0f;
+    float slideScale = 100.0f;
+};
+
+enum class RobotType {
+    SATELLITE,
+    INTERNAL_ENGINE
 };
 
 struct CombatRobotData
 {
+    RobotType type = RobotType::SATELLITE;
     JPH::BodyID mainBodyId;
     std::array<SatelliteData, NUM_SATELLITES> satellites;
     float hp = 100.0f;

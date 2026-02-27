@@ -103,6 +103,9 @@ public:
     JPH::PhysicsSystem& GetPhysicsSystem() { return *mPhysicsSystem; }
     const JPH::PhysicsSystem& GetPhysicsSystem() const { return *mPhysicsSystem; }
     
+    JPH::TempAllocator* GetTempAllocator() { return mTempAllocator; }
+    JPH::JobSystem* GetJobSystem() { return mJobSystem; }
+    
     // Allow updating settings at runtime
     void SetSettings(const JPH::PhysicsSettings& settings) {
         if (mPhysicsSystem) mPhysicsSystem->SetPhysicsSettings(settings);

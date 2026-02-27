@@ -32,7 +32,7 @@ if [ "$NUM_ENVS" -gt "$MAX_SAFE_ENVS" ]; then
     echo "System may crash due to Jolt Physics capacity constraints"
     echo "Recommend using NUM_ENVS=$MAX_SAFE_ENVS or lower"
     read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
+    echono dud li
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 1
     fi

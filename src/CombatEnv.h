@@ -12,9 +12,9 @@
 #include "CombatRobot.h"
 #include "AlignedAllocator.h"
 
-constexpr float ARENA_SIZE = 12.0f;
+constexpr float ARENA_SIZE = 36.0f;
 constexpr float ARENA_HALF = ARENA_SIZE * 0.5f;
-constexpr float ROBOT_SPAWN_OFFSET = 3.0f;
+constexpr float ROBOT_SPAWN_OFFSET = 10.0f;
 constexpr float INITIAL_HP = 100.0f;
 constexpr float DAMAGE_MULTIPLIER = 5.0f;
 constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz

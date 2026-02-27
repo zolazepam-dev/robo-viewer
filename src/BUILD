@@ -18,6 +18,7 @@ cc_library(
         "NeuralMath.cpp",
         "LatentMemory.cpp",
         "OpponentPool.cpp",
+        "InternalRobot.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -35,6 +36,7 @@ cc_library(
         "OpponentPool.h",
         "AlignedAllocator.h",
         "LockFreeQueue.h",
+        "InternalRobot.h",
     ],
     deps = [
         "@glfw",

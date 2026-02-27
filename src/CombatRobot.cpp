@@ -45,6 +45,9 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     uint32_t envIndex,
     int robotIndex)
 {
+    auto loadStart = std::chrono::high_resolution_clock::now();
+    std::cout << "[LoadRobot" << robotIndex << "] Start loading" << std::endl;
+    
     // Force sequential loading to prevent Jolt memory allocator collisions 
     // and JPH::Ref counter corruption from concurrent thread execution.
     static std::mutex sLoadMutex;
@@ -195,8 +198,8 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         
         for (int axis = (int)JPH::SixDOFConstraintSettings::EAxis::RotationX; axis <= (int)JPH::SixDOFConstraintSettings::EAxis::RotationZ; ++axis) {
             rotSettings.mMotorSettings[axis].mSpringSettings.mFrequency = 0.0f; // Pure velocity motor
-            rotSettings.mMotorSettings[axis].mMinTorqueLimit = -5000.0f;
-            rotSettings.mMotorSettings[axis].mMaxTorqueLimit = 5000.0f;
+            rotSettings.mMotorSettings[axis].mMinTorqueLimit = -50.0f;
+            rotSettings.mMotorSettings[axis].mMaxTorqueLimit = 50.0f;
         }
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
@@ -261,8 +264,8 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         slideSettings.mLimitsMin = slideMin;
         slideSettings.mLimitsMax = slideMax;
         slideSettings.mMotorSettings.mSpringSettings.mFrequency = 0.0f; // Pure velocity
-        slideSettings.mMotorSettings.mMinForceLimit = -10000.0f;
-        slideSettings.mMotorSettings.mMaxForceLimit = 10000.0f;
+        slideSettings.mMotorSettings.mMinForceLimit = -100.0f;
+        slideSettings.mMotorSettings.mMaxForceLimit = 100.0f;
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
@@ -276,6 +279,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         robotData.satellites[i].pidZ = PIDController{50.0f, 0.0f, 10.0f, 0.0f, 0.0f};
     }
 
+    auto loadEnd = std::chrono::high_resolution_clock::now();
+    auto loadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(loadEnd - loadStart).count();
+    std::cout << "[LoadRobot" << robotIndex << "] Loaded in " << loadDuration << "ms" << std::endl;
+    
     return robotData;
 }
 
@@ -384,10 +391,22 @@ void CombatRobotLoader::ComputeBasePIDActions(
 
 void CombatRobotLoader::BlendResidualWithBase(CombatRobotData& robot)
 {
-    for (int i = 0; i < ACTIONS_PER_ROBOT; ++i)
+    for (int i = 0; i < NUM_SATELLITES; ++i)
     {
-        robot.finalActions[i] = robot.baseActions[i] + 
-            robot.residualActions[i] * robot.actionScale.rotationScale;
+        int base = i * ACTIONS_PER_SATELLITE;
+        // PID output (baseActions) is already in target velocity units
+        // Model output (residualActions) is -1 to 1, scaled by actionScale
+        robot.finalActions[base + 0] = robot.baseActions[base + 0] + robot.residualActions[base + 0] * robot.actionScale.rotationScale;
+        robot.finalActions[base + 1] = robot.baseActions[base + 1] + robot.residualActions[base + 1] * robot.actionScale.rotationScale;
+        robot.finalActions[base + 2] = robot.baseActions[base + 2] + robot.residualActions[base + 2] * robot.actionScale.rotationScale;
+        robot.finalActions[base + 3] = robot.baseActions[base + 3] + robot.residualActions[base + 3] * robot.actionScale.slideScale;
+    }
+    
+    // For reaction wheels and burst, we just pass them through to ApplyActions
+    // (ApplyActions will handle their specific scales)
+    for (int i = NUM_SATELLITES * ACTIONS_PER_SATELLITE; i < ACTIONS_PER_ROBOT; ++i)
+    {
+        robot.finalActions[i] = robot.residualActions[i];
     }
 }
 
@@ -401,10 +420,11 @@ void CombatRobotLoader::ApplyActions(
 
     for (int i = 0; i < NUM_SATELLITES; ++i)
     {
-        const float vx = actions[i * ACTIONS_PER_SATELLITE + 0] * robot.actionScale.rotationScale;
-        const float vy = actions[i * ACTIONS_PER_SATELLITE + 1] * robot.actionScale.rotationScale;
-        const float vz = actions[i * ACTIONS_PER_SATELLITE + 2] * robot.actionScale.rotationScale;
-        const float slideVel = actions[i * ACTIONS_PER_SATELLITE + 3] * robot.actionScale.slideScale;
+        // actions here are already blended and scaled if coming from ApplyResidualActions
+        const float vx = actions[i * ACTIONS_PER_SATELLITE + 0];
+        const float vy = actions[i * ACTIONS_PER_SATELLITE + 1];
+        const float vz = actions[i * ACTIONS_PER_SATELLITE + 2];
+        const float slideVel = actions[i * ACTIONS_PER_SATELLITE + 3];
 
         if (robot.satellites[i].rotationJoint != nullptr)
         {
@@ -421,6 +441,7 @@ void CombatRobotLoader::ApplyActions(
     }
 
     const float reactionTorqueScale = 5000.0f;
+    // Indices 52, 53, 54 for reaction torque, 55 for burst
     JPH::Vec3 reactionTorque(
         actions[52] * reactionTorqueScale,
         actions[53] * reactionTorqueScale,
@@ -446,13 +467,20 @@ void CombatRobotLoader::ApplyResidualActions(
     const float* residualActions,
     JPH::PhysicsSystem* physicsSystem)
 {
+    // 1. Store the residual actions from the model
     for (int i = 0; i < ACTIONS_PER_ROBOT; ++i)
     {
         robot.residualActions[i] = residualActions[i];
     }
 
-    ComputeBasePIDActions(robot, physicsSystem, 1.0f / 60.0f);
+    // 2. Compute the base stability actions (PID)
+    // Using 120Hz control frequency to match viewer physicshz
+    ComputeBasePIDActions(robot, physicsSystem, 1.0f / 120.0f);
+
+    // 3. Blend and Scale
     BlendResidualWithBase(robot);
+
+    // 4. Apply to Jolt
     ApplyActions(robot, robot.finalActions.data(), physicsSystem);
 }
 
@@ -469,23 +497,28 @@ void CombatRobotLoader::PerformLidarScan(
     
     const JPH::NarrowPhaseQuery& narrowPhaseQuery = physicsSystem->GetNarrowPhaseQuery();
     
+    JPH::IgnoreMultipleBodiesFilter bodyFilter;
+    bodyFilter.IgnoreBody(robot.mainBodyId);
+    for (int i = 0; i < NUM_SATELLITES; ++i) {
+        if (!robot.satellites[i].coreBodyId.IsInvalid()) bodyFilter.IgnoreBody(robot.satellites[i].coreBodyId);
+        if (!robot.satellites[i].spikeBodyId.IsInvalid()) bodyFilter.IgnoreBody(robot.satellites[i].spikeBodyId);
+    }
+    
     for (int i = 0; i < NUM_LIDAR_RAYS; ++i)
     {
         JPH::Vec3 worldDir = rootRot * mLidarDirections[i];
         
         JPH::RRayCast ray;
         ray.mOrigin = rootPos;
-        ray.mDirection = JPH::RVec3(worldDir * maxDistance);
+        ray.mDirection = JPH::RVec3(worldDir); // Fixed: direction should be unit vector, not scaled
         
         JPH::RayCastResult result;
         
-        JPH::IgnoreSingleBodyFilter bodyFilter(robot.mainBodyId);
-        
         bool hit = narrowPhaseQuery.CastRay(ray, result, JPH::BroadPhaseLayerFilter(), JPH::ObjectLayerFilter(), bodyFilter);
         
-        if (hit)
+        if (hit && result.mFraction <= maxDistance)
         {
-            robot.lidarDistances[i] = static_cast<float>(result.mFraction * maxDistance);
+            robot.lidarDistances[i] = static_cast<float>(result.mFraction);
         }
         else
         {

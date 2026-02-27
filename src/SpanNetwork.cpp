@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <immintrin.h>
+#include <vector>
+#include <random>
 #include "AlignedAllocator.h"
 
 void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng)
@@ -26,6 +28,8 @@ void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots,
     }
     
     mBasisBuffer.resize(numBasis);
+    mBasisFunctionsBuffer.resize(inputDim * (mSplineDegree + 1));
+    mSpanIndicesBuffer.resize(inputDim);
     mTempOutput.resize(outputDim);
 }
 
@@ -107,107 +111,83 @@ void TensorProductBSpline::ComputeBasisFunctions(float x, float* basis, int& spa
 
 void TensorProductBSpline::Forward(const float* input, float* output)
 {
-    size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
-    
+    const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
+    const int degreePlus1 = mSplineDegree + 1;
+
+    // 1. Precompute basis functions for the input vector once
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
+    {
+        float x = std::tanh(input[inIdx]) * 0.5f + 0.5f;
+        int spanIdx;
+        ComputeBasisFunctions(x, &mBasisFunctionsBuffer[inIdx * degreePlus1], spanIdx);
+        mSpanIndicesBuffer[inIdx] = spanIdx;
+    }
+
+    // 2. Optimized Accumulation with precomputed cp pointers
     for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx)
     {
+        const float* cpBase = mControlPoints.data() + outIdx * numBasis;
         float sum = 0.0f;
-        
         for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
         {
-            float x = input[inIdx];
-            x = tanhf(x) * 0.5f + 0.5f;
-            
-            int spanIdx;
-            ComputeBasisFunctions(x, mBasisBuffer.data(), spanIdx);
+            const float* basisFuncs = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+            int spanIdx = mSpanIndicesBuffer[inIdx];
             
             for (int b = 0; b <= mSplineDegree; ++b)
             {
                 int basisIdx = spanIdx - mSplineDegree + b;
                 if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis)
                 {
-                    size_t cpIdx = outIdx * numBasis + static_cast<size_t>(basisIdx);
-                    sum += mBasisBuffer[b] * mControlPoints[cpIdx];
+                    sum += basisFuncs[b] * cpBase[basisIdx];
                 }
             }
         }
-        
         output[outIdx] = sum / static_cast<float>(mInputDim);
     }
 }
 
 void TensorProductBSpline::ForwardBatch(const float* input, float* output, int batchSize)
 {
-    for (int b = 0; b < batchSize; ++b)
-    {
-        Forward(input + b * mInputDim, output + b * mOutputDim);
+    const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
+    const int degreePlus1 = mSplineDegree + 1;
+    
+    // Precompute basis functions for all inputs in the batch
+    std::vector<float> batchBasis(batchSize * mInputDim * degreePlus1);
+    std::vector<int> batchSpanIndices(batchSize * mInputDim);
+    
+    for (int b = 0; b < batchSize; ++b) {
+        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+            float x = std::tanh(input[b * mInputDim + inIdx]) * 0.5f + 0.5f;
+            int spanIdx;
+            ComputeBasisFunctions(x, &batchBasis[b * mInputDim * degreePlus1 + inIdx * degreePlus1], spanIdx);
+            batchSpanIndices[b * mInputDim + inIdx] = spanIdx;
+        }
+    }
+    
+    // Optimized accumulation for all outputs in the batch
+    for (int b = 0; b < batchSize; ++b) {
+        for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx) {
+            const float* cpBase = mControlPoints.data() + outIdx * numBasis;
+            float sum = 0.0f;
+            for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+                const float* basisFuncs = &batchBasis[b * mInputDim * degreePlus1 + inIdx * degreePlus1];
+                int spanIdx = batchSpanIndices[b * mInputDim + inIdx];
+                
+                for (int k = 0; k <= mSplineDegree; ++k) {
+                    int basisIdx = spanIdx - mSplineDegree + k;
+                    if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
+                        sum += basisFuncs[k] * cpBase[basisIdx];
+                    }
+                }
+            }
+            output[b * mOutputDim + outIdx] = sum / static_cast<float>(mInputDim);
+        }
     }
 }
 
 void TensorProductBSpline::ForwardAVX2(const float* input, float* output)
 {
-    size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
-    
-    for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx)
-    {
-        __m256 sumVec = _mm256_setzero_ps();
-        size_t simdInputDim = mInputDim - (mInputDim % 8);
-        
-        for (size_t inIdx = 0; inIdx < simdInputDim; inIdx += 8)
-        {
-            __m256 x = _mm256_loadu_ps(input + inIdx);
-            
-            alignas(32) float xArr[8];
-            _mm256_store_ps(xArr, x);
-            alignas(32) float tanhArr[8];
-            for (int i = 0; i < 8; ++i)
-            {
-                tanhArr[i] = tanhf(xArr[i]) * 0.5f + 0.5f;
-            }
-            
-            for (int i = 0; i < 8; ++i)
-            {
-                float xi = tanhArr[i];
-                int spanIdx;
-                ComputeBasisFunctions(xi, mBasisBuffer.data(), spanIdx);
-                
-                for (int b = 0; b <= mSplineDegree; ++b)
-                {
-                    int basisIdx = spanIdx - mSplineDegree + b;
-                    if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis)
-                    {
-                        size_t cpIdx = outIdx * numBasis + static_cast<size_t>(basisIdx);
-                        sumVec = _mm256_add_ps(sumVec, _mm256_set1_ps(mBasisBuffer[b] * mControlPoints[cpIdx]));
-                    }
-                }
-            }
-        }
-        
-        alignas(32) float sumArr[8];
-        _mm256_store_ps(sumArr, sumVec);
-        float sum = sumArr[0] + sumArr[1] + sumArr[2] + sumArr[3] + sumArr[4] + sumArr[5] + sumArr[6] + sumArr[7];
-        
-        for (size_t inIdx = simdInputDim; inIdx < mInputDim; ++inIdx)
-        {
-            float x = input[inIdx];
-            x = tanhf(x) * 0.5f + 0.5f;
-            
-            int spanIdx;
-            ComputeBasisFunctions(x, mBasisBuffer.data(), spanIdx);
-            
-            for (int b = 0; b <= mSplineDegree; ++b)
-            {
-                int basisIdx = spanIdx - mSplineDegree + b;
-                if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis)
-                {
-                    size_t cpIdx = outIdx * numBasis + static_cast<size_t>(basisIdx);
-                    sum += mBasisBuffer[b] * mControlPoints[cpIdx];
-                }
-            }
-        }
-        
-        output[outIdx] = sum / static_cast<float>(mInputDim);
-    }
+    Forward(input, output);
 }
 
 void SpanNetwork::Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt19937& rng)
@@ -262,9 +242,34 @@ void SpanNetwork::Forward(const float* input, float* output)
 
 void SpanNetwork::ForwardBatch(const float* input, float* output, int batchSize)
 {
-    for (int b = 0; b < batchSize; ++b)
-    {
-        Forward(input + b * mInputDim, output + b * mOutputDim);
+    if (mLayers.empty()) return;
+    
+    int maxDim = 0;
+    for (size_t i = 0; i < mLayers.size(); ++i) {
+        maxDim = std::max(maxDim, (int)std::max(mLayerInputDims[i], mLayerOutputDims[i]));
+    }
+    
+    AlignedVector32<float> activationBuffer(maxDim * batchSize * 2);
+    AlignedVector32<float> tempBuffer(maxDim * batchSize);
+    
+    // First layer
+    mLayers[0].ForwardBatch(input, tempBuffer.data(), batchSize);
+    if (mLayers.size() > 1) {
+        ForwardMoLU_AVX2(tempBuffer.data(), mLayerOutputDims[0] * batchSize);
+    }
+    
+    // Hidden layers
+    for (size_t i = 1; i < mLayers.size() - 1; ++i) {
+        mLayers[i].ForwardBatch(tempBuffer.data(), activationBuffer.data(), batchSize);
+        ForwardMoLU_AVX2(activationBuffer.data(), mLayerOutputDims[i] * batchSize);
+        std::swap(tempBuffer, activationBuffer);
+    }
+    
+    // Last layer
+    if (mLayers.size() > 1) {
+        mLayers.back().ForwardBatch(tempBuffer.data(), output, batchSize);
+    } else {
+        std::copy(tempBuffer.begin(), tempBuffer.begin() + batchSize * mOutputDim, output);
     }
 }
 
@@ -337,18 +342,16 @@ void SpanActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, 
      
      size_t actorInputDim = stateDim + latentDim;
     std::vector<SpanLayerConfig> actorConfig = {
-        {actorInputDim, hiddenDim, 8, 3},
-        {hiddenDim, hiddenDim, 8, 3},
-        {hiddenDim, actionDim, 8, 3}
+        {actorInputDim, hiddenDim, 4, 2},
+        {hiddenDim, actionDim, 4, 2}
     };
      mActor.Init(actorConfig, rng);
      mActorTarget.Init(actorConfig, rng);
      
      size_t criticInputDim = stateDim + actionDim + latentDim;
     std::vector<SpanLayerConfig> criticConfig = {
-        {criticInputDim, hiddenDim, 8, 3},
-        {hiddenDim, hiddenDim, 8, 3},
-        {hiddenDim, 4, 8, 3}
+        {criticInputDim, hiddenDim, 4, 2},
+        {hiddenDim, 4, 4, 2}
     };
     mCritic1.Init(criticConfig, rng);
     mCritic2.Init(criticConfig, rng);
@@ -362,13 +365,13 @@ void SpanActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, 
     mNoiseBuffer.resize(actionDim);
 }
 
-void SpanActorCritic::SelectAction(const float* state, float* action, float* logProb, bool addNoise)
+void SpanActorCritic::SelectAction(const float* state, float* action, float* logProb, bool addNoise, int envIdx)
 {
     mLatentMemory.StepLatentDynamics(state, 1);
     
     AlignedVector32<float> zPos(LATENT_DIM);
     AlignedVector32<float> zVel(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), zVel.data(), 0);
+    mLatentMemory.GetLatentStates(zPos.data(), zVel.data(), envIdx);
     
     size_t combinedDim = mStateDim + mLatentDim;
     alignas(32) AlignedVector32<float> combined(combinedDim);
