@@ -14,30 +14,32 @@
 
 using AlignedVector32f = std::vector<float, AlignedAllocator<float, 32>>;
 
-constexpr int VECTOR_REWARD_DIM = 4;
+constexpr int VECTOR_REWARD_DIM = 5;
 
 struct VectorReward
 {
     float damage_dealt = 0.0f;
     float damage_taken = 0.0f;
-    float airtime = 0.0f;
+    float koth = 0.0f;
     float energy_used = 0.0f;
+    float altitude = 0.0f;
 
     VectorReward() = default;
     VectorReward(const VectorReward& other) = default;
     VectorReward& operator=(const VectorReward& other) = default;
 
-    float Dot(const std::array<float, 4>& preference) const
+    float Dot(const std::array<float, 5>& preference) const
     {
         return damage_dealt * preference[0] +
                damage_taken * preference[1] +
-               airtime * preference[2] +
-               energy_used * preference[3];
+               koth * preference[2] +
+               energy_used * preference[3] +
+               altitude * preference[4];
     }
 
     float Scalar() const
     {
-        return damage_dealt + damage_taken + airtime + energy_used;
+        return damage_dealt + damage_taken + koth + energy_used + altitude;
     }
 };
 

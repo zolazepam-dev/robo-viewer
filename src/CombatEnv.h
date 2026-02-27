@@ -120,6 +120,9 @@ private:
     bool mDone = false;
     int mObservationDim = OBSERVATION_DIM;
 
+    JPH::RVec3 mKothPoint{0,0,0};
+    JPH::BodyID mKothVisualId;
+
     float mPrevHp1 = INITIAL_HP;
     float mPrevHp2 = INITIAL_HP;
     float mPrevEnergy1 = 0.0f;

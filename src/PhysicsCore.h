@@ -17,6 +17,10 @@ namespace Layers
     // Every parallel environment gets its own exclusive layer starting from 1
     // e.g., Env 0 -> Layer 1, Env 1 -> Layer 2.
     static constexpr JPH::ObjectLayer MOVING_BASE = 1;
+
+    // Ghost layers for visuals that should NOT collide with anything
+    // Offset by a large enough number to not overlap with MOVING_BASE
+    static constexpr JPH::ObjectLayer GHOST_BASE = 5000;
 }
 
 namespace BroadPhaseLayers
@@ -74,12 +78,16 @@ class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter
 public:
     virtual bool ShouldCollide(JPH::ObjectLayer inObject1, JPH::ObjectLayer inObject2) const override
     {
-        // 1. Static objects don't collide with other static objects
+        // 1. Ghost layers NEVER collide with anything
+        if (inObject1 >= Layers::GHOST_BASE || inObject2 >= Layers::GHOST_BASE) return false;
+
+        // 2. Static objects don't collide with other static objects
         if (inObject1 == Layers::STATIC && inObject2 == Layers::STATIC) return false;
- // 2. Everything collides with the static environment (Floor)
+
+        // 3. Everything collides with the static environment (Floor)
         if (inObject1 == Layers::STATIC || inObject2 == Layers::STATIC) return true;
 
-        // 3. Two dynamic objects ONLY collide if they belong to the exact same environment
+        // 4. Two dynamic objects ONLY collide if they belong to the exact same environment
         return inObject1 == inObject2;
     }
 };

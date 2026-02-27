@@ -4,9 +4,11 @@
 
 #include <cmath>
 #include <iostream>
+#include <random>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
 
 void CombatContactListener::OnContactAdded(const JPH::Body& body1, const JPH::Body& body2,
                                             const JPH::ContactManifold& manifold, JPH::ContactSettings& settings)
@@ -58,33 +60,66 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
 
-    // Fixed non-overlapping spawn
-    JPH::RVec3 pos1(-10.0f, 2.0f, 0.0f);
-    JPH::RVec3 pos2(10.0f, 2.0f, 0.0f);
-
-    mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
-    mRobot1.type = RobotType::INTERNAL_ENGINE;
-    
-    mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
-    mRobot2.type = RobotType::INTERNAL_ENGINE;
-
-    mStepCount = 0;
-    mDone = false;
-    mPrevHp1 = INITIAL_HP;
-    mPrevHp2 = INITIAL_HP;
-    CombatContactListener::Get().ResetForceReadings(mEnvIndex);
+    Reset();
 }
 
 void CombatEnv::Reset()
 {
+    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+    
+    // 1. Remove old bodies if they exist
+    auto removeRobot = [&](CombatRobotData& robot) {
+        if (!robot.mainBodyId.IsInvalid()) {
+            bodyInterface.RemoveBody(robot.mainBodyId);
+            bodyInterface.DestroyBody(robot.mainBodyId);
+            robot.mainBodyId = JPH::BodyID();
+        }
+        for (int i = 0; i < NUM_SATELLITES; ++i) {
+            if (!robot.satellites[i].coreBodyId.IsInvalid()) {
+                bodyInterface.RemoveBody(robot.satellites[i].coreBodyId);
+                bodyInterface.DestroyBody(robot.satellites[i].coreBodyId);
+                robot.satellites[i].coreBodyId = JPH::BodyID();
+            }
+            if (!robot.satellites[i].spikeBodyId.IsInvalid()) {
+                bodyInterface.RemoveBody(robot.satellites[i].spikeBodyId);
+                bodyInterface.DestroyBody(robot.satellites[i].spikeBodyId);
+                robot.satellites[i].spikeBodyId = JPH::BodyID();
+            }
+        }
+    };
+
+    removeRobot(mRobot1);
+    removeRobot(mRobot2);
+
+    // Remove old KOTH visual
+    if (!mKothVisualId.IsInvalid()) {
+        bodyInterface.RemoveBody(mKothVisualId);
+        bodyInterface.DestroyBody(mKothVisualId);
+        mKothVisualId = JPH::BodyID();
+    }
+
     mStepCount = 0;
     mDone = false;
     mPrevHp1 = INITIAL_HP;
     mPrevHp2 = INITIAL_HP;
+    mPrevEnergy1 = 0.0f;
+    mPrevEnergy2 = 0.0f;
     CombatContactListener::Get().ResetForceReadings(mEnvIndex);
 
-    JPH::RVec3 pos1(-10.0f, 2.0f, 0.0f);
-    JPH::RVec3 pos2(10.0f, 2.0f, 0.0f);
+    // Randomize KOTH point
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<float> distXZ(-15.0f, 15.0f);
+    std::uniform_real_distribution<float> distY(2.0f, 12.0f);
+    mKothPoint = JPH::RVec3(distXZ(rng), distY(rng), distXZ(rng));
+
+    // Create Visual Sphere for KOTH
+    JPH::SphereShapeSettings kothShape(0.8f);
+    JPH::BodyCreationSettings kothSettings(kothShape.Create().Get(), mKothPoint, JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::GHOST_BASE + mEnvIndex);
+    mKothVisualId = bodyInterface.CreateAndAddBody(kothSettings, JPH::EActivation::DontActivate);
+
+    // 2. Load fresh robots at the high spawn point
+    JPH::RVec3 pos1(-10.0f, 5.0f, 0.0f);
+    JPH::RVec3 pos2(10.0f, 5.0f, 0.0f);
 
     mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
     mRobot1.type = RobotType::INTERNAL_ENGINE;
@@ -219,6 +254,12 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     obs[idx++] = (float)relPos.GetX(); obs[idx++] = (float)relPos.GetY(); obs[idx++] = (float)relPos.GetZ();
     obs[idx++] = oppVel.GetX(); obs[idx++] = oppVel.GetY(); obs[idx++] = oppVel.GetZ();
 
+    // KOTH Point (Relative)
+    JPH::RVec3 relKoth = mKothPoint - myPos;
+    obs[idx++] = (float)relKoth.GetX() / 20.0f;
+    obs[idx++] = (float)relKoth.GetY() / 20.0f;
+    obs[idx++] = (float)relKoth.GetZ() / 20.0f;
+
     // Satellite / Engine states
     for (int i = 0; i < NUM_SATELLITES; ++i) {
         if (!robot.satellites[i].coreBodyId.IsInvalid()) {
@@ -281,43 +322,83 @@ void CombatEnv::CalculateRewards(StepResult& result)
 {
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     
-    // 1. Proximity Reward (encourages engagement)
-    float dist = static_cast<float>((bodyInterface.GetPosition(mRobot2.mainBodyId) - bodyInterface.GetPosition(mRobot1.mainBodyId)).Length());
-    
-    // Smooth proximity: positive when close, negative when far. Sweet spot around 2.0m-5.0m
-    float prox1 = 0.0f;
-    if (dist < 20.0f) {
-        prox1 = 0.1f * (1.0f - (dist / 5.0f)); 
-    } else {
-        prox1 = -0.5f; // Hard penalty for fleeing
-    }
-
-    // 2. Damage Rewards (The primary objective)
-    // We use the delta damage since last step
-    float dmgDealt1 = mRobot1.totalDamageDealt;
-    float dmgTaken1 = mRobot1.totalDamageTaken;
-    float dmgDealt2 = mRobot2.totalDamageDealt;
-    float dmgTaken2 = mRobot2.totalDamageTaken;
-
-    result.reward1.damage_dealt = dmgDealt1;
-    result.reward1.damage_taken = -dmgTaken1;
-    
-    result.reward2.damage_dealt = dmgDealt2;
-    result.reward2.damage_taken = -dmgTaken2;
-
-    // 3. Efficiency & Survival
-    result.reward1.energy_used = -mRobot1.totalEnergyUsed * 0.01f;
-    result.reward2.energy_used = -mRobot2.totalEnergyUsed * 0.01f;
-
-    // 4. Airtime / Movement bonus
+    JPH::RVec3 pos1 = bodyInterface.GetPosition(mRobot1.mainBodyId);
+    JPH::RVec3 pos2 = bodyInterface.GetPosition(mRobot2.mainBodyId);
     JPH::Vec3 vel1 = bodyInterface.GetLinearVelocity(mRobot1.mainBodyId);
     JPH::Vec3 vel2 = bodyInterface.GetLinearVelocity(mRobot2.mainBodyId);
-    result.reward1.airtime = vel1.Length() * 0.01f;
-    result.reward2.airtime = vel2.Length() * 0.01f;
 
-    // Add proximity as a "shape" to damage_dealt for now so it's visible in simple scalar
-    result.reward1.damage_dealt += prox1;
-    result.reward2.damage_dealt += prox1; // Mirror for symmetry
+    // 1. Proximity & Engagement Reward
+    float dist = static_cast<float>((pos2 - pos1).Length());
+    
+    float prox1 = 0.0f;
+    if (dist < 15.0f) {
+        prox1 = 0.1f * (1.0f - (dist / 15.0f)); 
+    } else {
+        prox1 = -0.05f * (dist - 15.0f); // Scaling penalty for being far
+    }
+
+    // Directional Attack Reward (moving toward opponent)
+    JPH::Vec3 toOpponent1 = JPH::Vec3(pos2 - pos1).Normalized();
+    JPH::Vec3 toOpponent2 = JPH::Vec3(pos1 - pos2).Normalized();
+    float approach1 = vel1.Dot(toOpponent1) * 0.02f;
+    float approach2 = vel2.Dot(toOpponent2) * 0.02f;
+
+    // Wall Penalty (Arena size is 36, so walls are at +/- 18)
+    auto calcWallPenalty = [](const JPH::RVec3& p) {
+        float px = std::abs(p.GetX());
+        float pz = std::abs(p.GetZ());
+        float maxD = std::max(px, pz);
+        if (maxD > 14.0f) return -0.1f * (maxD - 14.0f); // Gradual penalty starting 4m from wall
+        return 0.0f;
+    };
+    float wallPenalty1 = calcWallPenalty(pos1);
+    float wallPenalty2 = calcWallPenalty(pos2);
+
+    // 2. Damage Rewards (The primary objective)
+    // We compute the true delta using HP changes
+    float deltaDmgTaken1 = std::max(0.0f, mPrevHp1 - mRobot1.hp);
+    float deltaDmgTaken2 = std::max(0.0f, mPrevHp2 - mRobot2.hp);
+    
+    // In a 1v1, damage taken by 2 is damage dealt by 1
+    float deltaDmgDealt1 = deltaDmgTaken2;
+    float deltaDmgDealt2 = deltaDmgTaken1;
+
+    mPrevHp1 = mRobot1.hp;
+    mPrevHp2 = mRobot2.hp;
+
+    result.reward1.damage_dealt = deltaDmgDealt1;
+    result.reward1.damage_taken = -deltaDmgTaken1;
+    
+    result.reward2.damage_dealt = deltaDmgDealt2;
+    result.reward2.damage_taken = -deltaDmgTaken2;
+
+    // 3. Efficiency & Survival
+    float deltaEnergy1 = std::max(0.0f, mRobot1.totalEnergyUsed - mPrevEnergy1);
+    float deltaEnergy2 = std::max(0.0f, mRobot2.totalEnergyUsed - mPrevEnergy2);
+    mPrevEnergy1 = mRobot1.totalEnergyUsed;
+    mPrevEnergy2 = mRobot2.totalEnergyUsed;
+
+    result.reward1.energy_used = -deltaEnergy1 * 0.01f;
+    result.reward2.energy_used = -deltaEnergy2 * 0.01f;
+
+    // 4. KOTH Reward (Whoever is closest to the random target point)
+    float distToKoth1 = static_cast<float>((pos1 - mKothPoint).Length());
+    float distToKoth2 = static_cast<float>((pos2 - mKothPoint).Length());
+
+    if (distToKoth1 < distToKoth2) {
+        result.reward1.koth = 0.1f;
+        result.reward2.koth = 0.0f;
+    } else {
+        result.reward1.koth = 0.0f;
+        result.reward2.koth = 0.1f;
+    }
+
+    // 5. Altitude
+    result.reward1.altitude = std::max(0.0f, (float)pos1.GetY() * 0.05f);
+    result.reward2.altitude = std::max(0.0f, (float)pos2.GetY() * 0.05f);
+
+    // Shape the damage reward to encourage engagement
+    result.reward1.damage_dealt += (prox1 + approach1 + wallPenalty1);
+    result.reward2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
 }
-
 CombatContactListener& CombatContactListener::Get() { static CombatContactListener instance; return instance; }

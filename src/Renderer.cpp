@@ -355,10 +355,11 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
 
     const JPH::ObjectLayer staticLayer = Layers::STATIC;
     const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
+    const JPH::ObjectLayer ghostLayer = Layers::GHOST_BASE + envIndex;
 
     auto renderBody = [&](const JPH::BodyID& body_id, float forcedAlpha = -1.0f) {
         JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
-        if (layer != staticLayer && layer != envBaseLayer) return;
+        if (layer != staticLayer && layer != envBaseLayer && layer != ghostLayer) return;
 
         JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
         const JPH::Shape* shape_ptr = shape.GetPtr();
@@ -422,6 +423,11 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
                 metallic = 0.1f;
                 roughness = 0.9f;
                 if (transform.GetTranslation().GetY() < -0.1f) objectColor = glm::vec3(0.2f, 0.2f, 0.25f);
+            } else if (layer == ghostLayer) {
+                objectColor = glm::vec3(1.0f, 0.2f, 0.2f); // Bright red for KOTH
+                alpha = 0.6f;
+                metallic = 0.5f;
+                roughness = 0.5f;
             } else if (body_index % 3 == 0) {
                 objectColor = glm::vec3(0.0f, 0.8f, 0.8f); // Cyan
             } else if (body_index % 3 == 1) {

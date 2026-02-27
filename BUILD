@@ -229,3 +229,22 @@ cc_binary(
         "-march=native"
     ],
 )
+
+cc_binary(
+    name = "micro_board",
+    srcs = ["micro_board.cpp"],
+    deps = [
+        "@morphologica",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+    ],
+    linkopts = ["-lGL", "-lfreetype", "-lpthread"],
+    copts = [
+        "-std=c++20",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+)

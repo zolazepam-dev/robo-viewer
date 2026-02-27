@@ -25,3 +25,12 @@ http_archive(
     strip_prefix = "JoltPhysics-5.0.0",
     url = "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.0.0.tar.gz",
 )
+
+# --- Morphologica for visualization ---
+http_archive(
+    name = "morphologica",
+    build_file = "@//third_party:morphologica.BUILD",
+    sha256 = "8dbd93433cca4355e4eb75f99778d0806de3d2693217ed811a7a516b23e3510d",
+    strip_prefix = "morphologica-4.1",
+    url = "https://github.com/ABRG-Models/morphologica/archive/refs/tags/v4.1.tar.gz",
+)

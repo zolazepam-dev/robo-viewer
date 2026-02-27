@@ -87,7 +87,7 @@ private:
     TD3Config mConfig;
     std::mt19937 mRng;
     
-    std::array<float, VECTOR_REWARD_DIM> mPreferenceVector = {0.5f, 0.3f, 0.15f, 0.05f};
+    std::array<float, VECTOR_REWARD_DIM> mPreferenceVector = {0.5f, 0.3f, 0.1f, 0.05f, 0.05f};
     
     SpanActorCritic mModel;
     OpponentPool mOpponentPool;

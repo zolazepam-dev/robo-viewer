@@ -72,6 +72,14 @@ void process_input(GLFWwindow* window, float dt) {
 void EnsureDir(const std::string& path) { if (!fs::exists(path)) fs::create_directories(path); }
 
 int main(int argc, char* argv[]) {
+    int numEnvs = 1;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--envs" && i + 1 < argc) {
+            numEnvs = std::stoi(argv[++i]);
+        }
+    }
+
     const char* home = std::getenv("HOME");
     std::string checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints";
     EnsureDir(checkpointDir);
@@ -88,8 +96,8 @@ int main(int argc, char* argv[]) {
     CyberpunkUI ui;
     ui.Init(window);
 
-    // Single environment for viewing
-    VectorizedEnv vecEnv(1);
+    // Initializing vectorized environments
+    VectorizedEnv vecEnv(numEnvs);
     vecEnv.Init();
     
     Renderer renderer(1280, 720);
@@ -99,6 +107,13 @@ int main(int argc, char* argv[]) {
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
+    
+    // Auto-load weights if available
+    std::string finalModelPath = checkpointDir + "/model_final.bin";
+    if (fs::exists(finalModelPath)) {
+        trainer.Load(finalModelPath);
+        std::cout << "[main_train] Auto-loaded weights from: " << finalModelPath << std::endl;
+    }
     
     float timeScale = 1.0f;
     float physicsHz = 120.0f;
@@ -110,6 +125,7 @@ int main(int argc, char* argv[]) {
     long long totalSteps = 0;
     float sps = 0;
     int step_counter = 0;
+    int renderEnvIdx = 0;
     float currentRew1 = 0.0f;
     float currentRew2 = 0.0f;
     VectorReward lastVR1, lastVR2;
@@ -139,21 +155,25 @@ int main(int argc, char* argv[]) {
 
         if (trainEnabled && timeScale > 0.01f) {
             const auto& obs = vecEnv.GetObservations();
-            AlignedVector32<float> robotActions(2 * actionDim);
+            int numEnvs = vecEnv.GetNumEnvs();
+            AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
             
-            // Generate actions for both robots in the env
-            // Robot 1 uses latent slot 0, Robot 2 uses latent slot 1
-            trainer.SelectActionWithLatent((float*)obs.data(), robotActions.data(), 0);
-            trainer.SelectActionWithLatent((float*)obs.data() + stateDim, robotActions.data() + actionDim, 1);
+            // Generate actions for all robots in all envs
+            for (int i = 0; i < numEnvs; ++i) {
+                // Each environment has 2 robots. 
+                // We use envIdx * 2 and envIdx * 2 + 1 as latent slots to keep them distinct.
+                trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim), robotActions.data() + (i * 2 * actionDim), i * 2);
+                trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
+            }
             
-            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
+            for (int i = 0; i < numEnvs; ++i) {
                 vecEnv.GetEnv(i).QueueActions(robotActions.data() + (i * 2 * actionDim), robotActions.data() + (i * 2 * actionDim + actionDim));
             }
             
             PhysicsCore* core = vecEnv.GetPhysicsCore();
             core->GetPhysicsSystem().Update(1.0f / physicsHz, 1, core->GetTempAllocator(), core->GetJobSystem());
             
-            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
+            for (int i = 0; i < numEnvs; ++i) {
                 StepResult res = vecEnv.GetEnv(i).HarvestState();
                 
                 if (i == 0) {
@@ -186,7 +206,7 @@ int main(int argc, char* argv[]) {
         if (spsElapsed.count() >= 1.0f) { sps = step_counter / spsElapsed.count(); step_counter = 0; lastSpsTime = now; }
 
         if (renderEnabled && !headlessTurbo) {
-            renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, 0, gCam.front);
+            renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, renderEnvIdx, gCam.front);
         } else {
             glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -199,15 +219,20 @@ int main(int argc, char* argv[]) {
         ImGui::Text("STATUS: %s", trainEnabled ? "TRAINING" : "PAUSED");
         ImGui::Text("SPS: %.0f | Total Steps: %lld", sps, totalSteps);
         
+        if (numEnvs > 1) {
+            ImGui::SliderInt("View Env", &renderEnvIdx, 0, numEnvs - 1);
+        }
+
         {
-            auto& r1 = vecEnv.GetEnv(0).GetRobot1();
-            auto& r2 = vecEnv.GetEnv(0).GetRobot2();
+            auto& r1 = vecEnv.GetEnv(renderEnvIdx).GetRobot1();
+            auto& r2 = vecEnv.GetEnv(renderEnvIdx).GetRobot2();
             
-            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f | Scalar Rew: %.3f", r1.hp, currentRew1);
+            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f", r1.hp);
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR1.damage_dealt, lastVR1.damage_taken);
-                ImGui::Text("Air: %.3f | Energy: %.3f", lastVR1.airtime, lastVR1.energy_used);
+                ImGui::Text("KOTH: %.3f | Energy: %.3f", lastVR1.koth, lastVR1.energy_used);
+                ImGui::Text("Alt: %.3f", lastVR1.altitude);
                 ImGui::EndTooltip();
             }
 
@@ -215,7 +240,8 @@ int main(int argc, char* argv[]) {
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR2.damage_dealt, lastVR2.damage_taken);
-                ImGui::Text("Air: %.3f | Energy: %.3f", lastVR2.airtime, lastVR2.energy_used);
+                ImGui::Text("KOTH: %.3f | Energy: %.3f", lastVR2.koth, lastVR2.energy_used);
+                ImGui::Text("Alt: %.3f", lastVR2.altitude);
                 ImGui::EndTooltip();
             }
         }
