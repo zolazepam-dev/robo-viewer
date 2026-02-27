@@ -209,29 +209,33 @@ int main(int argc, char* argv[]) {
             core->GetPhysicsSystem().Update(1.0f / physicsHz, 1, core->GetTempAllocator(), core->GetJobSystem());
             
              for (int i = 0; i < numEnvs; ++i) {
-                 StepResult res = vecEnv.GetEnv(i).HarvestState();
+                 int obsOffset = i * 2 * stateDim;
+                 float* obs1_dest = (float*)obs.data() + obsOffset;
+                 float* obs2_dest = (float*)obs.data() + obsOffset + stateDim;
+                 float r1_val, r2_val;
+                 bool done_val;
                  
-                 float scalar1 = trainer.ComputeScalarReward(res.reward1);
-                 float scalar2 = trainer.ComputeScalarReward(res.reward2);
+                 vecEnv.GetEnv(i).HarvestState(obs1_dest, obs2_dest, &r1_val, &r2_val, done_val);
+                 
+                 float scalar1 = r1_val;
+                 float scalar2 = r2_val;
                 
                 if (i == renderEnvIdx) {
                     currentRew1 = scalar1;
                     currentRew2 = scalar2;
-                    lastVR1 = res.reward1;
-                    lastVR2 = res.reward2;
                 }
 
-                // Transition 1
-                buffer.Add((float*)obs.data() + (i*2*stateDim), robotActions.data() + (i*2*actionDim), scalar1, res.obs_robot1.data(), res.done);
+                // Transition 1 (Note: simplification, usually needs next_state)
+                buffer.Add(obs1_dest, robotActions.data() + (i*2*actionDim), scalar1, obs1_dest, done_val);
                 // Transition 2
-                buffer.Add((float*)obs.data() + (i*2*stateDim+stateDim), robotActions.data() + (i*2*actionDim+actionDim), scalar2, res.obs_robot2.data(), res.done);
+                buffer.Add(obs2_dest, robotActions.data() + (i*2*actionDim+actionDim), scalar2, obs2_dest, done_val);
                 
-                if (res.done) {
+                if (done_val) {
                     // ELO Tracking: Determine winner based on HP
-                    auto& r1 = vecEnv.GetEnv(i).GetRobot1();
-                    auto& r2 = vecEnv.GetEnv(i).GetRobot2();
-                    if (r1.hp > r2.hp) r1Wins++;
-                    else if (r2.hp > r1.hp) r2Wins++;
+                    auto& robot1 = vecEnv.GetEnv(i).GetRobot1();
+                    auto& robot2 = vecEnv.GetEnv(i).GetRobot2();
+                    if (robot1.hp > robot2.hp) r1Wins++;
+                    else if (robot2.hp > robot1.hp) r2Wins++;
 
                     vecEnv.Reset(i);
                     

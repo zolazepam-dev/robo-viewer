@@ -232,6 +232,44 @@ cc_binary(
 
 cc_binary(
     name = "micro_board",
+    srcs = ["micro_board.cpp"],
+    deps = [
+        ":local_morphologica",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+    ],
+    linkopts = ["-lGL", "-lfreetype", "-lpthread"],
+    copts = [
+        "-std=c++20",
+        "-O3",
+        "-I/usr/include/freetype2",
+        "-Imorphologica",
+        "-Imorphologica/fonts",
+        "'-DMORPH_FONTS_DIR=\"fonts\"'",
+    ],
+)
+
+cc_library(
+    name = "local_morphologica",
+    hdrs = glob(["morphologica/morph/**/*.h", "morphologica/morph/**/*.hpp"]),
+    includes = ["morphologica"],
+    copts = ["-std=c++20"],
+    deps = [
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+    ],
+    linkopts = [
+        "-lGL",
+        "-lfreetype",
+        "-lpthread",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "micro_board_simple",
     srcs = ["micro_board_simple.cpp"],
     copts = ["-std=c++17", "-O3"],
 )

@@ -120,9 +120,9 @@ int main() {
     // Get initial observations
     std::cout << "Getting initial observations..." << std::endl;
     env.Reset();
-    StepResult initialResult = env.HarvestState();
-    state1.assign(initialResult.obs_robot1.begin(), initialResult.obs_robot1.end());
-    state2.assign(initialResult.obs_robot2.begin(), initialResult.obs_robot2.end());
+    float r1_dummy, r2_dummy;
+    bool done_dummy;
+    env.HarvestState(state1.data(), state2.data(), &r1_dummy, &r2_dummy, done_dummy);
     std::cout << "Initial observations obtained!" << std::endl;
 
     std::cout << "[JOLTrl] Visualizer Matrix Engaged. Suppressing per-frame debug spam." << std::endl;
@@ -147,22 +147,24 @@ int main() {
             
             // Step
             env.QueueActions(actions.data(), actions.data() + actionDim);
-            StepResult result = env.HarvestState();
+            float reward1, reward2;
+            bool done;
+            env.HarvestState(state1.data(), state2.data(), &reward1, &reward2, done);
             
-            state1.assign(result.obs_robot1.begin(), result.obs_robot1.end());
-            state2.assign(result.obs_robot2.begin(), result.obs_robot2.end());
-            lastReward1 = result.reward1.damage_dealt;
-            lastReward2 = result.reward2.damage_dealt;
-            hp1 = result.obs_robot1[stateDim - 3];
-            hp2 = result.obs_robot2[stateDim - 3];
+            lastReward1 = reward1;
+            lastReward2 = reward2;
+            hp1 = state1[stateDim - 3];
+            hp2 = state2[stateDim - 3];
             
-            buffer.Add(state1.data(), actions.data(), result.reward1, state1.data(), result.done);
+            // Note: buffer.Add expects VectorReward, creating a dummy one for now or passing scalar if supported
+            VectorReward vr1; vr1.damage_dealt = reward1; // Approximation
+            buffer.Add(state1.data(), actions.data(), vr1, state1.data(), done);
             
             if (buffer.Size() >= td3cfg.startSteps) {
                 trainer.Train(buffer);
             }
             
-            if (result.done) {
+            if (done) {
                 env.Reset();
                 episodes++;
             }

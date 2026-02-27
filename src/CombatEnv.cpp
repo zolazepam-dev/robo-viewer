@@ -253,11 +253,11 @@ void CombatEnv::UpdateForceSensors()
     updateStress(mRobot2, 1);
 }
 
-void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const CombatRobotData& robot,
+void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
                                         const CombatRobotData& opponent, const ForceSensorReading& forces)
 {
     if (robot.mainBodyId.IsInvalid() || opponent.mainBodyId.IsInvalid()) {
-        std::fill(obs.begin(), obs.end(), 0.0f);
+        std::memset(obs, 0, OBSERVATION_DIM * sizeof(float));
         return;
     }
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
@@ -343,7 +343,7 @@ void CombatEnv::BuildObservationVector(AlignedVector32<float>& obs, const Combat
     while (idx < 256) obs[idx++] = 0.0f;
 }
 
-void CombatEnv::CalculateRewards(StepResult& result)
+void CombatEnv::CalculateRewards(float& r1, float& r2)
 {
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     
@@ -391,11 +391,12 @@ void CombatEnv::CalculateRewards(StepResult& result)
     mPrevHp1 = mRobot1.hp;
     mPrevHp2 = mRobot2.hp;
 
-    result.reward1.damage_dealt = deltaDmgDealt1;
-    result.reward1.damage_taken = -deltaDmgTaken1;
+    VectorReward vr1, vr2;
+    vr1.damage_dealt = deltaDmgDealt1;
+    vr1.damage_taken = -deltaDmgTaken1;
     
-    result.reward2.damage_dealt = deltaDmgDealt2;
-    result.reward2.damage_taken = -deltaDmgTaken2;
+    vr2.damage_dealt = deltaDmgDealt2;
+    vr2.damage_taken = -deltaDmgTaken2;
 
     // 3. Efficiency & Survival
     float deltaEnergy1 = std::max(0.0f, mRobot1.totalEnergyUsed - mPrevEnergy1);
@@ -403,27 +404,30 @@ void CombatEnv::CalculateRewards(StepResult& result)
     mPrevEnergy1 = mRobot1.totalEnergyUsed;
     mPrevEnergy2 = mRobot2.totalEnergyUsed;
 
-    result.reward1.energy_used = -deltaEnergy1 * 0.01f;
-    result.reward2.energy_used = -deltaEnergy2 * 0.01f;
+    vr1.energy_used = -deltaEnergy1 * 0.01f;
+    vr2.energy_used = -deltaEnergy2 * 0.01f;
 
     // 4. KOTH Reward (Whoever is closest to the random target point)
     float distToKoth1 = static_cast<float>((pos1 - mKothPoint).Length());
     float distToKoth2 = static_cast<float>((pos2 - mKothPoint).Length());
 
     if (distToKoth1 < distToKoth2) {
-        result.reward1.koth = 0.1f;
-        result.reward2.koth = 0.0f;
+        vr1.koth = 0.1f;
+        vr2.koth = 0.0f;
     } else {
-        result.reward1.koth = 0.0f;
-        result.reward2.koth = 0.1f;
+        vr1.koth = 0.0f;
+        vr2.koth = 0.1f;
     }
 
     // 5. Altitude
-    result.reward1.altitude = std::max(0.0f, (float)pos1.GetY() * 0.05f);
-    result.reward2.altitude = std::max(0.0f, (float)pos2.GetY() * 0.05f);
+    vr1.altitude = std::max(0.0f, (float)pos1.GetY() * 0.05f);
+    vr2.altitude = std::max(0.0f, (float)pos2.GetY() * 0.05f);
 
     // Shape the damage reward to encourage engagement
-    result.reward1.damage_dealt += (prox1 + approach1 + wallPenalty1);
-    result.reward2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
+    vr1.damage_dealt += (prox1 + approach1 + wallPenalty1);
+    vr2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
+
+    r1 = vr1.Scalar();
+    r2 = vr2.Scalar();
 }
 CombatContactListener& CombatContactListener::Get() { static CombatContactListener instance; return instance; }

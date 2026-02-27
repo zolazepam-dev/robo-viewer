@@ -22,24 +22,6 @@ constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz
 constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
 constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
 
-struct StepResult
-{
-    static constexpr int OBS_DIM = OBSERVATION_DIM;
-
-    AlignedVector32<float> obs_robot1;
-    AlignedVector32<float> obs_robot2;
-    VectorReward reward1;
-    VectorReward reward2;
-    ForceSensorReading forces1;
-    ForceSensorReading forces2;
-    bool done = false;
-    int winner = 0;
-
-    StepResult() : obs_robot1(OBS_DIM), obs_robot2(OBS_DIM) {}
-    StepResult(const StepResult& other) = default;
-    StepResult& operator=(const StepResult& other) = default;
-};
-
 class CombatContactListener : public JPH::ContactListener
 {
 public:
