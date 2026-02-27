@@ -106,6 +106,7 @@ int main(int argc, char* argv[]) {
     
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
+    TD3Trainer opponentTrainer(stateDim, actionDim, td3cfg); // League Play opponent
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
     // Auto-load weights if available
@@ -115,9 +116,13 @@ int main(int argc, char* argv[]) {
         std::cout << "[main_train] Auto-loaded weights from: " << finalModelPath << std::endl;
     }
     
+    // Sync opponent to start identical to main agent
+    opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
+
     float timeScale = 1.0f;
     float physicsHz = 120.0f;
-    bool trainEnabled = false; // Start paused
+    bool trainEnabled = true; // Default to enabled
+    bool leaguePlayEnabled = true; // Default to Fictitious Self-Play
     bool renderEnabled = true;
     bool headlessTurbo = false;
     
@@ -126,9 +131,17 @@ int main(int argc, char* argv[]) {
     float sps = 0;
     int step_counter = 0;
     int renderEnvIdx = 0;
+    int previousRenderEnvIdx = renderEnvIdx;
+    float sliderConfirmationTime = 0.0f;
+    const float SLIDER_CONFIRMATION_DURATION = 2.0f;
+    int r1Wins = 0;
+    int r2Wins = 0;
     float currentRew1 = 0.0f;
     float currentRew2 = 0.0f;
     VectorReward lastVR1, lastVR2;
+    
+
+    std::mt19937 leagueRng(std::random_device{}());
 
     // Fixed: Ensure global cam is used
     gCam.front = glm::normalize(glm::vec3(0, 2, 0) - gCam.position);
@@ -163,7 +176,12 @@ int main(int argc, char* argv[]) {
                 // Each environment has 2 robots. 
                 // We use envIdx * 2 and envIdx * 2 + 1 as latent slots to keep them distinct.
                 trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim), robotActions.data() + (i * 2 * actionDim), i * 2);
-                trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
+                
+                if (leaguePlayEnabled) {
+                    opponentTrainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
+                } else {
+                    trainer.SelectActionWithLatent((float*)obs.data() + (i * 2 * stateDim + stateDim), robotActions.data() + (i * 2 * actionDim + actionDim), i * 2 + 1);
+                }
             }
             
             for (int i = 0; i < numEnvs; ++i) {
@@ -173,26 +191,50 @@ int main(int argc, char* argv[]) {
             PhysicsCore* core = vecEnv.GetPhysicsCore();
             core->GetPhysicsSystem().Update(1.0f / physicsHz, 1, core->GetTempAllocator(), core->GetJobSystem());
             
-            for (int i = 0; i < numEnvs; ++i) {
-                StepResult res = vecEnv.GetEnv(i).HarvestState();
+             for (int i = 0; i < numEnvs; ++i) {
+                 StepResult res = vecEnv.GetEnv(i).HarvestState();
+                 
+                 float scalar1 = trainer.ComputeScalarReward(res.reward1);
+                 float scalar2 = trainer.ComputeScalarReward(res.reward2);
                 
-                if (i == 0) {
-                    currentRew1 = res.reward1.Scalar();
-                    currentRew2 = res.reward2.Scalar();
+                if (i == renderEnvIdx) {
+                    currentRew1 = scalar1;
+                    currentRew2 = scalar2;
                     lastVR1 = res.reward1;
                     lastVR2 = res.reward2;
                 }
 
                 // Transition 1
-                buffer.Add((float*)obs.data() + (i*2*stateDim), robotActions.data() + (i*2*actionDim), res.reward1.Scalar(), res.obs_robot1.data(), res.done);
+                buffer.Add((float*)obs.data() + (i*2*stateDim), robotActions.data() + (i*2*actionDim), scalar1, res.obs_robot1.data(), res.done);
                 // Transition 2
-                buffer.Add((float*)obs.data() + (i*2*stateDim+stateDim), robotActions.data() + (i*2*actionDim+actionDim), res.reward2.Scalar(), res.obs_robot2.data(), res.done);
+                buffer.Add((float*)obs.data() + (i*2*stateDim+stateDim), robotActions.data() + (i*2*actionDim+actionDim), scalar2, res.obs_robot2.data(), res.done);
                 
-                if (res.done) vecEnv.Reset(i);
+                if (res.done) {
+                    // ELO Tracking: Determine winner based on HP
+                    auto& r1 = vecEnv.GetEnv(i).GetRobot1();
+                    auto& r2 = vecEnv.GetEnv(i).GetRobot2();
+                    if (r1.hp > r2.hp) r1Wins++;
+                    else if (r2.hp > r1.hp) r2Wins++;
+
+                    vecEnv.Reset(i);
+                    
+                     // League Play: Rotate the opponent policy from the pool
+                    if (leaguePlayEnabled && trainer.GetOpponentPool().Size() > 0) {
+                        if (trainer.SampleOpponent()) {
+                            opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
+                        }
+                    }
+                }
             }
             
-            if (buffer.Size() > td3cfg.batchSize) trainer.Train(buffer);
+            if (totalSteps % 4 == 0 && buffer.Size() > td3cfg.batchSize) {
+                for (int update = 0; update < 2; ++update) {
+                    trainer.Train(buffer);
+                }
+            }
             
+
+
             if (totalSteps > 0 && totalSteps % 18000 == 0) {
                 trainer.Save(checkpointDir + "/model_step_" + std::to_string(totalSteps) + ".bin");
             }
@@ -218,16 +260,29 @@ int main(int argc, char* argv[]) {
         ImGui::Separator();
         ImGui::Text("STATUS: %s", trainEnabled ? "TRAINING" : "PAUSED");
         ImGui::Text("SPS: %.0f | Total Steps: %lld", sps, totalSteps);
+
         
         if (numEnvs > 1) {
-            ImGui::SliderInt("View Env", &renderEnvIdx, 0, numEnvs - 1);
+            if (ImGui::SliderInt("View Env", &renderEnvIdx, 0, numEnvs - 1)) {
+                if (renderEnvIdx != previousRenderEnvIdx) {
+                    sliderConfirmationTime = SLIDER_CONFIRMATION_DURATION;
+                    previousRenderEnvIdx = renderEnvIdx;
+                }
+            }
+        }
+
+        // Slider confirmation text
+        if (sliderConfirmationTime > 0.0f) {
+            sliderConfirmationTime -= dt;
+            float alpha = std::clamp(sliderConfirmationTime / SLIDER_CONFIRMATION_DURATION, 0.0f, 1.0f);
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, alpha), "Watching Environment %d", renderEnvIdx);
         }
 
         {
             auto& r1 = vecEnv.GetEnv(renderEnvIdx).GetRobot1();
             auto& r2 = vecEnv.GetEnv(renderEnvIdx).GetRobot2();
             
-            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f", r1.hp);
+            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f | Scalar Rew: %.3f", r1.hp, currentRew1);
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR1.damage_dealt, lastVR1.damage_taken);
@@ -248,6 +303,10 @@ int main(int argc, char* argv[]) {
         ImGui::Separator();
 
         ImGui::Checkbox("Enable Training", &trainEnabled);
+        ImGui::SameLine();
+        if (ImGui::Checkbox("League Play (FSP)", &leaguePlayEnabled)) {
+            opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
+        }
         ImGui::Checkbox("HEADLESS TURBO", &headlessTurbo);
         
         if (ImGui::Button("Load Final Checkpoint")) {

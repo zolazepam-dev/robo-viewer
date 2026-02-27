@@ -57,11 +57,13 @@ public:
     void render_gui() {
         if (data.empty()) return;
 
-        // Initialize the morphologica visualization window
-        morph::Visual v(1200, 800, "RL MicroBoard (Morphologica)");
-        v.backgroundWhite();
+        // Initialize the morphologica visualization window in 3D Dark Mode
+        morph::Visual v(1200, 800, "RL MicroBoard (3D Cascade Environment)");
+        v.backgroundBlack(); // Switch to dark mode for better 3D contrast
 
-        float x_offset = 0.0f; // Shift each graph horizontally so they don't overlap
+        float z_offset = 0.0f; // Stack in depth (Z-axis) for 3D Ridgeline effect
+        float x_offset = 0.0f; // Stagger horizontally
+        float y_offset = 0.0f; // Stagger vertically
 
         for (const auto& pair : data) {
             const std::string& tag = pair.first;
@@ -74,23 +76,28 @@ public:
                 y_data.push_back(p.value);
             }
 
-            // Create GraphVisual, bind it to the window's shaders, and offset its position
-            morph::vec<float, 3> offset = {x_offset, 0.0f, 0.0f};
+            // Create GraphVisual, offset its position in true 3D Space
+            morph::vec<float, 3> offset = {x_offset, y_offset, z_offset};
             auto gv = std::make_unique<morph::GraphVisual<float>>(offset);
             v.bindmodel(gv);
 
             // Configure the graph aesthetics
-            gv->setdata(x_data, y_data, tag); // Plots the line & sets legend
+            gv->setdata(x_data, y_data, tag);
             gv->xlabel = "Training Step";
             gv->ylabel = tag;
-            
+
             gv->finalize();
             v.addVisualModel(std::move(gv)); // Hand ownership to the window
 
-            x_offset += 3.0f; // Add horizontal spacing for the next tag's graph
+            // Create the 3D cascade effect
+            x_offset += 1.5f;   // Shift right slightly
+            y_offset += 1.0f;   // Shift up slightly
+            z_offset -= 3.0f;   // Push the next graph deeper into the screen!
         }
 
-        std::cout << "\n[GUI] Launching Morphologica OpenGL window. Close the window to terminate.\n";
+        std::cout << "\n[GUI] Launching 3D Morphologica environment.\n";
+        std::cout << "      --> TIP: Click and drag with your mouse to rotate the 3D scene!\n";
+        std::cout << "      --> TIP: Scroll your mouse wheel to fly through the cascade.\n";
         v.keepOpen(); // Blocks and runs the graphical render loop
     }
 

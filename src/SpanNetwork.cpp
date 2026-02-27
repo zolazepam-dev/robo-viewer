@@ -148,40 +148,8 @@ void TensorProductBSpline::Forward(const float* input, float* output)
 
 void TensorProductBSpline::ForwardBatch(const float* input, float* output, int batchSize)
 {
-    const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
-    const int degreePlus1 = mSplineDegree + 1;
-    
-    // Precompute basis functions for all inputs in the batch
-    std::vector<float> batchBasis(batchSize * mInputDim * degreePlus1);
-    std::vector<int> batchSpanIndices(batchSize * mInputDim);
-    
     for (int b = 0; b < batchSize; ++b) {
-        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
-            float x = std::tanh(input[b * mInputDim + inIdx]) * 0.5f + 0.5f;
-            int spanIdx;
-            ComputeBasisFunctions(x, &batchBasis[b * mInputDim * degreePlus1 + inIdx * degreePlus1], spanIdx);
-            batchSpanIndices[b * mInputDim + inIdx] = spanIdx;
-        }
-    }
-    
-    // Optimized accumulation for all outputs in the batch
-    for (int b = 0; b < batchSize; ++b) {
-        for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx) {
-            const float* cpBase = mControlPoints.data() + outIdx * numBasis;
-            float sum = 0.0f;
-            for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
-                const float* basisFuncs = &batchBasis[b * mInputDim * degreePlus1 + inIdx * degreePlus1];
-                int spanIdx = batchSpanIndices[b * mInputDim + inIdx];
-                
-                for (int k = 0; k <= mSplineDegree; ++k) {
-                    int basisIdx = spanIdx - mSplineDegree + k;
-                    if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
-                        sum += basisFuncs[k] * cpBase[basisIdx];
-                    }
-                }
-            }
-            output[b * mOutputDim + outIdx] = sum / static_cast<float>(mInputDim);
-        }
+        Forward(input + b * mInputDim, output + b * mOutputDim);
     }
 }
 
