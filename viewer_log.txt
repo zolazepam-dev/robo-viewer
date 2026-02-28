@@ -1,0 +1,11 @@
+[JOLTrl] Pinned Jolt worker thread 0 to CPU core 1
+[JOLTrl] Pinned Jolt worker thread 1 to CPU core 2
+[JOLTrl] Pinned Jolt worker thread 2 to CPU core 3
+[JOLTrl] Pinned Jolt worker thread 3 to CPU core 4
+[JOLTrl] Pinned Jolt worker thread 4 to CPU core 5
+[JOLTrl] Pinned Jolt worker thread 5 to CPU core 7
+[JOLTrl] Pinned Jolt worker thread 6 to CPU core 8
+[JOLTrl] Pinned Jolt worker thread 7 to CPU core 9
+[JOLTrl] Pinned Jolt worker thread 8 to CPU core 10
+[JOLTrl] Pinned Jolt worker thread 9 to CPU core 11
+[JOLTrl] PhysicsCore initialized globally for 1 overlapping environments.

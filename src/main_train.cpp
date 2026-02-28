@@ -21,7 +21,7 @@
 #include "src/NeuralNetwork.h"
 #include "src/TD3Trainer.h"
 #include "src/Renderer.h"
-#include "src/OverlayUI.h"
+#include "src/OverlayUI_refactor.h"
 
 namespace fs = std::filesystem;
 
@@ -38,6 +38,7 @@ struct FreeCamera {
 
 // GLOBAL CAMERA - NO SHADOWING
 FreeCamera gCam;
+Renderer* gRenderer = nullptr;
 double gLastX, gLastY;
 bool gFirstMouse = true;
 
@@ -72,6 +73,13 @@ void process_input(GLFWwindow* window, float dt) {
 
 void EnsureDir(const std::string& path) { if (!fs::exists(path)) fs::create_directories(path); }
 
+void window_size_callback(GLFWwindow* window, int width, int height) {
+    if (gRenderer) {
+        glViewport(0, 0, width, height);
+        gRenderer->Resize(width, height);
+    }
+}
+
 int main(int argc, char* argv[]) {
     int numEnvs = 1;
     for (int i = 1; i < argc; i++) {
@@ -91,11 +99,13 @@ int main(int argc, char* argv[]) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(0); 
     glewInit();
+    glfwSetWindowSizeCallback(window, window_size_callback);
     glEnable(GL_DEPTH_TEST);
     glfwSetCursorPosCallback(window, mouse_callback);
 
-    CyberpunkUI ui;
+    OverlayUIRefactored ui;
     ui.Init(window);
+    ui.LoadAllSettings(checkpointDir + "/settings.json");
 
     // Initializing vectorized environments
     VectorizedEnv vecEnv(numEnvs);
@@ -108,7 +118,7 @@ int main(int argc, char* argv[]) {
         telemetryFile << "Step,Tag,Value\n"; // Header
     }
     
-    Renderer renderer(1280, 720);
+    gRenderer = new Renderer(1280, 720);
     int stateDim = vecEnv.GetObservationDim(); // Should be 256
     int actionDim = vecEnv.GetActionDim();      // Should be 56
     
@@ -127,12 +137,11 @@ int main(int argc, char* argv[]) {
     // Sync opponent to start identical to main agent
     opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
 
-    float timeScale = 1.0f;
-    float physicsHz = 120.0f;
     bool trainEnabled = true; // Default to enabled
     bool leaguePlayEnabled = true; // Default to Fictitious Self-Play
     bool renderEnabled = true;
     bool headlessTurbo = false;
+    float physicsHz = 120.0f;
     
     auto last_time = std::chrono::high_resolution_clock::now();
     long long totalSteps = 0;
@@ -144,6 +153,7 @@ int main(int argc, char* argv[]) {
     const float SLIDER_CONFIRMATION_DURATION = 2.0f;
     int r1Wins = 0;
     int r2Wins = 0;
+    int mEpisodes = 0;
     float currentRew1 = 0.0f;
     float currentRew2 = 0.0f;
     VectorReward lastVR1, lastVR2;
@@ -174,7 +184,22 @@ int main(int argc, char* argv[]) {
         }
         process_input(window, dt);
 
-        if (trainEnabled && timeScale > 0.01f) {
+        float timeScale = ui.GetTimeScale();
+
+        // --- BROADCAST ROBOT TUNABLES ---
+        {
+            const auto& robotTune = ui.GetRobots();
+            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
+                auto& r1 = vecEnv.GetEnv(i).GetRobot1Ref();
+                auto& r2 = vecEnv.GetEnv(i).GetRobot2Ref();
+                r1.actionScale.slideScale = robotTune.enginePower;
+                r1.actionScale.rotationScale = robotTune.reactionWheelPower;
+                r2.actionScale.slideScale = robotTune.enginePower;
+                r2.actionScale.rotationScale = robotTune.reactionWheelPower;
+            }
+        }
+
+        if (!ui.IsPaused()) {
             const auto& obs = vecEnv.GetObservations();
             int numEnvs = vecEnv.GetNumEnvs();
             AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
@@ -214,7 +239,21 @@ int main(int argc, char* argv[]) {
             }
             
             PhysicsCore* core = vecEnv.GetPhysicsCore();
-            core->GetPhysicsSystem().Update(1.0f / physicsHz, 1, core->GetTempAllocator(), core->GetJobSystem());
+            core->GetPhysicsSystem().Update(1.0f / physicsHz * timeScale, 1, core->GetTempAllocator(), core->GetJobSystem());
+            
+            // Apply physics settings from UI
+            {
+                const auto& phys = ui.GetPhysics();
+                JPH::PhysicsSettings settings;
+                settings.mNumVelocitySteps = phys.velocitySteps;
+                settings.mNumPositionSteps = phys.positionSteps;
+                settings.mBaumgarte = phys.Baumgarte;
+                settings.mPenetrationSlop = phys.penetrationSlop;
+                settings.mSpeculativeContactDistance = phys.speculativeContactDistance;
+                settings.mAllowSleeping = phys.allowSleep;
+                core->SetSettings(settings);
+                core->GetPhysicsSystem().SetGravity(JPH::Vec3(0.0f, phys.gravityY, 0.0f));
+            }
             
              for (int i = 0; i < numEnvs; ++i) {
                  int obsOffset = i * 2 * stateDim;
@@ -239,6 +278,20 @@ int main(int argc, char* argv[]) {
                 buffer.Add(obs2_dest, robotActions.data() + (i*2*actionDim+actionDim), scalar2, obs2_dest, done_val);
                 
                 if (done_val) {
+                    // Get actual reward components before reset
+                    auto& r1data = vecEnv.GetEnv(i).GetRobot1();
+                    auto& r2data = vecEnv.GetEnv(i).GetRobot2();
+                    
+                    // Push episode reward data for plotting (only once per episode)
+                    float dmgDealt = r1data.hp < 100.0f ? (100.0f - r2data.hp) / 100.0f : 0.0f;
+                    float dmgTaken = r2data.hp < 100.0f ? (100.0f - r1data.hp) / 100.0f : 0.0f;
+                    
+                    // Only push for render env to avoid filling history too fast
+                    if (i == ui.GetRenderEnvIdx()) {
+                        ui.PushRewardData(dmgDealt, dmgTaken, 0.0f, 0.0f, scalar1);
+                    }
+                    
+                    mEpisodes++;
                     // ELO Tracking: Determine winner based on HP
                     auto& robot1 = vecEnv.GetEnv(i).GetRobot1();
                     auto& robot2 = vecEnv.GetEnv(i).GetRobot2();
@@ -272,6 +325,25 @@ int main(int argc, char* argv[]) {
             step_counter += 1;
         }
 
+        std::string saveName;
+        if (ui.GetAndClearSaveRequest(saveName)) {
+            trainer.Save(checkpointDir + "/" + saveName + ".bin");
+        }
+        std::string loadName;
+        if (ui.GetAndClearLoadRequest(loadName)) {
+            trainer.Load(checkpointDir + "/" + loadName + ".bin");
+        }
+
+        if (ui.GetAndClearGraphRequest()) {
+            std::string cmd = "./micro_board_gui " + telemetryPath + " &";
+            std::cout << "[main_train] Launching 3D Graph: " << cmd << std::endl;
+            system(cmd.c_str());
+        }
+
+        if (ui.GetManualOverride()) {
+            // use zero/random actions instead of policy
+        }
+
         static auto lastSpsTime = now;
         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
         if (spsElapsed.count() >= 1.0f) { 
@@ -280,7 +352,7 @@ int main(int argc, char* argv[]) {
             lastSpsTime = now; 
             
             // CSV Telemetry output for micro_board
-            if (trainEnabled) {
+            if (!ui.IsPaused()) {
                 std::cout << totalSteps << ",SPS," << sps << "\n";
                 std::cout << totalSteps << ",Reward1," << currentRew1 << "\n";
                 std::cout << totalSteps << ",Reward2," << currentRew2 << "\n";
@@ -291,135 +363,48 @@ int main(int argc, char* argv[]) {
                     telemetryFile << totalSteps << ",Reward1," << currentRew1 << "\n";
                     telemetryFile << totalSteps << ",Reward2," << currentRew2 << "\n";
                     telemetryFile << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
-                    telemetryFile.flush(); // Ensure micro_board sees it immediately
+                    telemetryFile.flush();
                 }
             }
         }
 
+        // Update UI stats every frame
+        ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 
+                       ui.GetRenderEnvIdx(), vecEnv.GetNumEnvs());
+
+        // Update per-agent rewards for UI display
+        ui.UpdateAgentRewards(currentRew1, currentRew2);
+
+        // Apply graphics settings from UI to renderer
+        const auto& graphics = ui.GetGraphics();
+
         if (renderEnabled && !headlessTurbo) {
-            renderer.Draw(vecEnv.GetGlobalPhysics(), gCam.position, renderEnvIdx, gCam.front);
+            gRenderer->Draw(vecEnv.GetGlobalPhysics(), gCam.position, ui.GetRenderEnvIdx(), gCam.front,
+                            graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
+                            graphics.showRobot1, graphics.showRobot2);
         } else {
             glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         }
 
-        ui.BeginFrame();
-        ImGui::Begin("Full Training Overseer");
-        ImGui::Text("Silicon: TD3 + 2nd Order Latent");
-        ImGui::Separator();
-        ImGui::Text("STATUS: %s", trainEnabled ? "TRAINING" : "PAUSED");
-        ImGui::Text("SPS: %.0f | Total Steps: %lld", sps, totalSteps);
-
-        
-        if (numEnvs > 1) {
-            if (ImGui::SliderInt("View Env", &renderEnvIdx, 0, numEnvs - 1)) {
-                if (renderEnvIdx != previousRenderEnvIdx) {
-                    sliderConfirmationTime = SLIDER_CONFIRMATION_DURATION;
-                    previousRenderEnvIdx = renderEnvIdx;
-                }
-            }
+        // Draw debug visualizations if enabled
+        if (graphics.showCollisionShapes || graphics.showAABBs || graphics.showContactPoints) {
+            // These would need to be implemented in Renderer
         }
 
-        // Slider confirmation text
-        if (sliderConfirmationTime > 0.0f) {
-            sliderConfirmationTime -= dt;
-            float alpha = std::clamp(sliderConfirmationTime / SLIDER_CONFIRMATION_DURATION, 0.0f, 1.0f);
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, alpha), "Watching Environment %d", renderEnvIdx);
-        }
-
-        {
-            auto& r1 = vecEnv.GetEnv(renderEnvIdx).GetRobot1();
-            auto& r2 = vecEnv.GetEnv(renderEnvIdx).GetRobot2();
-            
-            ImGui::TextColored(ImVec4(0, 1, 1, 1), "Robot 1 HP: %.1f | Scalar Rew: %.3f", r1.hp, currentRew1);
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR1.damage_dealt, lastVR1.damage_taken);
-                ImGui::Text("KOTH: %.3f | Energy: %.3f", lastVR1.koth, lastVR1.energy_used);
-                ImGui::Text("Alt: %.3f", lastVR1.altitude);
-                ImGui::EndTooltip();
-            }
-
-            ImGui::TextColored(ImVec4(1, 0, 1, 1), "Robot 2 HP: %.1f | Scalar Rew: %.3f", r2.hp, currentRew2);
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::Text("Dmg+: %.3f | Dmg-: %.3f", lastVR2.damage_dealt, lastVR2.damage_taken);
-                ImGui::Text("KOTH: %.3f | Energy: %.3f", lastVR2.koth, lastVR2.energy_used);
-                ImGui::Text("Alt: %.3f", lastVR2.altitude);
-                ImGui::EndTooltip();
-            }
-        }
-        ImGui::Separator();
-
-        ImGui::Checkbox("Enable Training", &trainEnabled);
-        ImGui::SameLine();
-        if (ImGui::Checkbox("League Play (FSP)", &leaguePlayEnabled)) {
-            opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
-        }
-        ImGui::Checkbox("HEADLESS TURBO", &headlessTurbo);
-        
-        if (ImGui::Button("Load Final Checkpoint")) {
-            trainer.Load(checkpointDir + "/model_final.bin");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("SAVE MODEL NOW")) {
-            std::string manualSave = checkpointDir + "/manual_save.bin";
-            trainer.Save(manualSave);
-            std::cout << "[GUI] Model saved to: " << manualSave << std::endl;
-        }
-
-        if (ImGui::Button("LAUNCH 3D METRICS GRAPH")) {
-            // Use the absolute path to the binary to avoid Bazel locking issues
-            std::string cmd = "./bazel-bin/micro_board " + telemetryPath + " &";
-            std::cout << "[GUI] Launching 3D Graph: " << cmd << std::endl;
-            int ret = system(cmd.c_str());
-            if (ret != 0) std::cerr << "[GUI] Error launching micro_board" << std::endl;
-        }
-        
-        ImGui::SliderFloat("Time Scale", &timeScale, 0.0f, 5.0f);
-        
-        if (ImGui::CollapsingHeader("Internal Engine Tuner")) {
-            auto& baseR1 = vecEnv.GetEnv(0).GetRobot1Ref();
-            float rotScale = baseR1.actionScale.rotationScale;
-            float engScale = baseR1.actionScale.slideScale;
-            
-            bool changed = false;
-            if (ImGui::SliderFloat("Reaction Wheel Power", &rotScale, 0.0f, 15000.0f)) changed = true;
-            if (ImGui::SliderFloat("Internal Engine Power", &engScale, 0.0f, 500.0f)) changed = true;
-            
-            // If tuned, broadcast to ALL robots in ALL environments
-            if (changed) {
-                std::cout << "[GUI] Tuning Applied: ReactionWheel=" << rotScale << " | Engine=" << engScale << " (Broadcast to " << numEnvs << " envs)" << std::endl;
-                for (int i = 0; i < numEnvs; ++i) {
-                    auto& r1 = vecEnv.GetEnv(i).GetRobot1Ref();
-                    auto& r2 = vecEnv.GetEnv(i).GetRobot2Ref();
-                    r1.actionScale.rotationScale = rotScale;
-                    r1.actionScale.slideScale = engScale;
-                    r2.actionScale.rotationScale = rotScale;
-                    r2.actionScale.slideScale = engScale;
-                }
-            }
-        }
-
-        if (ImGui::CollapsingHeader("Physics Tuner (Expansive)")) {
-            JPH::PhysicsSettings settings = vecEnv.GetGlobalPhysics()->GetPhysicsSettings();
-            bool changed = false;
-            ImGui::SliderFloat("Simulation Hz", &physicsHz, 60.0f, 1000.0f, "%.0f Hz");
-            if (ImGui::SliderInt("Velocity Steps", (int*)&settings.mNumVelocitySteps, 1, 50)) changed = true;
-            if (ImGui::SliderInt("Position Steps", (int*)&settings.mNumPositionSteps, 1, 50)) changed = true;
-            if (ImGui::SliderFloat("Baumgarte", &settings.mBaumgarte, 0.0f, 1.0f)) changed = true;
-            if (ImGui::SliderFloat("Penetration Slop", &settings.mPenetrationSlop, 0.0f, 0.1f)) changed = true;
-            if (ImGui::SliderFloat("Speculative Dist", &settings.mSpeculativeContactDistance, 0.0f, 0.1f)) changed = true;
-            if (changed) vecEnv.GetGlobalPhysics()->SetPhysicsSettings(settings);
-        }
-
-        if (ImGui::Button("Manual Reset All")) vecEnv.Reset();
+        ui.NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(450, 700), ImGuiCond_FirstUseEver);
+        ImGui::Begin("JOLTrl Control Center", nullptr, ImGuiWindowFlags_NoCollapse);
+        ui.DrawAllTabs();
         ImGui::End();
-        ui.EndFrame();
+        ui.Render();
+        ui.SaveAllSettings(checkpointDir + "/settings.json");
         glfwSwapBuffers(window);
     }
 
     trainer.Save(checkpointDir + "/model_final.bin");
+    delete gRenderer;
     ui.Shutdown();
     glfwTerminate();
     return 0;

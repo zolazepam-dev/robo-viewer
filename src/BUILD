@@ -10,6 +10,7 @@ cc_library(
         "CombatRobot.cpp",
         "RobotLoader.cpp",
         "OverlayUI.cpp",
+        "OverlayUI_refactor.cpp",
         "VectorizedEnv.cpp",
         "CombatEnv.cpp",
         "TD3Trainer.cpp",
@@ -26,6 +27,7 @@ cc_library(
         "CombatRobot.h",
         "RobotLoader.h",
         "OverlayUI.h",
+        "OverlayUI_refactor.h",
         "VectorizedEnv.h",
         "CombatEnv.h",
         "TD3Trainer.h",
@@ -50,7 +52,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
@@ -67,10 +69,29 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++20",
+        "-std=c++17",
         "-O3",
         "-mavx2",
         "-mfma",
         "-march=native"
+    ],
+)
+
+cc_binary(
+    name = "practice_xml_viewer",
+    srcs = ["xml_viewer.cpp"],
+    deps = [
+        ":core",
+        "@jolt//:jolt",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
     ],
 )

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <Jolt/Jolt.h>
-#include <imgui.h>
+#include "imgui.h"
 #include <string>
 #include <vector>
+#include <GLFW/glfw3.h>
 
 // Forward declarations
 class VectorizedEnv;
@@ -16,11 +17,11 @@ class PhysicsCore;
 
 struct PhysicsTunables {
     float gravityY = -9.81f;
-    float timestep = 1.0f / 60.0f;
-    int velocitySteps = 4;
-    int positionSteps = 2;
-    float Baumgarte = 0.2f;
-    float penetrationSlop = 0.01f;
+    float timestep = 1.0f / 120.0f; // Higher Hz for better CCD
+    int velocitySteps = 8;         // More solver iterations
+    int positionSteps = 3;
+    float Baumgarte = 0.3f;        // Faster error correction
+    float penetrationSlop = 0.005f;
     float speculativeContactDistance = 0.01f;
     bool allowSleep = false;
     float timeScale = 1.0f;
@@ -80,6 +81,10 @@ public:
     
     void UpdateStats(int totalSteps, int episodes, float sps, float avgReward,
                      int currentEnv, int numEnvs);
+    void UpdateAgentRewards(float agent1, float agent2) {
+        mAgent1Reward = agent1;
+        mAgent2Reward = agent2;
+    }
     void PushRewardData(float damageDealt, float damageTaken, 
                         float airtime, float energy, float scalar);
     void PushPhysicsMetrics(float solverTime, float broadphaseTime, 
@@ -102,7 +107,10 @@ public:
     // Policy management
     bool GetAndClearSaveRequest(std::string& outName);
     bool GetAndClearLoadRequest(std::string& outName);
+    bool GetAndClearGraphRequest();
     bool GetManualOverride() const { return mManualOverride; }
+    
+    void DrawAllTabs();
     
     // Spawn system
     struct SpawnRequest {
@@ -185,6 +193,8 @@ private:
     bool mStepOne = false;
     bool mResetRequested = false;
     bool mRestartRequested = false;
+    bool mLaunchGraphRequested = false;
+    bool mManualOverride = false;
     float mTimeScale = 1.0f;
     int mRenderEnvIdx = 0;
     int mStepsPerEpisode = 1000;
@@ -209,6 +219,8 @@ private:
     int mEpisodes = 0;
     float mSPS = 0.0f;
     float mAvgReward = 0.0f;
+    float mAgent1Reward = 0.0f;
+    float mAgent2Reward = 0.0f;
     int mNumEnvs = 0;
     
     ImGuiContext* mContext = nullptr;

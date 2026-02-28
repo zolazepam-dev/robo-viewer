@@ -1,0 +1,13 @@
+<JoltShape type="Pyramid">
+  <Vertex x="-2.5000" y="0.0000" z="-2.5000" />
+  <Vertex x="2.5000" y="0.0000" z="-2.5000" />
+  <Vertex x="2.5000" y="0.0000" z="2.5000" />
+  <Vertex x="-2.5000" y="0.0000" z="2.5000" />
+  <Vertex x="0.0000" y="7.0000" z="0.0000" />
+  <Triangle v1="0" v2="1" v3="2" />
+  <Triangle v1="0" v2="2" v3="3" />
+  <Triangle v1="0" v2="4" v3="1" />
+  <Triangle v1="1" v2="4" v3="2" />
+  <Triangle v1="2" v2="4" v3="3" />
+  <Triangle v1="3" v2="4" v3="0" />
+</JoltShape>
