@@ -143,9 +143,19 @@ void VectorizedEnv::ResetDoneEnvs()
 
 VectorizedEnv::~VectorizedEnv()
 {
+    Shutdown();
+}
+
+void VectorizedEnv::Shutdown()
+{
     if (gCombatContactListener)
     {
         mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
         gCombatContactListener = nullptr;
     }
+    mPhysicsCore.Shutdown();
+    mEnvs.clear();
+    mAllObservations.clear();
+    mAllRewards.clear();
+    mAllDones.clear();
 }

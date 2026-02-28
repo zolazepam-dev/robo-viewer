@@ -3,7 +3,7 @@
   "shell": {
     "radius": 2.0,
     "thickness": 0.1,
-    "mass": 15.0
+    "mass": 100.0
   },
   "engines": [
     { "id": 1, "radius": 0.2, "mass": 2.0 },

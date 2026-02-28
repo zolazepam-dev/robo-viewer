@@ -281,6 +281,11 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Agent 2: %.3f", mAgent2Reward);
     
     ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "HEALTH");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Agent 1: %.1f / 100", mAgent1HP);
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Agent 2: %.1f / 100", mAgent2HP);
+    
+    ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "LEAGUE PLAY");
     ImGui::Text("Opponent ID: %d", mCurrentOpponentIdx);
     
@@ -298,6 +303,8 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::Text("DEBUG: mRestartRequested = %s", mRestartRequested ? "true" : "false");
     ImGui::Text("DEBUG: mAgent1Reward = %.3f", mAgent1Reward);
     ImGui::Text("DEBUG: mAgent2Reward = %.3f", mAgent2Reward);
+    ImGui::Text("DEBUG: mAgent1HP = %.1f", mAgent1HP);
+    ImGui::Text("DEBUG: mAgent2HP = %.1f", mAgent2HP);
     ImGui::Text("DEBUG: mCurrentOpponentIdx = %d", mCurrentOpponentIdx);
 }
 

@@ -68,15 +68,15 @@ public:
             const auto& pts = pair.second;
 
             // Extract x and y into morph::vvec format
-            morph::vvec<float> x_data, y_data;
+            morph::vvec<double> x_data, y_data;
             for (const auto& p : pts) {
-                x_data.push_back(static_cast<float>(p.step));
-                y_data.push_back(p.value);
+                x_data.push_back(static_cast<double>(p.step));
+                y_data.push_back(static_cast<double>(p.value));
             }
 
             // Create GraphVisual, bind it to the window's shaders, and offset its position
             morph::vec<float, 3> offset = {x_offset, 0.0f, 0.0f};
-            auto gv = std::make_unique<morph::GraphVisual<float>>(offset);
+            auto gv = std::make_unique<morph::GraphVisual<double>>(offset);
             v.bindmodel(gv);
 
             // Configure the graph aesthetics
@@ -85,7 +85,7 @@ public:
             gv->ylabel = tag;
             
             gv->finalize();
-            v.addVisualModel(std::move(gv)); // Hand ownership to the window
+            v.addVisualModel(gv); // Hand ownership to the window
 
             x_offset += 3.0f; // Add horizontal spacing for the next tag's graph
         }

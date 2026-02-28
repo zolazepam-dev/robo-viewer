@@ -108,8 +108,8 @@ int main(int argc, char* argv[]) {
     ui.LoadAllSettings(checkpointDir + "/settings.json");
 
     // Initializing vectorized environments
-    VectorizedEnv vecEnv(numEnvs);
-    vecEnv.Init();
+    VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs);
+    vecEnv->Init();
 
     // Prepare Telemetry File for micro_board
     std::string telemetryPath = checkpointDir + "/telemetry.csv";
@@ -119,8 +119,8 @@ int main(int argc, char* argv[]) {
     }
     
     gRenderer = new Renderer(1280, 720);
-    int stateDim = vecEnv.GetObservationDim(); // Should be 256
-    int actionDim = vecEnv.GetActionDim();      // Should be 56
+    int stateDim = vecEnv->GetObservationDim(); // Should be 256
+    int actionDim = vecEnv->GetActionDim();      // Should be 56
     
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
@@ -190,9 +190,9 @@ int main(int argc, char* argv[]) {
         // --- BROADCAST ROBOT TUNABLES ---
         {
             const auto& robotTune = ui.GetRobots();
-            for (int i = 0; i < vecEnv.GetNumEnvs(); ++i) {
-                auto& r1 = vecEnv.GetEnv(i).GetRobot1Ref();
-                auto& r2 = vecEnv.GetEnv(i).GetRobot2Ref();
+            for (int i = 0; i < vecEnv->GetNumEnvs(); ++i) {
+                auto& r1 = vecEnv->GetEnv(i).GetRobot1Ref();
+                auto& r2 = vecEnv->GetEnv(i).GetRobot2Ref();
                 r1.actionScale.slideScale = robotTune.enginePower;
                 r1.actionScale.rotationScale = robotTune.reactionWheelPower;
                 r2.actionScale.slideScale = robotTune.enginePower;
@@ -201,8 +201,8 @@ int main(int argc, char* argv[]) {
         }
 
         if (!ui.IsPaused()) {
-            const auto& obs = vecEnv.GetObservations();
-            int numEnvs = vecEnv.GetNumEnvs();
+            const auto& obs = vecEnv->GetObservations();
+            int numEnvs = vecEnv->GetNumEnvs();
             AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
             
             // Collect all robot 1 observations and environment indices
@@ -236,10 +236,10 @@ int main(int argc, char* argv[]) {
             
             for (int i = 0; i < numEnvs; ++i) {
                 // Adjust indexing for robotActions because we batched them separately
-                vecEnv.GetEnv(i).QueueActions(robotActions.data() + (i * actionDim), robotActions.data() + (numEnvs * actionDim + i * actionDim));
+                vecEnv->GetEnv(i).QueueActions(robotActions.data() + (i * actionDim), robotActions.data() + (numEnvs * actionDim + i * actionDim));
             }
             
-            PhysicsCore* core = vecEnv.GetPhysicsCore();
+            PhysicsCore* core = vecEnv->GetPhysicsCore();
             core->GetPhysicsSystem().Update(1.0f / physicsHz * timeScale, 1, core->GetTempAllocator(), core->GetJobSystem());
             
             // Apply physics settings from UI
@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
                  float r1_val, r2_val;
                  bool done_val;
                  
-                 vecEnv.GetEnv(i).HarvestState(obs1_dest, obs2_dest, &r1_val, &r2_val, done_val);
+                 vecEnv->GetEnv(i).HarvestState(obs1_dest, obs2_dest, &r1_val, &r2_val, done_val);
                  
                  float scalar1 = r1_val;
                  float scalar2 = r2_val;
@@ -280,8 +280,8 @@ int main(int argc, char* argv[]) {
                 
                 if (done_val) {
                     // Get actual reward components before reset
-                    auto& r1data = vecEnv.GetEnv(i).GetRobot1();
-                    auto& r2data = vecEnv.GetEnv(i).GetRobot2();
+                    auto& r1data = vecEnv->GetEnv(i).GetRobot1();
+                    auto& r2data = vecEnv->GetEnv(i).GetRobot2();
                     
                     // Push episode reward data for plotting (only once per episode)
                     float dmgDealt = r1data.hp < 100.0f ? (100.0f - r2data.hp) / 100.0f : 0.0f;
@@ -294,12 +294,12 @@ int main(int argc, char* argv[]) {
                     
                     mEpisodes++;
                     // ELO Tracking: Determine winner based on HP
-                    auto& robot1 = vecEnv.GetEnv(i).GetRobot1();
-                    auto& robot2 = vecEnv.GetEnv(i).GetRobot2();
+                    auto& robot1 = vecEnv->GetEnv(i).GetRobot1();
+                    auto& robot2 = vecEnv->GetEnv(i).GetRobot2();
                     if (robot1.hp > robot2.hp) r1Wins++;
                     else if (robot2.hp > robot1.hp) r2Wins++;
 
-                    vecEnv.Reset(i);
+                    vecEnv->Reset(i);
                     
                      // League Play: Rotate the opponent policy from the pool
                     if (leaguePlayEnabled && trainer.GetOpponentPool().Size() > 0) {
@@ -350,7 +350,8 @@ int main(int argc, char* argv[]) {
         static auto lastSpsTime = now;
         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
         if (spsElapsed.count() >= 1.0f) { 
-            sps = step_counter / spsElapsed.count(); 
+            // SPS = steps per second * numEnvs (each step processes all envs)
+            sps = (step_counter * vecEnv->GetNumEnvs()) / spsElapsed.count(); 
             step_counter = 0; 
             lastSpsTime = now; 
             
@@ -371,9 +372,32 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Update HP display
+        auto& envHP = vecEnv->GetEnv(ui.GetRenderEnvIdx());
+        ui.UpdateAgentHP(envHP.GetRobot1().hp, envHP.GetRobot2().hp);
+
         // Update UI stats every frame
         ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 
-                       ui.GetRenderEnvIdx(), vecEnv.GetNumEnvs());
+                       ui.GetRenderEnvIdx(), vecEnv->GetNumEnvs());
+
+        // Check for restart request from UI
+        if (ui.ShouldRestartSim()) {
+            std::cout << "[main] Restarting with " << ui.GetConfig().numEnvs << " environments..." << std::endl;
+            
+            // Recreate VectorizedEnv with new count
+            vecEnv->Shutdown();
+            delete vecEnv;
+            vecEnv = new VectorizedEnv(ui.GetConfig().numEnvs);
+            vecEnv->Init();
+            
+            // Reset stats
+            totalSteps = 0;
+            mEpisodes = 0;
+            
+            std::cout << "[main] Restart complete" << std::endl;
+            
+            ui.ClearRestartRequest();
+        }
 
         // Update per-agent rewards for UI display
         ui.UpdateAgentRewards(currentRew1, currentRew2);
@@ -382,7 +406,7 @@ int main(int argc, char* argv[]) {
         const auto& graphics = ui.GetGraphics();
 
         if (renderEnabled && !headlessTurbo) {
-            gRenderer->Draw(vecEnv.GetGlobalPhysics(), gCam.position, ui.GetRenderEnvIdx(), gCam.front,
+            gRenderer->Draw(vecEnv->GetGlobalPhysics(), gCam.position, ui.GetRenderEnvIdx(), gCam.front,
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                             graphics.showRobot1, graphics.showRobot2);
         } else {
@@ -408,6 +432,7 @@ int main(int argc, char* argv[]) {
 
     trainer.Save(checkpointDir + "/model_final.bin");
     delete gRenderer;
+    delete vecEnv;
     ui.Shutdown();
     glfwTerminate();
     return 0;

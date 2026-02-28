@@ -33,13 +33,13 @@ struct RobotTunables {
     float reactionWheelPower = 6000.0f;
     float shellRadius = 2.0f;
     float shellThickness = 0.3f;
-    float shellMass = 25.0f;
+    float shellMass = 100.0f;
     float motorSpeed = 10.0f;
     float motorTorque = 450.0f;
 };
 
 struct TrainingConfigUI {
-    int numEnvs = 8;
+    int numEnvs = 64;
     int checkpointInterval = 50000;
     std::string checkpointDir = "checkpoints";
     std::string checkpointLoadName = "";
@@ -85,6 +85,10 @@ public:
         mAgent1Reward = agent1;
         mAgent2Reward = agent2;
     }
+    void UpdateAgentHP(float hp1, float hp2) {
+        mAgent1HP = hp1;
+        mAgent2HP = hp2;
+    }
     void SetOpponentIndex(int idx) { mCurrentOpponentIdx = idx; }
     void PushRewardData(float damageDealt, float damageTaken, 
                         float airtime, float energy, float scalar);
@@ -96,6 +100,7 @@ public:
     bool ShouldStepOne() const { return mStepOne; }
     bool ShouldReset() const { return mResetRequested; }
     bool ShouldRestartSim() const { return mRestartRequested; }
+    void ClearRestartRequest() { mRestartRequested = false; }
     float GetTimeScale() const { return mTimeScale; }
     int GetRenderEnvIdx() const { return mRenderEnvIdx; }
     int GetStepsPerEpisode() const { return mStepsPerEpisode; }
@@ -103,6 +108,7 @@ public:
     const PhysicsTunables& GetPhysics() const { return mPhysics; }
     const RobotTunables& GetRobots() const { return mRobotTune; }
     const GraphicsSettings& GetGraphics() const { return mGraphics; }
+    const TrainingConfigUI& GetConfig() const { return mConfig; }
     GraphSelect GetGraphSelect() const { return mCurrentGraph; }
     
     // Policy management
@@ -222,6 +228,8 @@ private:
     float mAvgReward = 0.0f;
     float mAgent1Reward = 0.0f;
     float mAgent2Reward = 0.0f;
+    float mAgent1HP = 100.0f;
+    float mAgent2HP = 100.0f;
     int mCurrentOpponentIdx = 0;
     int mNumEnvs = 0;
     

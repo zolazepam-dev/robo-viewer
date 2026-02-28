@@ -14,8 +14,9 @@ public:
     VectorizedEnv(const VectorizedEnv& other) = default;
     VectorizedEnv& operator=(const VectorizedEnv& other) = default;
 
-        void Init(bool initRobots = true);
-        void Step(const AlignedVector32<float>& actions);
+    void Init(bool initRobots = true);
+    void Shutdown();
+    void Step(const AlignedVector32<float>& actions);
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();
 

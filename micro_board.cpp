@@ -1,179 +1,100 @@
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <vector>
-#include <map>
 #include <string>
-#include <iomanip>
-#include <algorithm>
+#include <regex>
+#include <fstream>
 #include <cmath>
 
-// Morphologica includes
-#include <morph/Visual.h>
-#include <morph/GraphVisual.h>
-#include <morph/vvec.h>
+struct Vertex { float x, y, z; };
+std::vector<Vertex> vertices;
 
-struct Point {
-    int step;
-    float value;
-};
+void ParseXML(const std::string& path) {
+    std::cout << "[DEBUG] Opening XML: " << path << std::endl;
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "[ERROR] Could not open file: " << path << std::endl;
+        return;
+    }
+    std::string line;
+    std::regex v_regex("<Vertex x=\"([^\"]+)\" y=\"([^\"]+)\" z=\"([^\"]+)\"");
+    std::smatch match;
+    while (std::getline(file, line)) {
+        if (std::regex_search(line, match, v_regex)) {
+            Vertex v;
+            v.x = std::stof(match[1]);
+            v.y = std::stof(match[2]);
+            v.z = std::stof(match[3]);
+            vertices.push_back(v);
+        }
+    }
+    std::cout << "[DEBUG] Loaded " << vertices.size() << " vertices." << std::endl;
+}
 
-class StandaloneBoard {
-private:
-    std::map<std::string, std::vector<Point>> data;
+int main(int argc, char** argv) {
+    std::string xml = "dodecahedron.xml";
+    if (argc > 1) xml = argv[1];
+    
+    ParseXML(xml);
+    if (vertices.empty()) {
+        std::cerr << "[ERROR] No geometry to render. Exiting." << std::endl;
+        return 1;
+    }
 
-public:
-    // Parse CSV line formatted as: Step,Tag,Value (e.g., 100,Loss,0.453)
-    void parse_line(const std::string& line) {
-        std::stringstream ss(line);
-        std::string step_str, tag, value_str;
+    std::cout << "[DEBUG] Initializing GLFW..." << std::endl;
+    if (!glfwInit()) {
+        std::cerr << "[ERROR] GLFW Initialization Failed" << std::endl;
+        return 1;
+    }
 
-        if (std::getline(ss, step_str, ',') && 
-            std::getline(ss, tag, ',') && 
-            std::getline(ss, value_str, ',')) {
-            try {
-                int step = std::stoi(step_str);
-                float value = std::stof(value_str);
-                data[tag].push_back({step, value});
-            } catch (...) {
-                // Ignore malformed lines (e.g., headers)
+    std::cout << "[DEBUG] Creating Window..." << std::endl;
+    GLFWwindow* window = glfwCreateWindow(800, 800, "DEBUG SPIKY POP", nullptr, nullptr);
+    if (!window) {
+        std::cerr << "[ERROR] Window creation failed. Is DISPLAY set correctly?" << std::endl;
+        glfwTerminate();
+        return 1;
+    }
+    glfwMakeContextCurrent(window);
+    
+    std::cout << "[DEBUG] Initializing GLEW..." << std::endl;
+    glewExperimental = GL_TRUE;
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "[ERROR] GLEW Initialization Failed" << std::endl;
+        return 1;
+    }
+
+    std::cout << "[DEBUG] Starting Main Loop..." << std::endl;
+    float angle = 0.0f;
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        glClearColor(0.0f, 0.0f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(-20, 20, -20, 20, -100, 100);
+        glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+        glRotatef(angle, 0.5f, 1.0f, 0.2f); angle += 0.5f;
+        
+        glPointSize(8.0f); glBegin(GL_POINTS); glColor3f(1.0f, 0.9f, 0.0f);
+        for (const auto& v : vertices) glVertex3f(v.x, v.y, v.z);
+        glEnd();
+        
+        glBegin(GL_LINES); glColor3f(0.0f, 0.7f, 1.0f);
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            for (size_t j = i + 1; j < vertices.size(); ++j) {
+                float dx = vertices[i].x - vertices[j].x, dy = vertices[i].y - vertices[j].y, dz = vertices[i].z - vertices[j].z;
+                if (std::sqrt(dx*dx + dy*dy + dz*dz) < 15.0f) {
+                    glVertex3f(vertices[i].x, vertices[i].y, vertices[i].z);
+                    glVertex3f(vertices[j].x, vertices[j].y, vertices[j].z);
+                }
             }
         }
-    }
-
-    void load_from_stream(std::istream& is) {
-        std::string line;
-        while (std::getline(is, line)) {
-            parse_line(line);
-        }
+        glEnd();
         
-        // Sort data by step just in case lines arrived out of order
-        for (auto& pair : data) {
-            std::sort(pair.second.begin(), pair.second.end(), 
-                [](const Point& a, const Point& b) { return a.step < b.step; });
-        }
+        glfwSwapBuffers(window);
     }
-
-    void render_gui() {
-        if (data.empty()) return;
-
-        // Initialize the morphologica visualization window in 3D Dark Mode
-        morph::Visual v(1200, 800, "RL MicroBoard (3D Cascade Environment)");
-        v.backgroundBlack(); // Switch to dark mode for better 3D contrast
-
-        float z_offset = 0.0f; // Stack in depth (Z-axis) for 3D Ridgeline effect
-        float x_offset = 0.0f; // Stagger horizontally
-        float y_offset = 0.0f; // Stagger vertically
-
-        for (const auto& pair : data) {
-            const std::string& tag = pair.first;
-            const auto& pts = pair.second;
-
-            // Extract x and y into morph::vvec format
-            morph::vvec<float> x_data, y_data;
-            for (const auto& p : pts) {
-                x_data.push_back(static_cast<float>(p.step));
-                y_data.push_back(p.value);
-            }
-
-            // Create GraphVisual, offset its position in true 3D Space
-            morph::vec<float, 3> offset = {x_offset, y_offset, z_offset};
-            auto gv = std::make_unique<morph::GraphVisual<float>>(offset);
-            v.bindmodel(gv);
-
-            // Configure the graph aesthetics
-            gv->setdata(x_data, y_data, tag);
-            gv->xlabel = "Training Step";
-            gv->ylabel = tag;
-
-            gv->finalize();
-            v.addVisualModel(gv); // Hand ownership to the window (takes lvalue ref)
-
-            // Create the 3D cascade effect
-            x_offset += 1.5f;   // Shift right slightly
-            y_offset += 1.0f;   // Shift up slightly
-            z_offset -= 3.0f;   // Push the next graph deeper into the screen!
-        }
-
-        std::cout << "\n[GUI] Launching 3D Morphologica environment.\n";
-        std::cout << "      --> TIP: Click and drag with your mouse to rotate the 3D scene!\n";
-        std::cout << "      --> TIP: Scroll your mouse wheel to fly through the cascade.\n";
-        v.keepOpen(); // Blocks and runs the graphical render loop
-    }
-
-    // Generates a statistical breakdown specifically formatted for LLM context
-    void generate_llm_breakdown(const std::string& tag) {
-        if (data.find(tag) == data.end() || data[tag].empty()) return;
-
-        const auto& pts = data[tag];
-        float start_val = pts.front().value;
-        float end_val = pts.back().value;
-        float min_v = start_val, max_v = start_val;
-        float sum = 0.0f;
-
-        for (const auto& p : pts) {
-            if (p.value < min_v) min_v = p.value;
-            if (p.value > max_v) max_v = p.value;
-            sum += p.value;
-        }
-
-        float avg = sum / pts.size();
-        float delta_pct = ((end_val - start_val) / (std::abs(start_val) + 1e-8f)) * 100.0f;
-        
-        std::string trend = (end_val < start_val) ? "DECREASING" : "INCREASING";
-        if (std::abs(delta_pct) < 1.0f) trend = "STABLE";
-
-        std::cout << "=== LLM DATA BREAKDOWN FOR '" << tag << "' ===\n";
-        std::cout << "Metric: " << tag << "\n";
-        std::cout << "Data Points: " << pts.size() << "\n";
-        std::cout << "Step Range: " << pts.front().step << " to " << pts.back().step << "\n";
-        std::cout << "Start Value: " << std::fixed << std::setprecision(6) << start_val << "\n";
-        std::cout << "End Value: " << end_val << "\n";
-        std::cout << "Min Value: " << min_v << "\n";
-        std::cout << "Max Value: " << max_v << "\n";
-        std::cout << "Average: " << avg << "\n";
-        std::cout << "Overall Trend: " << trend << " (" << std::showpos << delta_pct << "%)\n\n";
-        
-        std::cout << "[SYSTEM PROMPT APPEND]\n";
-        std::cout << "The training metric '" << tag << "' exhibited an overall " << trend 
-                  << " trend, changing by " << delta_pct << "%. "
-                  << "The peak value was " << max_v << " and the minimum was " << min_v << ". "
-                  << "Analyze these statistics to determine if the model is converging smoothly or if hyperparameter tuning (e.g., learning rate adjustment) is required.\n";
-        std::cout << "=====================================\n\n";
-    }
-
-    void process_all() {
-        if (data.empty()) {
-            std::cout << "No valid log data found.\n";
-            return;
-        }
-
-        // 1. Output the text/math logic to stdout for the LLM pipeline
-        for (const auto& pair : data) {
-            generate_llm_breakdown(pair.first);
-        }
-
-        // 2. Launch the hardware-accelerated GUI for the human viewing it
-        render_gui();
-    }
-};
-
-int main(int argc, char* argv[]) {
-    StandaloneBoard board;
-
-    if (argc > 1) {
-        // Read from file if provided as argument
-        std::ifstream file(argv[1]);
-        if (!file.is_open()) {
-            std::cerr << "Error: Could not open file " << argv[1] << "\n";
-            return 1;
-        }
-        board.load_from_stream(file);
-    } else {
-        // Otherwise, read from standard input (pipe)
-        board.load_from_stream(std::cin);
-    }
-
-    board.process_all();
+    
+    std::cout << "[DEBUG] Shutting down." << std::endl;
+    glfwTerminate();
     return 0;
 }
