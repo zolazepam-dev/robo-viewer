@@ -22,6 +22,7 @@ public:
 
     const AlignedVector32<float>& GetObservations() const { return mAllObservations; }
     const AlignedVector32<float>& GetRewards() const { return mAllRewards; }
+    const std::vector<VectorReward>& GetVectorRewards() const { return mAllVectorRewards; }
     const std::vector<bool>& GetDones() const { return mAllDones; }
 
     CombatEnv& GetEnv(int index) { return mEnvs[index]; }
@@ -44,4 +45,5 @@ private:
     AlignedVector32<float> mAllObservations;
     AlignedVector32<float> mAllRewards;
     std::vector<bool> mAllDones;
+    std::vector<VectorReward> mAllVectorRewards;
 };

@@ -256,44 +256,41 @@ int main(int argc, char* argv[]) {
                 core->GetPhysicsSystem().SetGravity(JPH::Vec3(0.0f, phys.gravityY, 0.0f));
             }
             
-             for (int i = 0; i < numEnvs; ++i) {
-                 int obsOffset = i * 2 * stateDim;
-                 float* obs1_dest = (float*)obs.data() + obsOffset;
-                 float* obs2_dest = (float*)obs.data() + obsOffset + stateDim;
-                 float r1_val, r2_val;
-                 bool done_val;
-                 
-                 vecEnv->GetEnv(i).HarvestState(obs1_dest, obs2_dest, &r1_val, &r2_val, done_val);
-                 
-                 float scalar1 = r1_val;
-                 float scalar2 = r2_val;
+            // Use batch observations from VectorizedEnv (already harvested in Step())
+            const auto& allObs = vecEnv->GetObservations();
+            const auto& allRewards = vecEnv->GetRewards();
+            const auto& allDones = vecEnv->GetDones();
+            const auto& allVectorRewards = vecEnv->GetVectorRewards();
+            
+            // Only process render env for UI updates
+            int renderIdx = ui.GetRenderEnvIdx();
+            currentRew1 = allRewards[renderIdx * 2];
+            currentRew2 = allRewards[renderIdx * 2 + 1];
+            
+            // Add transitions to replay buffer
+            for (int i = 0; i < numEnvs; ++i) {
+                const float* obs1 = allObs.data() + i * 2 * stateDim;
+                const float* obs2 = obs1 + stateDim;
+                float r1 = allRewards[i * 2];
+                float r2 = allRewards[i * 2 + 1];
+                bool done = allDones[i];
                 
-                if (i == renderEnvIdx) {
-                    currentRew1 = scalar1;
-                    currentRew2 = scalar2;
-                }
-
-                // Transition 1 (Note: simplification, usually needs next_state)
-                buffer.Add(obs1_dest, robotActions.data() + (i*2*actionDim), scalar1, obs1_dest, done_val);
-                // Transition 2
-                buffer.Add(obs2_dest, robotActions.data() + (i*2*actionDim+actionDim), scalar2, obs2_dest, done_val);
+                // CORRECT action indexing: Robot1 first, then Robot2
+                buffer.Add(obs1, robotActions.data() + i * actionDim, r1, obs1, done);
+                buffer.Add(obs2, robotActions.data() + numEnvs * actionDim + i * actionDim, r2, obs2, done);
                 
-                if (done_val) {
-                    // Get actual reward components before reset
-                    auto& r1data = vecEnv->GetEnv(i).GetRobot1();
-                    auto& r2data = vecEnv->GetEnv(i).GetRobot2();
+                if (done) {
+                    // Get vector rewards for UI display
+                    const auto& vr = allVectorRewards[i];
+                    float dmgDealt = vr.damage_dealt;
+                    float dmgTaken = vr.damage_taken;
+                    float energy = vr.energy_used;
                     
-                    // Push episode reward data for plotting (only once per episode)
-                    float dmgDealt = r1data.hp < 100.0f ? (100.0f - r2data.hp) / 100.0f : 0.0f;
-                    float dmgTaken = r2data.hp < 100.0f ? (100.0f - r1data.hp) / 100.0f : 0.0f;
-                    
-                    // Only push for render env to avoid filling history too fast
-                    if (i == ui.GetRenderEnvIdx()) {
-                        ui.PushRewardData(dmgDealt, dmgTaken, 0.0f, 0.0f, scalar1);
+                    if (i == renderIdx) {
+                        ui.PushRewardData(dmgDealt, dmgTaken, 0.0f, energy, dmgDealt - dmgTaken * 0.5f);
                     }
                     
                     mEpisodes++;
-                    // ELO Tracking: Determine winner based on HP
                     auto& robot1 = vecEnv->GetEnv(i).GetRobot1();
                     auto& robot2 = vecEnv->GetEnv(i).GetRobot2();
                     if (robot1.hp > robot2.hp) r1Wins++;
@@ -301,7 +298,7 @@ int main(int argc, char* argv[]) {
 
                     vecEnv->Reset(i);
                     
-                     // League Play: Rotate the opponent policy from the pool
+                    // League Play
                     if (leaguePlayEnabled && trainer.GetOpponentPool().Size() > 0) {
                         if (trainer.SampleOpponent()) {
                             opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());

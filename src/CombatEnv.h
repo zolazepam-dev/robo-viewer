@@ -79,6 +79,8 @@ public:
     const CombatRobotData& GetRobot2() const { return mRobot2; }
     CombatRobotData& GetRobot1Ref() { return mRobot1; }
     CombatRobotData& GetRobot2Ref() { return mRobot2; }
+    const VectorReward& GetRobot1Reward() const { return mReward1; }
+    const VectorReward& GetRobot2Reward() const { return mReward2; }
     int GetStepCount() const { return mStepCount; }
     bool IsDone() const { return mDone; }
     int GetObservationDim() const { return mObservationDim; }
@@ -112,4 +114,7 @@ private:
 
     float mAirAccumulator1 = 0.0f;
     float mAirAccumulator2 = 0.0f;
+    
+    VectorReward mReward1;
+    VectorReward mReward2;
 };

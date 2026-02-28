@@ -113,6 +113,12 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
         mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
         mAllDones[i] = done;
     }
+    
+    mAllVectorRewards.resize(mNumEnvs);
+    for (int i = 0; i < mNumEnvs; ++i) {
+        if (mAllDones[i]) continue;
+        mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
+    }
 }
 
 void VectorizedEnv::Reset(int envIndex)

@@ -429,5 +429,8 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
 
     r1 = vr1.Scalar();
     r2 = vr2.Scalar();
+    
+    mReward1 = vr1;
+    mReward2 = vr2;
 }
 CombatContactListener& CombatContactListener::Get() { static CombatContactListener instance; return instance; }
