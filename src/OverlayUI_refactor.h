@@ -85,6 +85,7 @@ public:
         mAgent1Reward = agent1;
         mAgent2Reward = agent2;
     }
+    void SetOpponentIndex(int idx) { mCurrentOpponentIdx = idx; }
     void PushRewardData(float damageDealt, float damageTaken, 
                         float airtime, float energy, float scalar);
     void PushPhysicsMetrics(float solverTime, float broadphaseTime, 
@@ -221,6 +222,7 @@ private:
     float mAvgReward = 0.0f;
     float mAgent1Reward = 0.0f;
     float mAgent2Reward = 0.0f;
+    int mCurrentOpponentIdx = 0;
     int mNumEnvs = 0;
     
     ImGuiContext* mContext = nullptr;

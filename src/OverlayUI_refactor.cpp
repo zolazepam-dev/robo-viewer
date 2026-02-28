@@ -276,9 +276,13 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::Text("Episodes: %d", mEpisodes);
     ImGui::TextColored(mColorWarning, "SPS: %.0f", mSPS);
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "AGENT REWARDS");
+    ImGui::TextColored(mColorAccent, "AGENT REWARDS");
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "Agent 1: %.3f", mAgent1Reward);
     ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Agent 2: %.3f", mAgent2Reward);
+    
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "LEAGUE PLAY");
+    ImGui::Text("Opponent ID: %d", mCurrentOpponentIdx);
     
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "DEBUG VALUES");
@@ -294,6 +298,7 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::Text("DEBUG: mRestartRequested = %s", mRestartRequested ? "true" : "false");
     ImGui::Text("DEBUG: mAgent1Reward = %.3f", mAgent1Reward);
     ImGui::Text("DEBUG: mAgent2Reward = %.3f", mAgent2Reward);
+    ImGui::Text("DEBUG: mCurrentOpponentIdx = %d", mCurrentOpponentIdx);
 }
 
 void OverlayUIRefactored::DrawPhysicsTab()

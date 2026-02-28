@@ -156,6 +156,7 @@ int main(int argc, char* argv[]) {
     int mEpisodes = 0;
     float currentRew1 = 0.0f;
     float currentRew2 = 0.0f;
+    int currentOpponentIdx = 0;
     VectorReward lastVR1, lastVR2;
     
 
@@ -304,6 +305,8 @@ int main(int argc, char* argv[]) {
                     if (leaguePlayEnabled && trainer.GetOpponentPool().Size() > 0) {
                         if (trainer.SampleOpponent()) {
                             opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
+                            currentOpponentIdx++;
+                            ui.SetOpponentIndex(currentOpponentIdx);
                         }
                     }
                 }
