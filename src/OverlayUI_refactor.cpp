@@ -284,6 +284,8 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "HEALTH");
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Agent 1: %.1f / 100", mAgent1HP);
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Agent 2: %.1f / 100", mAgent2HP);
+    ImGui::Text("HP Δ: A1 %.3f | A2 %.3f", mAgent1HPDelta, mAgent2HPDelta);
+    ImGui::Text("Impulse: %.3f", mLastImpulse);
     
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "LEAGUE PLAY");

@@ -20,12 +20,17 @@
 #include "PhysicsCore.h"
 #include "CombatRobot.h"
 
+#include "Config.h"
+
 Camera gCamera;
 
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "   Combat Self-Play Training           " << std::endl;
     std::cout << "========================================" << std::endl;
+    
+    // Load runtime configuration (defaults used if file missing)
+    LoadConfig("config/game_config.json");
     
     // Init GLFW
     if (!glfwInit()) return 1;

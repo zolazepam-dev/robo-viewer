@@ -6,8 +6,13 @@
 
 #include "VectorizedEnv.h"
 
+#include "Config.h"
+
 int main() {
     std::cout << "Main function started" << std::endl;
+    
+    // Load runtime configuration (defaults used if file missing)
+    LoadConfig("config/game_config.json");
     
     try {
         std::cout << "Creating VectorizedEnv(1)" << std::endl;

@@ -13,6 +13,7 @@
 #include "VectorizedEnv.h"
 #include "NeuralNetwork.h"
 #include "TD3Trainer.h"
+#include "Config.h"
 
 namespace fs = std::filesystem;
 
@@ -49,6 +50,9 @@ int main(int argc, char* argv[]) {
     
     EnsureDir(config.checkpointDir);
     EnsureDir("saved_models");
+
+    // Load runtime configuration (defaults if missing)
+    LoadConfig("config/game_config.json");
     
     // Initialize Training Environment (Headless)
     std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << std::endl;

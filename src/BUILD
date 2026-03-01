@@ -6,6 +6,7 @@ cc_library(
     name = "core",
     srcs = [
         "PhysicsCore.cpp",
+        "Config.cpp",
         "Renderer.cpp",
         "CombatRobot.cpp",
         "RobotLoader.cpp",
@@ -23,6 +24,7 @@ cc_library(
     ],
     hdrs = [
         "PhysicsCore.h",
+        "Config.h",
         "Renderer.h",
         "CombatRobot.h",
         "RobotLoader.h",

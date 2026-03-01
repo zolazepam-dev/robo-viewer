@@ -1,0 +1,71 @@
+Codebase TXT snapshot (current problems)
+=======================================
+Repo: /home/cammyz/robo-viewer (JOLTrl / robo-viewer)
+Date: now
+
+Scope
+-----
+- Single-file text summary for external review ("oracle").
+- Focus: damage/HP never decreasing, reward starvation.
+
+Key files
+---------
+- src/CombatEnv.cpp/.h — damage checks, rewards, reset.
+- src/CombatRobot.cpp/.h — robot state (hp, damage tracking).
+- src/VectorizedEnv.cpp — registers CombatContactListener with Jolt.
+- AGENTS.md — architecture and rules (zero allocation, contact layers).
+
+Current problem
+---------------
+- HP never drops during episodes; rewards tied to HP deltas stay zero.
+- Logs show robots moving, but no effective damage or HP changes.
+
+Observed logic (CombatEnv::CheckCollisions)
+------------------------------------------
+- Thresholds: spikeThreshold=3.0f, engineThreshold=5.5f, shellThreshold=5.5f.
+- Damage formulas (with DAMAGE_MULTIPLIER=10):
+  * Shell bump: dmg = |relVel_shell| * 0.0010 + 0.10 (only victim loses HP).
+  * Satellite spikes: |relVel| * 0.002 + 0.05 when within 3m.
+  * Internal engines: |relVel| * 0.003 + 0.08 when within 5.5m.
+- Symmetric chip damage: uses CombatContactListener impulseMagnitude[0]; if >0.01 then dmg = impulse * 0.0005 + 0.05 applied to both.
+- Debug prints exist for shell distance, damage, impulse.
+
+Contact pipeline (CombatContactListener)
+---------------------------------------
+- On contact add/persist: logs object layers and computes relVel magnitude; adds to impulseMagnitude[0] for both robots in that env.
+- If contacts never register (no [Contact] logs or impulse stays 0), chip damage path never fires.
+- Layer/env mapping: envIdx derived from object layer (Layers::MOVING_BASE offset). If layers mismatch or collisions filtered, envIdx may bail or contacts blocked.
+
+Reset and rewards
+-----------------
+- Reset sets hp to INITIAL_HP=100 and zeros totals (CombatEnv::Reset).
+- CalculateRewards uses HP deltas (prevHp - currentHp). With no HP change, damage_dealt/damage_taken rewards are zero; proximity/approach terms are small.
+
+Hypotheses why HP never drops
+-----------------------------
+1) Collision layers/filters prevent contact events between opponents (no [Contact] logs; impulseMagnitude remains 0).
+2) Distance gates rarely satisfied: spawn spacing ~5m with shell radius ~2m; spike threshold 3m may be too tight; engines/shell 5.5m may still be too tight if broadphase keeps separation.
+3) Damage scaling too small: at speed ~10, shell damage ~0.11 HP; spike ~0.25; engine ~0.38. HP 100 means very slow decay.
+4) Chip damage path inactive: impulseMagnitude not populated (contact listener not firing or reset each step).
+
+Quick reproduction checklist
+----------------------------
+- Run viewer: `bazel run //:viewer` and watch HP; expect no change currently.
+- Check logs: look for `[Contact]` and `[Damage]` lines. If absent, collision filtering is the issue.
+
+Minimal experiments to confirm pipeline
+---------------------------------------
+- Temporarily increase thresholds to 8–10m and multipliers by 10x (e.g., shell 0.01, spike 0.02, engine 0.03; floors 0.5–1.0). HP should drop quickly if contact path works.
+- If still no HP change, force damage without distance check to verify HP updates; if HP then drops, thresholds/filtering are blocking.
+- If HP never drops even when forced, HP may be reset elsewhere (not observed) or mainBodyId invalid; check that mainBodyId is valid after Reset.
+
+Open questions for oracle
+-------------------------
+- Are object layers set so opposing robots collide? Are satellites/spikes assigned colliding layers?
+- Should damage be tied to contact manifold impulse/kinetic energy instead of raw relVel magnitude?
+- Do spawn offsets or sleep/activation states prevent close contact? (mAllowSleeping is expected false per AGENTS.md.)
+
+Notes on instrumentation
+------------------------
+- Add one-time logs when HP crosses 75/50/25 to avoid per-frame spam.
+- Log impulseMagnitude accumulation per step to confirm contact listener is called.

@@ -16,12 +16,14 @@
 #include <atomic>
 #include <algorithm>
 #include <cstring>
+#include <unistd.h>  // for access()
 
 #include "src/VectorizedEnv.h"
 #include "src/NeuralNetwork.h"
 #include "src/TD3Trainer.h"
 #include "src/Renderer.h"
 #include "src/OverlayUI_refactor.h"
+#include "src/Config.h"
 
 namespace fs = std::filesystem;
 
@@ -88,6 +90,9 @@ int main(int argc, char* argv[]) {
             numEnvs = std::stoi(argv[++i]);
         }
     }
+
+    // Load runtime configuration (defaults used if file missing)
+    LoadConfig("config/game_config.json");
 
     const char* home = std::getenv("HOME");
     std::string checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints";
@@ -242,6 +247,9 @@ int main(int argc, char* argv[]) {
             PhysicsCore* core = vecEnv->GetPhysicsCore();
             core->GetPhysicsSystem().Update(1.0f / physicsHz * timeScale, 1, core->GetTempAllocator(), core->GetJobSystem());
             
+            // HARVEST state after physics update - this calls CheckCollisions() and computes rewards!
+            vecEnv->HarvestAfterPhysics();
+            
             // Apply physics settings from UI
             {
                 const auto& phys = ui.GetPhysics();
@@ -335,8 +343,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (ui.GetAndClearGraphRequest()) {
-            std::string cmd = "./micro_board_gui " + telemetryPath + " &";
-            std::cout << "[main_train] Launching 3D Graph: " << cmd << std::endl;
+            // Launch the 3D telemetry grapher
+            std::string cmd = "./telemetry_grapher " + telemetryPath + " &";
+            std::cout << "[main_train] Launching 3D Telemetry Grapher: " << cmd << std::endl;
             system(cmd.c_str());
         }
 
@@ -369,9 +378,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Update HP display
+        // Update HP and impulse display for the render environment
         auto& envHP = vecEnv->GetEnv(ui.GetRenderEnvIdx());
         ui.UpdateAgentHP(envHP.GetRobot1().hp, envHP.GetRobot2().hp);
+        ui.UpdateImpulse(envHP.GetLastImpulse());
 
         // Update UI stats every frame
         ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 

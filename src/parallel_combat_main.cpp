@@ -19,6 +19,8 @@
 #include "TD3Trainer.h"
 #include "Renderer.h"
 
+#include "Config.h"
+
 namespace fs = std::filesystem;
 
 Camera gCamera;
@@ -89,6 +91,9 @@ int main(int argc, char* argv[]) {
     
     EnsureDir(config.checkpointDir);
     EnsureDir("saved_models");
+    
+    // Load runtime configuration (defaults used if file missing)
+    LoadConfig("config/game_config.json");
     
     if (!glfwInit()) return 1;
     

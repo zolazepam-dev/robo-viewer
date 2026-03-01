@@ -69,13 +69,13 @@ Core 0 (Threads 0 & 6) is reserved for the OS background tasks and the main RL p
 
 Cores 1-5 (Threads 1-5, 7-11) are strictly pinned to Jolt's worker thread pool using pthread_setaffinity_np.
 
-3. Dimensional Ghosting
+`3. Dimensional Ghosting
 Parallel environments do not exist in separate PhysicsSystem instances.
 
 All training agents are spawned into a single, unified 0,0,0 coordinate space.
 
 Inter-robot collisions are bypassed mathematically at the broadphase level using heavily customized ObjectLayerPairFilter configurations.
-
+`
 4. The Physics Loop (Fidelity over Frames)
 Simulation is completely uncoupled from real-time rendering.
 

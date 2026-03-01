@@ -85,7 +85,12 @@ public:
         mAgent1Reward = agent1;
         mAgent2Reward = agent2;
     }
+    void UpdateImpulse(float impulse) { mLastImpulse = impulse; }
     void UpdateAgentHP(float hp1, float hp2) {
+        mAgent1HPDelta = hp1 - mAgent1HPLast;
+        mAgent2HPDelta = hp2 - mAgent2HPLast;
+        mAgent1HPLast = hp1;
+        mAgent2HPLast = hp2;
         mAgent1HP = hp1;
         mAgent2HP = hp2;
     }
@@ -230,6 +235,11 @@ private:
     float mAgent2Reward = 0.0f;
     float mAgent1HP = 100.0f;
     float mAgent2HP = 100.0f;
+    float mAgent1HPLast = 100.0f;
+    float mAgent2HPLast = 100.0f;
+    float mAgent1HPDelta = 0.0f;
+    float mAgent2HPDelta = 0.0f;
+    float mLastImpulse = 0.0f;
     int mCurrentOpponentIdx = 0;
     int mNumEnvs = 0;
     

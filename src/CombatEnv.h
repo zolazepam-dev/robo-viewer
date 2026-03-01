@@ -12,12 +12,10 @@
 #include "CombatRobot.h"
 #include "AlignedAllocator.h"
 
+#include "Config.h"
+
 constexpr float ARENA_SIZE = 36.0f;
 constexpr float ARENA_HALF = ARENA_SIZE * 0.5f;
-constexpr float ROBOT_SPAWN_OFFSET = 10.0f;
-constexpr float INITIAL_HP = 100.0f;
-constexpr float DAMAGE_MULTIPLIER = 5.0f;
-constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz
 
 constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
 constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
@@ -84,6 +82,7 @@ public:
     int GetStepCount() const { return mStepCount; }
     bool IsDone() const { return mDone; }
     int GetObservationDim() const { return mObservationDim; }
+    float GetLastImpulse() const { return mLastImpulse; }
 
 private:
     void CheckCollisions();
@@ -111,6 +110,8 @@ private:
     float mPrevHp2 = INITIAL_HP;
     float mPrevEnergy1 = 0.0f;
     float mPrevEnergy2 = 0.0f;
+
+    float mLastImpulse = 0.0f;
 
     float mAirAccumulator1 = 0.0f;
     float mAirAccumulator2 = 0.0f;

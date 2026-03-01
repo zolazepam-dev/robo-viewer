@@ -121,6 +121,34 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
     }
 }
 
+
+void VectorizedEnv::HarvestAfterPhysics()
+{
+    // Harvest state from all environments after physics was updated externally
+    // This is used when main_train.cpp handles action queuing and physics stepping
+    const int actionDim = ACTIONS_PER_ROBOT;
+    for (int i = 0; i < mNumEnvs; ++i)
+    {
+        if (mAllDones[i]) continue;
+        
+        int obsOffset = i * mObservationDim * 2;
+        float* obs1 = mAllObservations.data() + obsOffset;
+        float* obs2 = mAllObservations.data() + obsOffset + mObservationDim;
+        float* reward1 = mAllRewards.data() + (i * 2);
+        float* reward2 = mAllRewards.data() + (i * 2 + 1);
+        bool done = false;
+
+        mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
+        mAllDones[i] = done;
+    }
+    
+    mAllVectorRewards.resize(mNumEnvs);
+    for (int i = 0; i < mNumEnvs; ++i) {
+        if (mAllDones[i]) continue;
+        mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
+    }
+}
+
 void VectorizedEnv::Reset(int envIndex)
 {
     if (envIndex < 0)

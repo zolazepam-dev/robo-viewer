@@ -238,4 +238,26 @@ void InternalRobotLoader::ApplyInternalActions(
     bodyInterface.AddTorque(robot.mainBodyId, reactionTorque);
 
     robot.totalEnergyUsed += energySum * 0.0001f;
+    
+    // Reaction Wheels - Simulated gyroscopic effect via counter-torques
+    // 3 orthogonal wheels: X (actions[47]), Y (actions[48]), Z (actions[49])
+    const float gyroScale = robot.actionScale.rotationScale * 0.25f;  // Weaker gyroscopic effect
+    for (int i = 0; i < NUM_REACTION_WHEELS; ++i) {
+        float wheelAction = actions[47 + i];
+        
+        JPH::Vec3 axis;
+        if (i == 0) axis = JPH::Vec3(1, 0, 0);
+        else if (i == 1) axis = JPH::Vec3(0, 1, 0);
+        else axis = JPH::Vec3(0, 0, 1);
+        
+        JPH::Vec3 torque = axis * wheelAction * gyroScale;
+        
+        // Apply counter-torque to main body (simulates reaction wheel gyroscopic effect)
+        bodyInterface.AddTorque(robot.mainBodyId, -torque);
+        
+        // Update wheel state (simulated RPM based on cumulative torque)
+        robot.reactionWheels[i].targetTorque = torque.Length();
+        robot.reactionWheels[i].rpm += wheelAction * 30.0f;  // Slower RPM buildup  // Simplified RPM model
+        robot.reactionWheels[i].rpm *= 0.98f;  // Natural decay
+    }
 }

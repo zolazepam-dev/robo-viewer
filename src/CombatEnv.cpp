@@ -65,16 +65,17 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
 
 void CombatEnv::Reset()
 {
+    const Config& cfg = GetConfig();
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     
     mStepCount = 0;
     mDone = false;
-    mPrevHp1 = INITIAL_HP;
-    mPrevHp2 = INITIAL_HP;
+    mPrevHp1 = cfg.hp.initial;
+    mPrevHp2 = cfg.hp.initial;
     mPrevEnergy1 = 0.0f;
     mPrevEnergy2 = 0.0f;
-    mRobot1.hp = INITIAL_HP;
-    mRobot2.hp = INITIAL_HP;
+    mRobot1.hp = cfg.hp.initial;
+    mRobot2.hp = cfg.hp.initial;
     mRobot1.totalDamageDealt = 0.0f;
     mRobot1.totalDamageTaken = 0.0f;
     mRobot2.totalDamageDealt = 0.0f;
@@ -85,8 +86,8 @@ void CombatEnv::Reset()
 
     // Randomize KOTH point
     static std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<float> distXZ(-15.0f, 15.0f);
-    std::uniform_real_distribution<float> distY(2.0f, 12.0f);
+    std::uniform_real_distribution<float> distXZ(cfg.koth.randomXZMin, cfg.koth.randomXZMax);
+    std::uniform_real_distribution<float> distY(cfg.koth.randomYMin, cfg.koth.randomYMax);
     mKothPoint = JPH::RVec3(distXZ(rng), distY(rng), distXZ(rng));
 
     // Update KOTH visual position if it exists, otherwise create it
@@ -99,8 +100,8 @@ void CombatEnv::Reset()
     }
 
     // 2. Reset existing robots instead of destroying/recreating
-    JPH::RVec3 pos1(-10.0f, 5.0f, 0.0f);
-    JPH::RVec3 pos2(10.0f, 5.0f, 0.0f);
+    JPH::RVec3 pos1(-cfg.env.spawnOffset, cfg.env.spawnHeight, 0.0f);
+    JPH::RVec3 pos2(cfg.env.spawnOffset, cfg.env.spawnHeight, 0.0f);
     
     if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
         // First time initialization: load robots
@@ -112,7 +113,7 @@ void CombatEnv::Reset()
     } else {
         // Reset robot 1
         bodyInterface.SetPositionAndRotation(mRobot1.mainBodyId, pos1, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
+        bodyInterface.SetLinearVelocity(mRobot1.mainBodyId, JPH::Vec3(cfg.env.initialPushSpeed, 0.0f, 0.0f));
         bodyInterface.SetAngularVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
         for (int i = 0; i < NUM_SATELLITES; ++i) {
             if (!mRobot1.satellites[i].coreBodyId.IsInvalid()) {
@@ -132,7 +133,7 @@ void CombatEnv::Reset()
         
         // Reset robot 2
         bodyInterface.SetPositionAndRotation(mRobot2.mainBodyId, pos2, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
+        bodyInterface.SetLinearVelocity(mRobot2.mainBodyId, JPH::Vec3(-cfg.env.initialPushSpeed, 0.0f, 0.0f));
         bodyInterface.SetAngularVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
         for (int i = 0; i < NUM_SATELLITES; ++i) {
             if (!mRobot2.satellites[i].coreBodyId.IsInvalid()) {
@@ -169,6 +170,7 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 
 void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done)
 {
+    const Config& cfg = GetConfig();
     if (mDone) {
         done = true;
         return;
@@ -187,7 +189,7 @@ void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* re
 
     CalculateRewards(*reward1, *reward2);
 
-    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= MAX_EPISODE_STEPS) {
+    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= cfg.env.maxSteps) {
         mDone = true;
     }
     
@@ -196,9 +198,10 @@ void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* re
 
 void CombatEnv::CheckCollisions()
 {
+    const Config& cfg = GetConfig();
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-    const float spikeThreshold = 0.55f;
-    const float engineThreshold = 1.0f; // Larger radius for engine slam
+    const float spikeThreshold = cfg.damage.spikeThreshold;
+    const float engineThreshold = cfg.damage.engineThreshold; // Larger radius for engine slam
 
     auto applyDamage = [&](CombatRobotData& attacker, CombatRobotData& victim) {
         if (attacker.mainBodyId.IsInvalid() || victim.mainBodyId.IsInvalid()) return;
@@ -211,7 +214,7 @@ void CombatEnv::CheckCollisions()
                 JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
                 if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
                     JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].spikeBodyId);
-                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.001f;
+                    float damage = vel.Length() * cfg.damage.multiplier * cfg.damage.spikeScale + cfg.damage.spikeFloor;
                     victim.hp -= damage;
                     attacker.totalDamageDealt += damage;
                     victim.totalDamageTaken += damage;
@@ -225,7 +228,7 @@ void CombatEnv::CheckCollisions()
                 JPH::RVec3 engPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
                 if ((engPos - victimPos).LengthSq() < engineThreshold * engineThreshold) {
                     JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
-                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.002f; // Heavier slam
+                    float damage = vel.Length() * cfg.damage.multiplier * cfg.damage.engineScale + cfg.damage.engineFloor; // Heavier slam
                     victim.hp -= damage;
                     attacker.totalDamageDealt += damage;
                     victim.totalDamageTaken += damage;
@@ -330,7 +333,12 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.impulseMagnitude[i];
     for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.jointStress[i];
 
-    // Current Mass Observations (for the new mass-shifting feature)
+    // Reaction Wheel RPM (gyroscopic state)
+    for (int i = 0; i < NUM_REACTION_WHEELS; ++i) {
+        obs[idx++] = robot.reactionWheels[i].rpm / 1000.0f;  // Normalize to [-1, 1]
+    }
+    
+    // Current Mass Observations
     obs[idx++] = bodyInterface.GetShape(robot.mainBodyId)->GetMassProperties().mMass / 50.0f;
     for (int i = 0; i < 3; ++i) {
         if (!robot.satellites[i].coreBodyId.IsInvalid()) {
@@ -345,6 +353,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
 
 void CombatEnv::CalculateRewards(float& r1, float& r2)
 {
+    const Config& cfg = GetConfig();
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
     
     JPH::RVec3 pos1 = bodyInterface.GetPosition(mRobot1.mainBodyId);
@@ -356,24 +365,24 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     float dist = static_cast<float>((pos2 - pos1).Length());
     
     float prox1 = 0.0f;
-    if (dist < 15.0f) {
-        prox1 = 0.1f * (1.0f - (dist / 15.0f)); 
+    if (dist < cfg.reward.proximityRange) {
+        prox1 = cfg.reward.proximityScale * (1.0f - (dist / cfg.reward.proximityRange)); 
     } else {
-        prox1 = -0.05f * (dist - 15.0f); // Scaling penalty for being far
+        prox1 = -cfg.reward.proximityFarPenalty * (dist - cfg.reward.proximityRange); // Scaling penalty for being far
     }
 
     // Directional Attack Reward (moving toward opponent)
     JPH::Vec3 toOpponent1 = JPH::Vec3(pos2 - pos1).Normalized();
     JPH::Vec3 toOpponent2 = JPH::Vec3(pos1 - pos2).Normalized();
-    float approach1 = vel1.Dot(toOpponent1) * 0.02f;
-    float approach2 = vel2.Dot(toOpponent2) * 0.02f;
+    float approach1 = vel1.Dot(toOpponent1) * cfg.reward.approachScale;
+    float approach2 = vel2.Dot(toOpponent2) * cfg.reward.approachScale;
 
     // Wall Penalty (Arena size is 36, so walls are at +/- 18)
-    auto calcWallPenalty = [](const JPH::RVec3& p) {
+    auto calcWallPenalty = [&](const JPH::RVec3& p) {
         float px = std::abs(p.GetX());
         float pz = std::abs(p.GetZ());
         float maxD = std::max(px, pz);
-        if (maxD > 14.0f) return -0.1f * (maxD - 14.0f); // Gradual penalty starting 4m from wall
+        if (maxD > cfg.reward.wallStart) return -cfg.reward.wallPenaltyScale * (maxD - cfg.reward.wallStart); // Gradual penalty starting 4m from wall
         return 0.0f;
     };
     float wallPenalty1 = calcWallPenalty(pos1);
@@ -404,24 +413,24 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     mPrevEnergy1 = mRobot1.totalEnergyUsed;
     mPrevEnergy2 = mRobot2.totalEnergyUsed;
 
-    vr1.energy_used = -deltaEnergy1 * 0.01f;
-    vr2.energy_used = -deltaEnergy2 * 0.01f;
+    vr1.energy_used = -deltaEnergy1 * cfg.reward.energyScale;
+    vr2.energy_used = -deltaEnergy2 * cfg.reward.energyScale;
 
     // 4. KOTH Reward (Whoever is closest to the random target point)
     float distToKoth1 = static_cast<float>((pos1 - mKothPoint).Length());
     float distToKoth2 = static_cast<float>((pos2 - mKothPoint).Length());
 
     if (distToKoth1 < distToKoth2) {
-        vr1.koth = 0.1f;
+        vr1.koth = cfg.reward.kothWin;
         vr2.koth = 0.0f;
     } else {
         vr1.koth = 0.0f;
-        vr2.koth = 0.1f;
+        vr2.koth = cfg.reward.kothWin;
     }
 
     // 5. Altitude
-    vr1.altitude = std::max(0.0f, (float)pos1.GetY() * 0.05f);
-    vr2.altitude = std::max(0.0f, (float)pos2.GetY() * 0.05f);
+    vr1.altitude = std::max(0.0f, (float)pos1.GetY() * cfg.reward.altitudeScale);
+    vr2.altitude = std::max(0.0f, (float)pos2.GetY() * cfg.reward.altitudeScale);
 
     // Shape the damage reward to encourage engagement
     vr1.damage_dealt += (prox1 + approach1 + wallPenalty1);

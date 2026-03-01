@@ -13,6 +13,7 @@
 #include <cmath>
 
 constexpr int NUM_SATELLITES = 6;
+constexpr int NUM_REACTION_WHEELS = 3;  // For gyroscopic control
 constexpr int ACTIONS_PER_SATELLITE = 4;
 constexpr int REACTION_WHEEL_DIM = 4;
 constexpr int ACTIONS_PER_ROBOT = 56; // Matching VectorizedEnv: 6*4=24 for satellites, then reaction wheels and bursts at end
@@ -58,6 +59,14 @@ struct PIDController
     }
 };
 
+
+struct ReactionWheelState {
+    float rpm = 0.0f;      // Current RPM
+    float targetTorque = 0.0f;  // Last applied torque
+    
+    ReactionWheelState() : rpm(0.0f), targetTorque(0.0f) {}
+};
+
 struct SatelliteData
 {
     JPH::BodyID coreBodyId;
@@ -90,6 +99,7 @@ struct CombatRobotData
     RobotType type = RobotType::SATELLITE;
     JPH::BodyID mainBodyId;
     std::array<SatelliteData, NUM_SATELLITES> satellites;
+    std::array<ReactionWheelState, NUM_REACTION_WHEELS> reactionWheels;  // Zero-init by default constructor  // Gyroscopic control
     float hp = 100.0f;
 
     uint32_t envIndex = 0;

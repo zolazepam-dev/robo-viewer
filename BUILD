@@ -6,6 +6,7 @@ cc_binary(
     data = [
         "//robots:combat_bot.json",
         "//robots:internal_bot.json",
+        "config/game_config.json",
     ],
     deps = [
         "//src:core",
@@ -28,6 +29,7 @@ cc_binary(
     data = [
         "//robots:combat_bot.json",
         "//robots:internal_bot.json",
+        "config/game_config.json",
     ],
     deps = [
         "//src:core",
@@ -114,6 +116,7 @@ cc_binary(
     data = [
         "//robots:combat_bot.json",
         "//robots:internal_bot.json",
+        "config/game_config.json",
     ],
     deps = [
         "//src:core",
@@ -148,7 +151,7 @@ cc_binary(
 cc_binary(
     name = "minimal_test",
     srcs = ["//src:main_train_minimal.cpp"],
-    data = ["//robots:combat_bot.json"],
+    data = ["//robots:combat_bot.json", "config/game_config.json"],
     deps = [
         "//src:core",
         "@nlohmann_json//:json",
@@ -232,8 +235,8 @@ cc_binary(
 
 cc_binary(
     name = "micro_board",
-    srcs = [
-        "micro_board.cpp",
+    srcs = ["micro_board.cpp"],
+    data = [
         "fonts/ttf-bitstream-vera/Vera.ttf",
         "fonts/ttf-bitstream-vera/VeraIt.ttf",
         "fonts/ttf-bitstream-vera/VeraBd.ttf",
@@ -287,4 +290,43 @@ cc_binary(
     name = "micro_board_simple",
     srcs = ["micro_board_simple.cpp"],
     copts = ["-std=c++17", "-O3"],
+)
+
+# clangd compilation database generation
+load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
+
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    # Specify the main targets we use for development
+    # This avoids issues with problematic targets like micro_board
+    targets = {
+        "//:train": "",
+        "//:viewer": "",
+        "//:system_test": "",
+        "//:sequential_test": "",
+        "//:simple_test": "",
+        "//:json_test": "",
+        "//:jolt_test": "",
+        "//:train_headless": "",
+    },
+    # Exclude external sources to avoid issues with precompiled headers in dependencies
+    exclude_external_sources = True,
+    exclude_headers = "all",
+)
+
+cc_binary(
+    name = "telemetry_grapher",
+    srcs = ["//src:telemetry_grapher.cpp"],
+    deps = [
+        "//src:core",
+        "//:local_morphologica",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
 )

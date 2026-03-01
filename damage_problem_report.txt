@@ -1,0 +1,75 @@
+JOLTrl / robo-viewer damage issue summary (single-file backup for oracle)
+====================================================================
+
+Repository context
+------------------
+- Project: high-performance RL combat robots on Jolt Physics (train + viewer).
+- Key files: src/CombatEnv.cpp/.h, CombatRobot.cpp/.h, CombatContactListener.
+- HP constants: INITIAL_HP = 100; DAMAGE_MULTIPLIER = 10; thresholds in CombatEnv::CheckCollisions.
+
+Problem statement (as observed/complained)
+------------------------------------------
+- Damage logic seems broken/insufficient: hits rarely reduce HP, episodes stall because robots survive too long, and reward shaping tied to HP deltas gives near-zero signal.
+- We want a concise snapshot so an "oracle" can advise how to fix.
+
+Where damage is applied
+-----------------------
+1) CombatEnv::CheckCollisions() @ src/CombatEnv.cpp
+   - Defines thresholds: spikeThreshold=3.0, engineThreshold=5.5, shellThreshold=5.5.
+   - applyDamage(attacker,victim):
+     * Shell-to-shell: if distance^2 < shellThreshold^2 then damage = |v_rel_shell| * DMG * 0.0010 + 0.10. Only victim shell loses HP; attacker gains totalDamageDealt.
+     * Satellite spikes: for each spike within 3.0m, damage = |v_rel| * DMG * 0.002 + 0.05.
+     * Internal engines: for each engine core within 5.5m, damage = |v_rel| * DMG * 0.003 + 0.08.
+   - After both directions, symmetric chip damage uses impulseMagnitude[0] from CombatContactListener: if impulse > 0.01, dmg = impulse * DMG * 0.0005 + 0.05 applied to both robots (dealt/taken increments on both).
+   - Debug prints currently active (shell distance + damage lines) every step -> performance noise, but confirms calculations.
+
+2) Reward ties damage to HP deltas
+   - CombatEnv::CalculateRewards(): deltaDmgTaken = max(0, prevHp - currentHp); damage_dealt = opponent delta.
+   - mPrevHp1/2 updated after computing deltas. If HP never changes, rewards stay near zero.
+
+3) Reset paths
+   - CombatEnv::Reset(): sets hp to INITIAL_HP, zeroes totals, resets positions/velocities; reuses bodies instead of recreating. Satellites reset velocities; engines repositioned for internal robots.
+   - CombatRobotLoader::ResetRobot(): also zeros hp/damage/energy when called (used by loader).
+
+Hypotheses for the damage bug
+-----------------------------
+- Distance gates too large or too small: 3m spike and 5.5m shell/engine thresholds may seldom trigger given spawn spacing (~5m) and shell radius (~2m). Movement may not close gaps quickly enough; shell distances logged show if never below threshold.
+- Relative velocity scaling is tiny: multipliers 0.0010/0.002/0.003 with DMG=10 mean ~0.1–0.3 damage even at |v|=10, so HP decays very slowly; combined with chip damage floor 0.05, total per hit is low.
+- Contact listener impulseMagnitude[0] may stay near zero: if contact filtering prevents overlaps, chip damage path may never fire.
+- Robots may spend time airborne or sliding without contact; reward still expects HP deltas, so training signal vanishes.
+- Debug prints suggest code executes but HP remains ~100 for long runs.
+
+Suggested directions for oracle/next steps
+------------------------------------------
+1) Verify proximity triggers:
+   - Log/inspect shellDist vs thresholds; consider lowering spikeThreshold to 1.5–2.0m? or increasing if bodies never get that close due to broadphase separation.
+   - Check Jolt collision layers/object filters to ensure satellites/spikes actually collide with opponent shells; contact listener may be filtering them out.
+
+2) Increase damage scaling:
+   - Try larger multipliers or floor values (e.g., *0.01 with DMG=10) so moderate impacts remove several HP.
+   - Alternatively reduce INITIAL_HP.
+
+3) Ensure impulse-based chip damage works:
+   - Confirm CombatContactListener populates impulseMagnitude[0]; if always zero, add debug there or accumulate max manifold impulse.
+   - Consider using manifold normal impulse instead of custom field.
+
+4) Simplify for debugging:
+   - Temporarily disable distance gating and apply damage on any detected contact to confirm pipeline works.
+   - Add one-time log when HP crosses thresholds (75/50/25) instead of per-step spam.
+
+5) Reproduction baseline:
+   - Run bazel run //:viewer to visualize collisions.
+   - Use bazel run //:train --config=opt and track HP over time; if HP rarely drops, damage logic is ineffective.
+
+Key constants to tweak
+----------------------
+- DAMAGE_MULTIPLIER (CombatEnv.h): 10.0f.
+- spikeThreshold=3.0f, engineThreshold=5.5f, shellThreshold=5.5f (CombatEnv::CheckCollisions).
+- Damage formulas: spike 0.002, engine 0.003, shell 0.0010 terms + floors 0.05/0.08/0.10.
+
+Open questions for oracle
+-------------------------
+- Are contact layers allowing spike/core vs opponent shell collisions?
+- What are actual body radii; should thresholds be tied to shape sizes rather than constants?
+- Should damage be tied to impulse/kinetic energy instead of raw relative velocity?
+- Is HP clamped elsewhere or reset mid-episode inadvertently?
