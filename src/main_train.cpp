@@ -370,7 +370,18 @@ int main(int argc, char* argv[]) {
             // SPS = steps per second * numEnvs (each step processes all envs)
             sps = (step_counter * vecEnv->GetNumEnvs()) / spsElapsed.count(); 
             step_counter = 0; 
-            lastSpsTime = now; 
+            lastSpsTime = now;
+            
+            // Periodic battery status for rendered env (every 200 steps)
+            if (totalSteps > 0 && totalSteps % 200 == 0) {
+                int rIdx = ui.GetRenderEnvIdx();
+                auto& renv = vecEnv->GetEnv(rIdx);
+                auto& r1 = renv.GetRobot1Ref();
+                auto& r2 = renv.GetRobot2Ref();
+                std::cout << "\033[1;37m🔋 ENV[" << rIdx << "] Step " << totalSteps 
+                          << " | R1: " << r1.battery.currentCharge << "/1000"
+                          << " | R2: " << r2.battery.currentCharge << "/1000\033[0m" << std::endl;
+            } 
             
             // CSV Telemetry output for micro_board
             if (!ui.IsPaused()) {
