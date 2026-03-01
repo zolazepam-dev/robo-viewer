@@ -9,6 +9,15 @@
 #include <cmath>
 #include <cstring>
 
+
+struct BattleNotification
+{
+    std::string message;
+    ImVec4 color;
+    float displayTime = 0.0f;
+    float maxDisplayTime = 3.0f;
+};
+
 struct RewardHistory
 {
     static constexpr int HISTORY_SIZE = 200;
@@ -60,6 +69,9 @@ public:
     void SetTrainingStats(int totalSteps, int episodes, float sps, float avgReward);
     void SetEnvironmentStats(int numEnvs, int selectedEnv);
     void PushRewardHistory(float damageDealt, float damageTaken, float airtime, float energy, float scalar);
+    void AddBattleNotification(const std::string& msg, ImVec4 color);
+    void DrawBattleNotifications();
+    void UpdateBattleNotifications(float dt);
     
     bool IsPaused() const { return mPaused; }
     bool IsRenderingEnabled() const { return mRenderEnabled; }
@@ -83,12 +95,16 @@ private:
     int mNumEnvs = 0;
     
     RewardHistory mRewardHistory;
+    std::vector<BattleNotification> mNotifications;
     
-    ImVec4 mColorBg{0.02f, 0.02f, 0.05f, 1.0f};
+    // Public colors for notifications
     ImVec4 mColorAccent{0.0f, 1.0f, 0.85f, 1.0f};
     ImVec4 mColorAccent2{1.0f, 0.0f, 0.5f, 1.0f};
     ImVec4 mColorAccent3{0.0f, 0.5f, 1.0f, 1.0f};
     ImVec4 mColorWarning{1.0f, 0.85f, 0.0f, 1.0f};
     ImVec4 mColorText{0.9f, 0.9f, 0.95f, 1.0f};
     ImVec4 mColorDim{0.5f, 0.5f, 0.6f, 0.8f};
+    
+private:
+    ImVec4 mColorBg{0.02f, 0.02f, 0.05f, 1.0f};
 };

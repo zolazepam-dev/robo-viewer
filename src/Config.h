@@ -4,12 +4,12 @@
 
 struct DamageConfig {
     float multiplier = 10.0f;
-    float spikeThreshold = 0.55f;
-    float engineThreshold = 1.0f;
-    float spikeScale = 0.001f;
-    float engineScale = 0.002f;
-    float spikeFloor = 0.0f;
-    float engineFloor = 0.0f;
+    float spikeThreshold = 3.5f;     // Was 0.55 - now accounts for 2m radius shells
+    float engineThreshold = 4.0f;     // Was 1.0 - now accounts for shell contact
+    float spikeScale = 0.002f;        // Doubled for more visible damage
+    float engineScale = 0.003f;       // Doubled for more visible damage
+    float spikeFloor = 0.1f;          // Minimum damage even at low velocity
+    float engineFloor = 0.15f;        // Minimum damage even at low velocity
 };
 
 struct HpConfig {
@@ -26,9 +26,9 @@ struct KothConfig {
 
 struct EnvConfig {
     int maxSteps = 7200;
-    float spawnOffset = 2.5f;
+    float spawnOffset = 2.0f;  // Reduced from 2.5 - robots now 4m apart (touching)
     float spawnHeight = 5.0f;
-    float initialPushSpeed = 8.0f;
+    float initialPushSpeed = 5.0f;  // Push robots toward each other at spawn
 };
 
 struct RewardConfig {
@@ -44,7 +44,7 @@ struct RewardConfig {
 };
 
 struct DebugConfig {
-    bool enableDamageLogs = false;
+    bool enableDamageLogs = false;  // Set to true for combat debugging
 };
 
 struct Config {

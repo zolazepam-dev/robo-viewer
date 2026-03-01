@@ -54,6 +54,18 @@ int main(int argc, char* argv[]) {
     // Load runtime configuration (defaults if missing)
     LoadConfig("config/game_config.json");
     
+    std::cout << std::endl;
+    std::cout << "========================================" << std::endl;
+    std::cout << "[MAIN] JOLTrl Headless Training Starting" << std::endl;
+    {
+        const Config& dbgCfg = GetConfig();
+        std::cout << "  spike_thresh=" << dbgCfg.damage.spikeThreshold << std::endl;
+        std::cout << "  engine_thresh=" << dbgCfg.damage.engineThreshold << std::endl;
+        std::cout << "  spawn_offset=" << dbgCfg.env.spawnOffset << std::endl;
+    }
+    std::cout << "========================================" << std::endl;
+    std::cout << std::endl;
+    
     // Initialize Training Environment (Headless)
     std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << std::endl;
     VectorizedEnv vecEnv(config.numParallelEnvs);

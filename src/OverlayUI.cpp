@@ -137,6 +137,38 @@ void CyberpunkUI::SetEnvironmentStats(int numEnvs, int selectedEnv)
     mSelectedEnv = selectedEnv;
 }
 
+
+void CyberpunkUI::AddBattleNotification(const std::string& msg, ImVec4 color)
+{
+    BattleNotification notif;
+    notif.message = msg;
+    notif.color = color;
+    notif.displayTime = notif.maxDisplayTime;
+    mNotifications.push_back(notif);
+    if (mNotifications.size() > 5) mNotifications.erase(mNotifications.begin());
+}
+
+void CyberpunkUI::UpdateBattleNotifications(float dt)
+{
+    for (auto it = mNotifications.begin(); it != mNotifications.end(); ) {
+        it->displayTime -= dt;
+        if (it->displayTime <= 0.0f) it = mNotifications.erase(it);
+        else ++it;
+    }
+}
+
+void CyberpunkUI::DrawBattleNotifications()
+{
+    if (mNotifications.empty()) return;
+    ImGui::Begin("⚔️ Battle Log", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    for (auto& n : mNotifications) {
+        float alpha = n.displayTime / n.maxDisplayTime;
+        ImVec4 c = ImVec4(n.color.x, n.color.y, n.color.z, alpha);
+        ImGui::TextColored(c, "%s", n.message.c_str());
+    }
+    ImGui::End();
+}
+
 void CyberpunkUI::PushRewardHistory(float damageDealt, float damageTaken, float airtime, float energy, float scalar)
 {
     mRewardHistory.Push(damageDealt, damageTaken, airtime, energy, scalar);

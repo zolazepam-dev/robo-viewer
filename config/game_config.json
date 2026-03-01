@@ -1,12 +1,12 @@
 {
   "damage": {
     "multiplier": 10.0,
-    "spike_threshold": 0.55,
-    "engine_threshold": 1.0,
-    "spike_scale": 0.001,
-    "engine_scale": 0.002,
-    "spike_floor": 0.0,
-    "engine_floor": 0.0
+    "spike_threshold": 4.0,
+    "engine_threshold": 4.5,
+    "spike_scale": 0.002,
+    "engine_scale": 0.003,
+    "spike_floor": 0.1,
+    "engine_floor": 0.15
   },
   "hp": {
     "initial": 100.0
@@ -20,9 +20,9 @@
   },
   "env": {
     "max_steps": 7200,
-    "spawn_offset": 2.5,
+    "spawn_offset": 2.0,
     "spawn_height": 5.0,
-    "initial_push_speed": 8.0
+    "initial_push_speed": 5.0
   },
   "reward": {
     "proximity_range": 15.0,

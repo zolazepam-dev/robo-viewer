@@ -10,6 +10,8 @@
 #include "NeuralMath.h"
 #include "NeuralNetwork.h"
 #include "CombatRobot.h"
+
+constexpr float INITIAL_HP = 100.0f;
 #include "AlignedAllocator.h"
 
 #include "Config.h"
@@ -72,6 +74,7 @@ public:
 
     void QueueActions(const float* actions1, const float* actions2);
     void HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done);
+    void ManagePowerSystems(CombatRobotData& robot, const float* actions, float dt);
 
     const CombatRobotData& GetRobot1() const { return mRobot1; }
     const CombatRobotData& GetRobot2() const { return mRobot2; }
@@ -90,6 +93,9 @@ private:
     float ComputeAirtime() const;
     float ComputeEnergyUsed(const float* actions, int actionDim) const;
     void UpdateForceSensors();
+    
+    void ApplyEMP(CombatRobotData& target, float duration);
+    void ApplySlowmo(CombatRobotData& robot, float duration);
     void BuildObservationVector(float* obs, const CombatRobotData& robot,
                                  const CombatRobotData& opponent, const ForceSensorReading& forces);
 
@@ -98,6 +104,8 @@ private:
 
     CombatRobotData mRobot1;
     CombatRobotData mRobot2;
+    std::array<float, ACTIONS_PER_ROBOT> mRobot1Actions{};
+    std::array<float, ACTIONS_PER_ROBOT> mRobot2Actions{};
     uint32_t mEnvIndex = 0;
     int mStepCount = 0;
     bool mDone = false;

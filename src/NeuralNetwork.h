@@ -37,7 +37,15 @@ struct VectorReward
                altitude * preference[4];
     }
 
-    float Scalar() const
+        // Battery & Power System
+    float battery_charge = 0.0f;
+    float shield_health = 0.0f;
+    float emp_dealt = 0.0f;
+    float emp_received = 0.0f;
+    float slowmo_uptime = 0.0f;
+    float energy_efficiency = 0.0f;
+    
+float Scalar() const
     {
         return damage_dealt + damage_taken + koth + energy_used + altitude;
     }

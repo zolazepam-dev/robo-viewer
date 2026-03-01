@@ -17,7 +17,8 @@ public:
     void Init(bool initRobots = true);
     void Shutdown();
     void Step(const AlignedVector32<float>& actions);
-    void HarvestAfterPhysics();  // Harvest state after external physics update
+    void HarvestAfterPhysics();
+    void ManageAllPowerSystems(const AlignedVector32<float>& allActions, float dt);  // Harvest state after external physics update
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();
 

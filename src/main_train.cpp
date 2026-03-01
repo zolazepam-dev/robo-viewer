@@ -93,6 +93,17 @@ int main(int argc, char* argv[]) {
 
     // Load runtime configuration (defaults used if file missing)
     LoadConfig("config/game_config.json");
+    std::cout << std::endl;
+    std::cout << "========================================" << std::endl;
+    std::cout << "[MAIN] JOLTrl Training Starting" << std::endl;
+    {
+        const Config& dbgCfg = GetConfig();
+        std::cout << "  spike_thresh=" << dbgCfg.damage.spikeThreshold << std::endl;
+        std::cout << "  engine_thresh=" << dbgCfg.damage.engineThreshold << std::endl;
+        std::cout << "  spawn_offset=" << dbgCfg.env.spawnOffset << std::endl;
+    }
+    std::cout << "========================================" << std::endl;
+    std::cout << std::endl;
 
     const char* home = std::getenv("HOME");
     std::string checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints";
