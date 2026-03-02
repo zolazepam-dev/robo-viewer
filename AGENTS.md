@@ -185,3 +185,184 @@ This is non-negotiable and prevents catastrophic macro expansion errors.
 
 ### Sleep Mechanics
 Disable Jolt's "sleep" mechanics globally. RL agents are constantly exploring and must never be put to sleep by the broadphase. Check `PhysicsCore.cpp` for the `mAllowSleeping = false` configuration.
+## Battery Management System
+
+The project includes a comprehensive battery power management system for robot combat simulation.
+
+### Architecture
+
+```
+src/
+├── BatterySystem.h          # Core battery management (template-based, addable to any robot)
+├── CombatRobot.h            # BatterySystem integrated into CombatRobotData
+└── OverlayUI_refactor.*     # ImGui battery tab with real-time graphs
+```
+
+### BatterySystem Class
+
+Template-based system that can be added to any Jolt robot:
+
+```cpp
+#include "BatterySystem.h"
+
+class MyRobot {
+    BatterySystem battery;
+    
+    void Init() {
+        battery.Init(BatteryConfig{
+            .capacity = 1000.0f,        // Joules
+            .chargeRate = 20.0f,        // J/s
+            .maxOutput = 100.0f,        // J/s
+            .heatCapacity = 100.0f,     // Heat before overheat
+            .coolingRate = 5.0f,        // Heat/s dissipation
+            .overheatTemp = 80.0f,      // Celsius cutoff
+            .ambientTemp = 20.0f,       // Celsius
+            .regenEfficiency = 0.3f,    // 30% braking recovery
+            .wirelessRange = 5.0f,      // Meters
+            .wirelessMaxRate = 15.0f    // J/s at 0 distance
+        });
+    }
+    
+    void Update(float dt, const JPH::Vec3& velocity, const JPH::Vec3& prevVelocity) {
+        // Calculate distance to wireless charger (e.g., arena center)
+        float chargeDistance = position.Length();
+        battery.Update(dt, velocity, prevVelocity, chargeDistance);
+    }
+    
+    void UseAbility(float powerNeeded, float dt) {
+        float actual = battery.RequestPower(powerNeeded, PowerType::Attack, dt);
+        // ... use actual power available
+    }
+};
+```
+
+### Key Features
+
+1. **Energy Storage**: Configurable capacity with charge/discharge rate limits
+2. **Thermal Management**: 
+   - Heat generation from charging, discharging, and regenerative braking
+   - Passive cooling based on temperature differential
+   - Overheat cutoff at 80°C with auto-recovery when cooled 10°C below threshold
+3. **Wireless Charging**: Distance-based quadratic falloff from charging point
+4. **Regenerative Braking**: Automatic energy recovery on ANY deceleration (30% efficiency)
+5. **Power Output Settings**: Attack/movement/shield multipliers (0.1-1.0) to limit max output
+
+### Power Types
+
+```cpp
+enum class PowerType { Attack, Movement, Shield, General };
+```
+
+### Battery State Access
+
+```cpp
+const BatteryState& state = battery.GetState();
+
+// Energy
+float energy = state.currentEnergy;
+float totalCharged = state.totalCharged;
+float totalDischarged = state.totalDischarged;
+float totalRegenerated = state.totalRegenerated;
+
+// Thermal
+float temp = state.temperature;
+bool isOverheated = state.isOverheated;
+
+// Status
+bool isCharging = state.isCharging;
+bool isDischarging = state.isDischarging;
+float currentDraw = state.currentDraw;
+float currentCharge = state.currentCharge;
+
+// Power settings
+float attackSetting = state.attackPowerSetting;  // 0.1 to 1.0
+float movementSetting = state.movementPowerSetting;
+float shieldSetting = state.shieldPowerSetting;
+
+// Helpers
+float chargePct = state.GetChargePercent();      // 0-100%
+float heatPct = state.GetHeatPercent();          // 0-100%
+bool isLow = state.IsLowPower();                 // < 20%
+bool isCritical = state.IsCriticalPower();       // < 10%
+```
+
+### ImGui Battery Tab
+
+The training UI includes a dedicated Battery tab with:
+
+- **Robot 1 / Robot 2 tabs**: Individual robot telemetry
+- **Comparison tab**: Side-by-side metrics
+- **Real-time graphs**: 300-sample history for energy, temperature, charge/discharge rates
+- **Color-coded indicators**:
+  - Energy: Green (>60%), Yellow (>30%), Red (<30%)
+  - Temperature: Green (<50%), Yellow (<80%), Red (≥80%)
+
+### Integration in CombatEnv
+
+```cpp
+// In CombatEnv.cpp - ManagePowerSystems()
+void CombatEnv::ManagePowerSystems(float dt, const Action& action) {
+    // Update battery with velocity for regen braking
+    JPH::Vec3 velocity = mRobot1.body->GetLinearVelocity();
+    JPH::Vec3 prevVelocity = mRobot1.prevVelocity;
+    
+    // Wireless charging from arena center
+    float chargeDist = mRobot1.body->GetPosition().Length();
+    mRobot1.battery.Update(dt, velocity, prevVelocity, chargeDist);
+    
+    // Set power output from action[55]
+    float powerSetting = action[55];
+    mRobot1.battery.SetAttackPowerSetting(powerSetting);
+    mRobot1.battery.SetMovementPowerSetting(powerSetting);
+    mRobot1.battery.SetShieldPowerSetting(powerSetting);
+    
+    // Request power for abilities
+    if (action[52] > 0.5f) {  // EMP
+        mRobot1.battery.RequestPower(EMP_COST, PowerType::Attack, dt);
+    }
+}
+```
+
+### Configuration Constants
+
+All battery constants are defined in `BatterySystem.h`:
+
+```cpp
+constexpr float BATTERY_DEFAULT_CAPACITY = 1000.0f;
+constexpr float BATTERY_DEFAULT_CHARGE_RATE = 20.0f;
+constexpr float BATTERY_DEFAULT_OUTPUT = 100.0f;
+constexpr float BATTERY_DEFAULT_HEAT_CAPACITY = 100.0f;
+constexpr float BATTERY_DEFAULT_COOLING = 5.0f;
+constexpr float BATTERY_AMBIENT_TEMP = 20.0f;
+constexpr float BATTERY_OVERHEAT_TEMP = 80.0f;
+constexpr float BATTERY_REGEN_EFFICIENCY = 0.3f;
+constexpr float WIRELESS_CHARGE_RANGE = 5.0f;
+constexpr float WIRELESS_CHARGE_MAX = 15.0f;
+```
+
+### Combat Power Costs
+
+Defined in `CombatRobot.h`:
+
+```cpp
+constexpr float SHIELD_DRAIN_RATE = 25.0f;   // J/s
+constexpr float EMP_COST = 150.0f;            // One-time
+constexpr float SLOWMO_COST = 50.0f;          // J/s
+```
+
+### Terminal Output
+
+Battery status is printed every 200 steps during training:
+
+```
+🔋 ENV[0] Step 200 | R1: 985/1000 | R2: 992/1000
+```
+
+### Best Practices
+
+1. **Always call Update()** before RequestPower() each physics step
+2. **Pass previous velocity** for accurate regenerative braking calculation
+3. **Check isOverheated** before attempting high-power actions
+4. **Use power settings** to dynamically limit output during combat
+5. **Monitor temperature** - sustained high drain will cause overheat
+6. **Position near charger** (arena center 0,0,0) for wireless charging

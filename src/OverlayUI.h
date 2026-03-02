@@ -9,6 +9,26 @@
 #include <cmath>
 #include <cstring>
 
+#include "BatterySystem.h"
+
+struct BatteryHistory
+{
+    static constexpr int HISTORY_SIZE = 300;
+    
+    std::array<float, HISTORY_SIZE> energyHistory{};
+    std::array<float, HISTORY_SIZE> tempHistory{};
+    std::array<float, HISTORY_SIZE> chargeRateHistory{};
+    std::array<float, HISTORY_SIZE> dischargeRateHistory{};
+    int writeIdx = 0;
+    
+    void Push(float energy, float temp, float charge, float discharge) {
+        energyHistory[writeIdx] = energy;
+        tempHistory[writeIdx] = temp;
+        chargeRateHistory[writeIdx] = charge;
+        dischargeRateHistory[writeIdx] = discharge;
+        writeIdx = (writeIdx + 1) % HISTORY_SIZE;
+    }
+};
 
 struct BattleNotification
 {
@@ -72,6 +92,10 @@ public:
     void AddBattleNotification(const std::string& msg, ImVec4 color);
     void DrawBattleNotifications();
     void UpdateBattleNotifications(float dt);
+    void DrawBatteryTab();
+    void UpdateBatteryHistory(const BatteryState& r1, const BatteryState& r2);
+    void DrawBatteryPanel(const BatteryHistory& history, ImVec4 color);
+    void DrawBatteryComparison();
     
     bool IsPaused() const { return mPaused; }
     bool IsRenderingEnabled() const { return mRenderEnabled; }
@@ -96,6 +120,9 @@ private:
     
     RewardHistory mRewardHistory;
     std::vector<BattleNotification> mNotifications;
+    BatteryHistory mBatteryHistoryR1;
+    BatteryHistory mBatteryHistoryR2;
+    bool mShowBatteryTab = true;
     
     // Public colors for notifications
     ImVec4 mColorAccent{0.0f, 1.0f, 0.85f, 1.0f};

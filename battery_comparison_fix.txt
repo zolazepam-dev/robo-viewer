@@ -1,0 +1,53 @@
+void CyberpunkUI::DrawBatteryComparison()
+{
+    float barWidth = ImGui::GetContentRegionAvail().x / 2.0f - 10.0f;
+    
+    ImGui::Columns(2, "BatteryCompare", false);
+    
+    // Robot 1
+    ImGui::PushStyleColor(ImGuiCol_Text, mColorAccent);
+    ImGui::Text("Robot 1");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+    
+    int idx1 = (mBatteryHistoryR1.writeIdx > 0) ? mBatteryHistoryR1.writeIdx - 1 : mBatteryHistoryR1.HISTORY_SIZE - 1;
+    float energy1 = mBatteryHistoryR1.energyHistory[idx1];
+    float temp1 = mBatteryHistoryR1.tempHistory[idx1];
+    float charge1 = mBatteryHistoryR1.chargeRateHistory[idx1];
+    float discharge1 = mBatteryHistoryR1.dischargeRateHistory[idx1];
+    
+    ImGui::Text("Energy: %.0f J", energy1);
+    ImGui::Text("Temp: %.1f°C", temp1);
+    ImGui::Text("Charging: %.1f J/s", charge1);
+    ImGui::Text("Discharging: %.1f J/s", discharge1);
+    
+    ImGui::NextColumn();
+    
+    // Robot 2
+    ImGui::PushStyleColor(ImGuiCol_Text, mColorAccent2);
+    ImGui::Text("Robot 2");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+    
+    int idx2 = (mBatteryHistoryR2.writeIdx > 0) ? mBatteryHistoryR2.writeIdx - 1 : mBatteryHistoryR2.HISTORY_SIZE - 1;
+    float energy2 = mBatteryHistoryR2.energyHistory[idx2];
+    float temp2 = mBatteryHistoryR2.tempHistory[idx2];
+    float charge2 = mBatteryHistoryR2.chargeRateHistory[idx2];
+    float discharge2 = mBatteryHistoryR2.dischargeRateHistory[idx2];
+    
+    ImGui::Text("Energy: %.0f J", energy2);
+    ImGui::Text("Temp: %.1f°C", temp2);
+    ImGui::Text("Charging: %.1f J/s", charge2);
+    ImGui::Text("Discharging: %.1f J/s", discharge2);
+    
+    ImGui::Columns(1);
+    
+    // Side-by-side energy graph
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Energy Comparison");
+    
+    ImGui::PlotLines("##R1Energy", mBatteryHistoryR1.energyHistory.data(), 300, 0, "R1", 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 100));
+    ImGui::SameLine();
+    ImGui::PlotLines("##R2Energy", mBatteryHistoryR2.energyHistory.data(), 300, 0, "R2", 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 100));
+}

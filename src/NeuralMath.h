@@ -16,7 +16,7 @@ constexpr size_t CRITIC_INPUT_DIM = OBS_DIM + ACTION_DIM + LATENT_DIM;  // 256 +
 constexpr size_t CRITIC_HIDDEN_DIM = 1024;
 constexpr size_t CRITIC_LAYERS = 3;
 constexpr size_t REWARD_VECTOR_DIM = 4;
-constexpr size_t NUM_PARALLEL_ENVS = 128;
+constexpr size_t NUM_PARALLEL_ENVS = 1024;
 
 constexpr size_t AVX2_WIDTH = 8;
 constexpr size_t AVX2_ALIGNMENT = 32;

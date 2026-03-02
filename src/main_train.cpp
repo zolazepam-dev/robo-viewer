@@ -83,7 +83,7 @@ void window_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 int main(int argc, char* argv[]) {
-    int numEnvs = 1;
+    int numEnvs = 512;  // Increased from 1 to match NUM_PARALLEL_ENVS
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--envs" && i + 1 < argc) {
@@ -328,8 +328,8 @@ int main(int argc, char* argv[]) {
                 }
             }
             
-            if (totalSteps % 4 == 0 && buffer.Size() > td3cfg.batchSize) {
-                for (int update = 0; update < 2; ++update) {
+            if (totalSteps % 16 == 0 && buffer.Size() > td3cfg.batchSize) {
+                for (int update = 0; update < 1; ++update) {
                     trainer.Train(buffer);
                 }
             }
@@ -379,8 +379,8 @@ int main(int argc, char* argv[]) {
                 auto& r1 = renv.GetRobot1Ref();
                 auto& r2 = renv.GetRobot2Ref();
                 std::cout << "\033[1;37m🔋 ENV[" << rIdx << "] Step " << totalSteps 
-                          << " | R1: " << r1.battery.currentCharge << "/1000"
-                          << " | R2: " << r2.battery.currentCharge << "/1000\033[0m" << std::endl;
+                          << " | R1: " << r1.battery.GetState().currentCharge << "/1000"
+                          << " | R2: " << r2.battery.GetState().currentCharge << "/1000\033[0m" << std::endl;
             } 
             
             // CSV Telemetry output for micro_board
@@ -404,6 +404,11 @@ int main(int argc, char* argv[]) {
         auto& envHP = vecEnv->GetEnv(ui.GetRenderEnvIdx());
         ui.UpdateAgentHP(envHP.GetRobot1().hp, envHP.GetRobot2().hp);
         ui.UpdateImpulse(envHP.GetLastImpulse());
+        ui.UpdateBatteryHistory(
+            envHP.GetRobot1().battery.GetState(), envHP.GetRobot2().battery.GetState(),
+            envHP.GetRobot1().cogOffset, envHP.GetRobot1().currentMass,
+            envHP.GetRobot2().cogOffset, envHP.GetRobot2().currentMass
+        );
 
         // Update UI stats every frame
         ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 

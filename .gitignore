@@ -164,3 +164,33 @@ lcov/
 *.profraw
 *.profdata
 *.prof
+
+# === Test Binaries (generated) ===
+battery_test
+integration_test
+engine_battery_test
+debug_battery
+
+# === Temporary Test Files ===
+*.txt~
+*.cpp~
+*.h~
+
+# === Third-Party Build Artifacts ===
+# Keep third_party/ source code, ignore build outputs
+third_party/*/Build/
+third_party/*/build/
+third_party/*/bin/
+third_party/*/lib/
+third_party/*/obj/
+third_party/*/*.o
+third_party/*/*.a
+third_party/*/*.so
+
+# Bazel third-party cache
+third_party/.cache/
+
+# === Compiled Test Files ===
+*.test
+*_test
+

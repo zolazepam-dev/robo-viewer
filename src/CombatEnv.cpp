@@ -1,5 +1,6 @@
 #include <Jolt/Jolt.h>
 #include "CombatEnv.h"
+#include "BatterySystem.h"
 #include "InternalRobot.h"
 
 #include <cmath>
@@ -100,9 +101,12 @@ void CombatEnv::Reset()
     }
 
     // 2. Reset existing robots instead of destroying/recreating
-    JPH::RVec3 pos1(-cfg.env.spawnOffset, cfg.env.spawnHeight, 0.0f);
-    JPH::RVec3 pos2(cfg.env.spawnOffset, cfg.env.spawnHeight, 0.0f);
-    
+    // Spawn robots on opposite sides of KOTH point with random angle
+    float angle = static_cast<float>(rng()) * 6.28318f / 4294967295.0f;
+    float offsetX = std::cos(angle) * cfg.env.spawnOffset;
+    float offsetZ = std::sin(angle) * cfg.env.spawnOffset;
+    JPH::RVec3 pos1(mKothPoint.GetX() - offsetX, cfg.env.spawnHeight, mKothPoint.GetZ() - offsetZ);
+    JPH::RVec3 pos2(mKothPoint.GetX() + offsetX, cfg.env.spawnHeight, mKothPoint.GetZ() + offsetZ);
     if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
         // First time initialization: load robots
         mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
@@ -157,6 +161,8 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 {
     if (mDone) return;
     
+    const float dt = 1.0f / 60.0f;
+    
     if (mRobot1.type == RobotType::SATELLITE)
         mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
     else
@@ -166,6 +172,10 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
         mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
     else
         InternalRobotLoader::ApplyInternalActions(mRobot2, actions2, mPhysicsSystem);
+    
+    // Update battery and power systems after applying actions
+    ManagePowerSystems(mRobot1, actions1, dt);
+    ManagePowerSystems(mRobot2, actions2, dt);
 }
 
 void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done)
@@ -256,6 +266,59 @@ void CombatEnv::UpdateForceSensors()
     updateStress(mRobot2, 1);
 }
 
+
+
+void CombatEnv::ManagePowerSystems(CombatRobotData& robot, const float* actions, float dt)
+{
+    if (robot.mainBodyId.IsInvalid()) return;
+    
+    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+    
+    // Get velocities for regenerative braking calculation
+    JPH::Vec3 velocity = bodyInterface.GetLinearVelocity(robot.mainBodyId);
+    JPH::RVec3 position = bodyInterface.GetPosition(robot.mainBodyId);
+    
+    // Calculate distance to wireless charger (KOTH point)
+    float chargeDistance = static_cast<float>((position - mKothPoint).Length());
+    
+    // Update battery system (handles wireless charging and regen braking)
+    // Note: For regen braking, we need previous velocity - using current velocity for now
+    // as CombatRobotData doesn't track prevVelocity
+    robot.battery.Update(dt, velocity, JPH::Vec3(0,0,0), chargeDistance);
+    
+    // Parse action indices for abilities (adjust indices as needed)
+    // Assuming actions[52] = EMP, actions[53] = Shield, actions[54] = Slowmo, actions[55] = PowerSetting
+    const float EMP_THRESHOLD = 0.5f;
+    const float SHIELD_THRESHOLD = 0.5f;
+    const float SLOWMO_THRESHOLD = 0.5f;
+    
+    // EMP Ability - costs energy, tracked by battery
+    if (actions[52] > EMP_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(EMP_COST, PowerType::Attack, dt);
+        // EMP effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Shield Ability - costs energy, tracked by battery
+    if (actions[53] > SHIELD_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(SHIELD_DRAIN_RATE, PowerType::Shield, dt);
+        // Shield effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Slow-mo Ability - costs energy, tracked by battery
+    if (actions[54] > SLOWMO_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(SLOWMO_COST, PowerType::General, dt);
+        // Slow-mo effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Power output setting (actions[55] controls all multipliers)
+    float powerSetting = fmaxf(0.1f, fminf(1.0f, actions[55]));
+    robot.battery.SetAttackPowerSetting(powerSetting);
+    robot.battery.SetMovementPowerSetting(powerSetting);
+    robot.battery.SetShieldPowerSetting(powerSetting);
+}
 void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
                                         const CombatRobotData& opponent, const ForceSensorReading& forces)
 {

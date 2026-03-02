@@ -1,0 +1,56 @@
+void CyberpunkUI::DrawBatteryPanel(const BatteryHistory& history, ImVec4 color)
+{
+    float barWidth = ImGui::GetContentRegionAvail().x;
+    
+    // Get latest values from history
+    int idx = (history.writeIdx > 0) ? history.writeIdx - 1 : history.HISTORY_SIZE - 1;
+    float energy = history.energyHistory[idx];
+    float temp = history.tempHistory[idx];
+    float chargeRate = history.chargeRateHistory[idx];
+    float dischargeRate = history.dischargeRateHistory[idx];
+    
+    // Battery Level
+    ImGui::TextColored(color, "Energy Storage");
+    float energyPct = energy / BATTERY_DEFAULT_CAPACITY;
+    ImVec4 energyColor = energyPct > 0.6f ? ImVec4(0,1,0.5,1) : energyPct > 0.3f ? ImVec4(1,0.85,0,1) : ImVec4(1,0,0,1);
+    
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, energyColor);
+    ImGui::ProgressBar(energyPct, ImVec2(barWidth, 40), "");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("%.0f/%.0f J (%.1f%%)", energy, BATTERY_DEFAULT_CAPACITY, energyPct * 100.0f);
+    
+    // Temperature
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(1,0.3,0,1), "Thermal Management");
+    float tempPct = (temp - BATTERY_AMBIENT_TEMP) / (BATTERY_OVERHEAT_TEMP - BATTERY_AMBIENT_TEMP);
+    tempPct = fmaxf(0.0f, fminf(1.0f, tempPct));
+    ImVec4 tempColor = tempPct > 0.8f ? ImVec4(1,0,0,1) : tempPct > 0.5f ? ImVec4(1,0.85,0,1) : ImVec4(0,1,0.5,1);
+    
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, tempColor);
+    ImGui::ProgressBar(tempPct, ImVec2(barWidth, 25), "");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("%.1f°C / %.0f°C", temp, BATTERY_OVERHEAT_TEMP);
+    
+    // Charge/Discharge Rates
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("⚡ Power Flow");
+    ImGui::TextColored(ImVec4(0,1,0.5,1), "  Charging: %.1f J/s", chargeRate);
+    ImGui::TextColored(ImVec4(1,0.3,0,1), "  Discharging: %.1f J/s", dischargeRate);
+    
+    // Graphs
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("📊 Real-time Graphs");
+    
+    ImGui::Text("Energy Level");
+    ImGui::PlotLines("##EnergyHist", history.energyHistory.data(), 300, 0, nullptr, 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 80));
+    
+    ImGui::Text("Temperature");
+    ImGui::PlotLines("##TempHist", history.tempHistory.data(), 300, 0, nullptr, BATTERY_AMBIENT_TEMP, BATTERY_OVERHEAT_TEMP, ImVec2(barWidth, 60));
+    
+    ImGui::Text("Charge/Discharge Rate");
+    ImGui::PlotLines("##ChargeHist", history.chargeRateHistory.data(), 300, 0, nullptr, 0.0f, 100.0f, ImVec2(barWidth, 60));
+}

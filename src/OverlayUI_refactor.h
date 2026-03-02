@@ -4,7 +4,9 @@
 #include "imgui.h"
 #include <string>
 #include <vector>
+#include <array>
 #include <GLFW/glfw3.h>
+#include "BatterySystem.h"
 
 // Forward declarations
 class VectorizedEnv;
@@ -39,7 +41,7 @@ struct RobotTunables {
 };
 
 struct TrainingConfigUI {
-    int numEnvs = 64;
+    int numEnvs = 512;  // Increased to match NUM_PARALLEL_ENVS
     int checkpointInterval = 50000;
     std::string checkpointDir = "checkpoints";
     std::string checkpointLoadName = "";
@@ -59,6 +61,31 @@ struct GraphicsSettings {
     float cameraDistance = 20.0f;
     float cameraAzimuth = 45.0f;
     float cameraElevation = 30.0f;
+};
+
+struct BatteryHistory {
+    static constexpr int HISTORY_SIZE = 300;
+    std::array<float, HISTORY_SIZE> energyHistory{};
+    std::array<float, HISTORY_SIZE> tempHistory{};
+    std::array<float, HISTORY_SIZE> chargeRateHistory{};
+    std::array<float, HISTORY_SIZE> dischargeRateHistory{};
+    std::array<float, HISTORY_SIZE> cogXHistory{};
+    std::array<float, HISTORY_SIZE> cogYHistory{};
+    std::array<float, HISTORY_SIZE> cogZHistory{};
+    std::array<float, HISTORY_SIZE> massHistory{};
+    int writeIdx = 0;
+    
+    void Push(float energy, float temp, float charge, float discharge, float cogX, float cogY, float cogZ, float mass) {
+        energyHistory[writeIdx] = energy;
+        tempHistory[writeIdx] = temp;
+        chargeRateHistory[writeIdx] = charge;
+        dischargeRateHistory[writeIdx] = discharge;
+        cogXHistory[writeIdx] = cogX;
+        cogYHistory[writeIdx] = cogY;
+        cogZHistory[writeIdx] = cogZ;
+        massHistory[writeIdx] = mass;
+        writeIdx = (writeIdx + 1) % HISTORY_SIZE;
+    }
 };
 
 enum class GraphSelect {
@@ -100,6 +127,7 @@ public:
     void PushPhysicsMetrics(float solverTime, float broadphaseTime, 
                             float collisionTime, float integrateTime);
     
+    void UpdateBatteryHistory(const BatteryState& r1, const BatteryState& r2, const JPH::Vec3& cog1, float mass1, const JPH::Vec3& cog2, float mass2);
     // Getters
     bool IsPaused() const { return mPaused; }
     bool ShouldStepOne() const { return mStepOne; }
@@ -196,6 +224,9 @@ private:
     void DrawSpawnTab();
     void DrawEpisodesTab();
     void DrawGraphSelector();
+    void DrawBatteryTab();
+    void DrawBatteryPanel(const BatteryHistory& history, ImVec4 color);
+    void DrawBatteryComparison();
     
     void DrawCyberpunkStyle();
     void PlotLine(const char* label, const std::vector<float>& data, float scale_min, float scale_max);
@@ -224,6 +255,8 @@ private:
     
     std::vector<float> mRewardHistory[5];
     std::vector<float> mPhysicsHistory[4];
+    BatteryHistory mBatteryHistoryR1;
+    BatteryHistory mBatteryHistoryR2;
     int mHistoryWritePos = 0;
     static constexpr int HISTORY_MAX = 500;
     

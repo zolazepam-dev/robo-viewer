@@ -41,6 +41,7 @@ cc_library(
         "AlignedAllocator.h",
         "LockFreeQueue.h",
         "InternalRobot.h",
+        "BatterySystem.h",
     ],
     deps = [
         "@glfw",
@@ -95,5 +96,21 @@ cc_binary(
         "-mavx2",
         "-mfma",
         "-march=native",
+    ],
+)
+
+cc_binary(
+    name = "battery_test",
+    srcs = ["battery_test.cpp"],
+    deps = [
+        ":core",
+        "@jolt//:jolt",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native"
     ],
 )

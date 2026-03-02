@@ -202,12 +202,15 @@ void InternalRobotLoader::ApplyInternalActions(
     if (robot.mainBodyId.IsInvalid()) return;
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
     
-    // WIRE UP GUI: Use the dynamic scale from the robot configuration
     const float maxForce = robot.actionScale.slideScale; 
     float energySum = 0.0f;
+    float totalThrust = 0.0f;
 
     JPH::RVec3 shellPos = bodyInterface.GetPosition(robot.mainBodyId);
-    float containmentRadius = 1.8f; // Soft boundary slightly inside the 2.0m shell
+    JPH::Vec3 totalMoment(0, 0, 0);
+    float totalMass = 50.0f;  // Shell mass
+    
+    float containmentRadius = 1.8f;
 
     for (int i = 0; i < 3; ++i) {
         if (robot.satellites[i].coreBodyId.IsInvalid()) continue;
@@ -215,13 +218,16 @@ void InternalRobotLoader::ApplyInternalActions(
         JPH::RVec3 engPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
         JPH::Vec3 relPos = JPH::Vec3(engPos - shellPos);
         float dist = relPos.Length();
+        float engineMass = 15.0f;  // Each engine mass
 
-        // --- PREVENTATIVE CONTAINMENT (Magnetic Well) ---
-        // Apply a spring force pulling back to center if they move too far
+        // Track CoG contribution
+        totalMoment += relPos * engineMass;
+        totalMass += engineMass;
+
+        // --- PREVENTATIVE CONTAINMENT ---
         if (dist > 0.1f) {
             float springK = 500.0f;
-            if (dist > containmentRadius) springK = 5000.0f; // Stiff recall
-            
+            if (dist > containmentRadius) springK = 5000.0f;
             JPH::Vec3 containmentForce = -relPos.Normalized() * (dist * springK);
             bodyInterface.AddForce(robot.satellites[i].coreBodyId, containmentForce);
         }
@@ -229,35 +235,66 @@ void InternalRobotLoader::ApplyInternalActions(
         // --- ACTION FORCE ---
         JPH::Vec3 force(actions[i * 3 + 0] * maxForce, actions[i * 3 + 1] * maxForce, actions[i * 3 + 2] * maxForce);
         bodyInterface.AddForce(robot.satellites[i].coreBodyId, force);
-        energySum += force.Length();
+        
+        // Calculate energy consumption: force magnitude * distance moved
+        float thrustMagnitude = force.Length();
+        energySum += thrustMagnitude;
+        totalThrust += thrustMagnitude;
     }
 
-    // Reaction Wheels (Main Body Rotation)
+    // Calculate Center of Gravity offset from shell center
+    JPH::Vec3 cogOffset = totalMoment / totalMass;
+    robot.cogOffset = cogOffset;
+    robot.currentMass = totalMass;
+
+    // Battery drain for engine thrust
+    // Formula: power = thrustMagnitude * efficiency_factor
+    // 100N of thrust = ~10 J/s consumption
+    const float THRUST_EFFICIENCY = 0.1f;  // J/s per Newton of thrust
+    float powerNeeded = totalThrust * THRUST_EFFICIENCY;
+    
+    const float dt = 1.0f / 60.0f;
+    float actualPower = robot.battery.RequestPower(powerNeeded, PowerType::Movement, dt);
+    
+    // Scale forces if battery is low (brownout effect)
+    float powerRatio = (powerNeeded > 0.0f) ? (actualPower / powerNeeded) : 1.0f;
+    if (powerRatio < 1.0f && powerNeeded > 0.0f) {
+        // Apply reduced forces due to low battery
+        for (int i = 0; i < 3; ++i) {
+            if (robot.satellites[i].coreBodyId.IsInvalid()) continue;
+            JPH::Vec3 force(actions[i * 3 + 0] * maxForce * powerRatio, 
+                           actions[i * 3 + 1] * maxForce * powerRatio, 
+                           actions[i * 3 + 2] * maxForce * powerRatio);
+            bodyInterface.AddForce(robot.satellites[i].coreBodyId, force);
+        }
+    }
+
+    // Reaction Wheels
     const float reactionTorqueScale = robot.actionScale.rotationScale;
     JPH::Vec3 reactionTorque(actions[52] * reactionTorqueScale, actions[53] * reactionTorqueScale, actions[54] * reactionTorqueScale);
     bodyInterface.AddTorque(robot.mainBodyId, reactionTorque);
 
     robot.totalEnergyUsed += energySum * 0.0001f;
     
-    // Reaction Wheels - Simulated gyroscopic effect via counter-torques
-    // 3 orthogonal wheels: X (actions[47]), Y (actions[48]), Z (actions[49])
-    const float gyroScale = robot.actionScale.rotationScale * 0.25f;  // Weaker gyroscopic effect
+    // Reaction wheel power consumption
+    float wheelPower = 0.0f;
     for (int i = 0; i < NUM_REACTION_WHEELS; ++i) {
         float wheelAction = actions[47 + i];
-        
         JPH::Vec3 axis;
         if (i == 0) axis = JPH::Vec3(1, 0, 0);
         else if (i == 1) axis = JPH::Vec3(0, 1, 0);
         else axis = JPH::Vec3(0, 0, 1);
         
-        JPH::Vec3 torque = axis * wheelAction * gyroScale;
-        
-        // Apply counter-torque to main body (simulates reaction wheel gyroscopic effect)
+        JPH::Vec3 torque = axis * wheelAction * reactionTorqueScale * 0.25f;
         bodyInterface.AddTorque(robot.mainBodyId, -torque);
         
-        // Update wheel state (simulated RPM based on cumulative torque)
         robot.reactionWheels[i].targetTorque = torque.Length();
-        robot.reactionWheels[i].rpm += wheelAction * 30.0f;  // Slower RPM buildup  // Simplified RPM model
-        robot.reactionWheels[i].rpm *= 0.98f;  // Natural decay
+        robot.reactionWheels[i].rpm += wheelAction * 30.0f;
+        robot.reactionWheels[i].rpm *= 0.98f;
+        
+        wheelPower += torque.Length() * 0.05f;  // Reaction wheels consume less power
     }
+    
+    // Request power for reaction wheels
+    robot.battery.RequestPower(wheelPower, PowerType::Movement, dt);
 }

@@ -24,7 +24,7 @@ struct TD3Config
     float policyNoise = 0.2f;
     float noiseClip = 0.5f;
     float explNoise = 0.1f;
-    int policyDelay = 2;
+    int policyDelay = 8;
     int batchSize = 16;
     int bufferSize = 1000000;
     int startSteps = 500;
@@ -79,9 +79,10 @@ public:
 
 private:
     void UpdateCritic(class ReplayBuffer& buffer);
-    void UpdateActor();
+    void UpdateActor(class ReplayBuffer& buffer);
     void UpdateTargets();
     void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
+    float ComputeCriticLoss(SpanNetwork& critic, const float* criticInput, int batchSize);
     
     int mStateDim;
     int mActionDim;
@@ -113,6 +114,12 @@ private:
     std::vector<int> mSampledIndices;
 
     AlignedVector32<float> mCriticInputBuffer;
+    
+    // Pre-allocated buffers for batch operations
+    AlignedVector32<float> mActorOutputBuffer;
+    AlignedVector32<float> mCriticQBuffer;
+    AlignedVector32<float> mLatentZPos;
+    AlignedVector32<float> mLatentZVel;
 
     int mStepCount = 0;
     int mUpdateCount = 0;

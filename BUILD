@@ -330,3 +330,11 @@ cc_binary(
     linkopts = ["-lGL", "-lpthread"],
     copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
 )
+
+
+cc_binary(
+    name = "integration_test",
+    srcs = ["//src:integration_test.cpp"],
+    deps = ["//src:core"],
+    copts = ["-std=c++17", "-O2"],
+)

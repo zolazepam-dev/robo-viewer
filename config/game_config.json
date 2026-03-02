@@ -20,7 +20,7 @@
   },
   "env": {
     "max_steps": 7200,
-    "spawn_offset": 2.0,
+    "spawn_offset": 4.0,
     "spawn_height": 5.0,
     "initial_push_speed": 5.0
   },

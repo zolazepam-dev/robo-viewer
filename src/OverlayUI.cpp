@@ -157,6 +157,153 @@ void CyberpunkUI::UpdateBattleNotifications(float dt)
     }
 }
 
+
+void CyberpunkUI::UpdateBatteryHistory(const BatteryState& r1, const BatteryState& r2)
+{
+    mBatteryHistoryR1.Push(r1.currentEnergy, r1.temperature, r1.currentCharge, r1.currentDraw);
+    mBatteryHistoryR2.Push(r2.currentEnergy, r2.temperature, r2.currentCharge, r2.currentDraw);
+}
+
+void CyberpunkUI::DrawBatteryTab()
+{
+    if (!mShowBatteryTab) return;
+    
+    ImGui::Begin("🔋 Battery Management System");
+    
+    if (ImGui::BeginTabBar("BatteryTabs")) {
+        // Robot 1 Tab
+        if (ImGui::BeginTabItem("Robot 1")) {
+            DrawBatteryPanel(mBatteryHistoryR1, mColorAccent);
+            ImGui::EndTabItem();
+        }
+        
+        // Robot 2 Tab
+        if (ImGui::BeginTabItem("Robot 2")) {
+            DrawBatteryPanel(mBatteryHistoryR2, mColorAccent2);
+            ImGui::EndTabItem();
+        }
+        
+        // Comparison Tab
+        if (ImGui::BeginTabItem("Comparison")) {
+            DrawBatteryComparison();
+            ImGui::EndTabItem();
+        }
+        
+        ImGui::EndTabBar();
+    }
+    
+    ImGui::End();
+}
+
+void CyberpunkUI::DrawBatteryPanel(const BatteryHistory& history, ImVec4 color)
+{
+    float barWidth = ImGui::GetContentRegionAvail().x;
+    
+    // Get latest values from history
+    int idx = (history.writeIdx > 0) ? history.writeIdx - 1 : history.HISTORY_SIZE - 1;
+    float energy = history.energyHistory[idx];
+    float temp = history.tempHistory[idx];
+    float chargeRate = history.chargeRateHistory[idx];
+    float dischargeRate = history.dischargeRateHistory[idx];
+    
+    // Battery Level
+    ImGui::TextColored(color, "Energy Storage");
+    float energyPct = energy / BATTERY_DEFAULT_CAPACITY;
+    ImVec4 energyColor = energyPct > 0.6f ? ImVec4(0,1,0.5,1) : energyPct > 0.3f ? ImVec4(1,0.85,0,1) : ImVec4(1,0,0,1);
+    
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, energyColor);
+    ImGui::ProgressBar(energyPct, ImVec2(barWidth, 40), "");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("%.0f/%.0f J (%.1f%%)", energy, BATTERY_DEFAULT_CAPACITY, energyPct * 100.0f);
+    
+    // Temperature
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(1,0.3,0,1), "Thermal Management");
+    float tempPct = (temp - BATTERY_AMBIENT_TEMP) / (BATTERY_OVERHEAT_TEMP - BATTERY_AMBIENT_TEMP);
+    tempPct = fmaxf(0.0f, fminf(1.0f, tempPct));
+    ImVec4 tempColor = tempPct > 0.8f ? ImVec4(1,0,0,1) : tempPct > 0.5f ? ImVec4(1,0.85,0,1) : ImVec4(0,1,0.5,1);
+    
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, tempColor);
+    ImGui::ProgressBar(tempPct, ImVec2(barWidth, 25), "");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("%.1f°C / %.0f°C", temp, BATTERY_OVERHEAT_TEMP);
+    
+    // Charge/Discharge Rates
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("⚡ Power Flow");
+    ImGui::TextColored(ImVec4(0,1,0.5,1), "  Charging: %.1f J/s", chargeRate);
+    ImGui::TextColored(ImVec4(1,0.3,0,1), "  Discharging: %.1f J/s", dischargeRate);
+    
+    // Graphs
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("📊 Real-time Graphs");
+    
+    ImGui::Text("Energy Level");
+    ImGui::PlotLines("##EnergyHist", history.energyHistory.data(), 300, 0, nullptr, 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 80));
+    
+    ImGui::Text("Temperature");
+    ImGui::PlotLines("##TempHist", history.tempHistory.data(), 300, 0, nullptr, BATTERY_AMBIENT_TEMP, BATTERY_OVERHEAT_TEMP, ImVec2(barWidth, 60));
+    
+    ImGui::Text("Charge/Discharge Rate");
+    ImGui::PlotLines("##ChargeHist", history.chargeRateHistory.data(), 300, 0, nullptr, 0.0f, 100.0f, ImVec2(barWidth, 60));
+}
+void CyberpunkUI::DrawBatteryComparison()
+{
+    float barWidth = ImGui::GetContentRegionAvail().x / 2.0f - 10.0f;
+    
+    ImGui::Columns(2, "BatteryCompare", false);
+    
+    // Robot 1
+    ImGui::PushStyleColor(ImGuiCol_Text, mColorAccent);
+    ImGui::Text("Robot 1");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+    
+    int idx1 = (mBatteryHistoryR1.writeIdx > 0) ? mBatteryHistoryR1.writeIdx - 1 : mBatteryHistoryR1.HISTORY_SIZE - 1;
+    float energy1 = mBatteryHistoryR1.energyHistory[idx1];
+    float temp1 = mBatteryHistoryR1.tempHistory[idx1];
+    float charge1 = mBatteryHistoryR1.chargeRateHistory[idx1];
+    float discharge1 = mBatteryHistoryR1.dischargeRateHistory[idx1];
+    
+    ImGui::Text("Energy: %.0f J", energy1);
+    ImGui::Text("Temp: %.1f°C", temp1);
+    ImGui::Text("Charging: %.1f J/s", charge1);
+    ImGui::Text("Discharging: %.1f J/s", discharge1);
+    
+    ImGui::NextColumn();
+    
+    // Robot 2
+    ImGui::PushStyleColor(ImGuiCol_Text, mColorAccent2);
+    ImGui::Text("Robot 2");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+    
+    int idx2 = (mBatteryHistoryR2.writeIdx > 0) ? mBatteryHistoryR2.writeIdx - 1 : mBatteryHistoryR2.HISTORY_SIZE - 1;
+    float energy2 = mBatteryHistoryR2.energyHistory[idx2];
+    float temp2 = mBatteryHistoryR2.tempHistory[idx2];
+    float charge2 = mBatteryHistoryR2.chargeRateHistory[idx2];
+    float discharge2 = mBatteryHistoryR2.dischargeRateHistory[idx2];
+    
+    ImGui::Text("Energy: %.0f J", energy2);
+    ImGui::Text("Temp: %.1f°C", temp2);
+    ImGui::Text("Charging: %.1f J/s", charge2);
+    ImGui::Text("Discharging: %.1f J/s", discharge2);
+    
+    ImGui::Columns(1);
+    
+    // Side-by-side energy graph
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Energy Comparison");
+    
+    ImGui::PlotLines("##R1Energy", mBatteryHistoryR1.energyHistory.data(), 300, 0, "R1", 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 100));
+    ImGui::SameLine();
+    ImGui::PlotLines("##R2Energy", mBatteryHistoryR2.energyHistory.data(), 300, 0, "R2", 0.0f, BATTERY_DEFAULT_CAPACITY, ImVec2(barWidth, 100));
+}
 void CyberpunkUI::DrawBattleNotifications()
 {
     if (mNotifications.empty()) return;

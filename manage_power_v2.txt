@@ -1,0 +1,52 @@
+
+void CombatEnv::ManagePowerSystems(CombatRobotData& robot, const float* actions, float dt)
+{
+    if (robot.mainBodyId.IsInvalid()) return;
+    
+    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+    
+    // Get velocities for regenerative braking calculation
+    JPH::Vec3 velocity = bodyInterface.GetLinearVelocity(robot.mainBodyId);
+    JPH::RVec3 position = bodyInterface.GetPosition(robot.mainBodyId);
+    
+    // Calculate distance to wireless charger (arena center at 0,0,0)
+    float chargeDistance = static_cast<float>(position.Length());
+    
+    // Update battery system (handles wireless charging and regen braking)
+    // Note: For regen braking, we need previous velocity - using current velocity for now
+    // as CombatRobotData doesn't track prevVelocity
+    robot.battery.Update(dt, velocity, JPH::Vec3(0,0,0), chargeDistance);
+    
+    // Parse action indices for abilities (adjust indices as needed)
+    // Assuming actions[52] = EMP, actions[53] = Shield, actions[54] = Slowmo, actions[55] = PowerSetting
+    const float EMP_THRESHOLD = 0.5f;
+    const float SHIELD_THRESHOLD = 0.5f;
+    const float SLOWMO_THRESHOLD = 0.5f;
+    
+    // EMP Ability - costs energy, tracked by battery
+    if (actions[52] > EMP_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(EMP_COST, PowerType::Attack, dt);
+        // EMP effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Shield Ability - costs energy, tracked by battery
+    if (actions[53] > SHIELD_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(SHIELD_DRAIN_RATE, PowerType::Shield, dt);
+        // Shield effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Slow-mo Ability - costs energy, tracked by battery
+    if (actions[54] > SLOWMO_THRESHOLD) {
+        float actualPower = robot.battery.RequestPower(SLOWMO_COST, PowerType::General, dt);
+        // Slow-mo effect would be applied here if power was available
+        (void)actualPower; // Suppress unused warning for now
+    }
+    
+    // Power output setting (actions[55] controls all multipliers)
+    float powerSetting = fmaxf(0.1f, fminf(1.0f, actions[55]));
+    robot.battery.SetAttackPowerSetting(powerSetting);
+    robot.battery.SetMovementPowerSetting(powerSetting);
+    robot.battery.SetShieldPowerSetting(powerSetting);
+}

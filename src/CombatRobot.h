@@ -1,5 +1,7 @@
 #pragma once
 
+#include "BatterySystem.h"
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -20,61 +22,13 @@ constexpr int ACTIONS_PER_ROBOT = 56; // Matching VectorizedEnv: 6*4=24 for sate
 constexpr int NUM_LIDAR_RAYS = 10;
 
 
-// Battery & Power Management System (32-byte aligned for AVX2)
-constexpr float MAX_BATTERY_CAPACITY = 1000.0f;
-constexpr float BATTERY_CHARGE_RATE = 15.0f;
+// Combat-specific power costs
 constexpr float SHIELD_DRAIN_RATE = 25.0f;
 constexpr float EMP_COST = 150.0f;
 constexpr float SLOWMO_COST = 50.0f;
 constexpr float SHIELD_MAX_HEALTH = 50.0f;
 constexpr float EMP_DURATION = 2.0f;
 constexpr float SLOWMO_DURATION = 3.0f;
-constexpr float SLOWMO_FACTOR = 0.5f;
-
-struct alignas(32) BatterySystem {
-    // Group 1: State floats (8 floats = 32 bytes)
-    float currentCharge = MAX_BATTERY_CAPACITY;
-    float shieldHealth = SHIELD_MAX_HEALTH;
-    float empTimer = 0.0f;
-    float slowmoTimer = 0.0f;
-    float totalEnergyGenerated = 0.0f;
-    float totalEnergyConsumed = 0.0f;
-    float reserved1 = 0.0f;
-    float reserved2 = 0.0f;
-    
-    // Group 2: Boolean flags packed (8 bytes, padded to 32)
-    uint8_t shieldActive = 0;
-    uint8_t empActive = 0;
-    uint8_t slowmoActive = 0;
-    uint8_t reserved3 = 0;
-    uint32_t reserved4 = 0;
-    uint32_t reserved5 = 0;
-    uint32_t reserved6 = 0;
-    
-    inline bool CanUseShield() const {
-        return currentCharge >= SHIELD_DRAIN_RATE * 0.1f && shieldHealth > 0.0f;
-    }
-    
-    inline bool CanUseEMP() const {
-        return currentCharge >= EMP_COST && empActive == 0;
-    }
-    
-    inline bool CanUseSlowmo() const {
-        return currentCharge >= SLOWMO_COST && slowmoActive == 0;
-    }
-    
-    inline void Reset() {
-        currentCharge = MAX_BATTERY_CAPACITY;
-        shieldHealth = SHIELD_MAX_HEALTH;
-        empTimer = 0.0f;
-        slowmoTimer = 0.0f;
-        totalEnergyGenerated = 0.0f;
-        totalEnergyConsumed = 0.0f;
-        shieldActive = 0;
-        empActive = 0;
-        slowmoActive = 0;
-    }
-};
 
 
 constexpr int OBSERVATION_DIM = 256; // Expanded for all sensors + padding
@@ -171,7 +125,7 @@ struct CombatRobotData
     int episodeSteps = 0;
 
     ResidualActionScale actionScale;
-    BatterySystem battery;
+    BatterySystem battery;  // Comprehensive battery with thermal management
 
     std::array<float, ACTIONS_PER_ROBOT> baseActions{};
     std::array<float, ACTIONS_PER_ROBOT> residualActions{};
@@ -179,6 +133,9 @@ struct CombatRobotData
     
     float observationBuffer[OBSERVATION_DIM];
     float lidarDistances[NUM_LIDAR_RAYS];
+    // Mass and balance tracking
+    JPH::Vec3 cogOffset{0,0,0};  // Center of gravity offset from shell center
+    float currentMass = 80.0f;   // Total robot mass (shell + engines)
 };
 
 class CombatRobotLoader

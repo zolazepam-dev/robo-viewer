@@ -26,7 +26,7 @@ struct KothConfig {
 
 struct EnvConfig {
     int maxSteps = 7200;
-    float spawnOffset = 2.0f;  // Reduced from 2.5 - robots now 4m apart (touching)
+    float spawnOffset = 4.0f;  // Increased to 4.0 - robots now 8m apart
     float spawnHeight = 5.0f;
     float initialPushSpeed = 5.0f;  // Push robots toward each other at spawn
 };

@@ -1,0 +1,20 @@
+void CombatEnv::QueueActions(const float* actions1, const float* actions2)
+{
+    if (mDone) return;
+    
+    const float dt = 1.0f / 60.0f;
+    
+    if (mRobot1.type == RobotType::SATELLITE)
+        mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
+    else
+        InternalRobotLoader::ApplyInternalActions(mRobot1, actions1, mPhysicsSystem);
+
+    if (mRobot2.type == RobotType::SATELLITE)
+        mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
+    else
+        InternalRobotLoader::ApplyInternalActions(mRobot2, actions2, mPhysicsSystem);
+    
+    // Update battery and power systems after applying actions
+    ManagePowerSystems(mRobot1, actions1, dt);
+    ManagePowerSystems(mRobot2, actions2, dt);
+}
