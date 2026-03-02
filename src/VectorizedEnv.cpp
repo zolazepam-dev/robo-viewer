@@ -126,10 +126,11 @@ void VectorizedEnv::HarvestAfterPhysics()
 {
     // Harvest state from all environments after physics was updated externally
     // This is used when main_train.cpp handles action queuing and physics stepping
-    const int actionDim = ACTIONS_PER_ROBOT;
     
-    // Parallelize environment harvesting with std::thread (simple version)
-    const int numThreads = std::thread::hardware_concurrency() / 2; // Use half the cores for harvesting
+    mAllVectorRewards.resize(mNumEnvs);
+    
+    // Parallelize environment harvesting with std::thread (use all available cores)
+    const int numThreads = std::thread::hardware_concurrency();
     std::vector<std::thread> workers;
     int envsPerThread = (mNumEnvs + numThreads - 1) / numThreads;
     
@@ -150,18 +151,13 @@ void VectorizedEnv::HarvestAfterPhysics()
 
                 mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
                 mAllDones[i] = done;
+                mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
             }
         });
     }
     
     for (auto& worker : workers) {
         worker.join();
-    }
-    
-    mAllVectorRewards.resize(mNumEnvs);
-    for (int i = 0; i < mNumEnvs; ++i) {
-        if (mAllDones[i]) continue;
-        mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
     }
 }
 
