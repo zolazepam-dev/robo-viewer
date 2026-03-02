@@ -83,7 +83,7 @@ void window_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 int main(int argc, char* argv[]) {
-    int numEnvs = 1024;  // Doubled from 512 to better utilize physics system
+    int numEnvs = 256;  // Default number of environments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--envs" && i + 1 < argc) {
