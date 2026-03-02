@@ -9,14 +9,15 @@
 #include "SpanNetwork.h"
 #include "LatentMemory.h"
 #include "OpponentPool.h"
-#include "NeuralMath.h"
 #include "NeuralNetwork.h"
 #include "AlignedAllocator.h"
+#include "IntrinsicMotivation.h"
+#include "AttentionEncoder.h"
 
 struct TD3Config
 {
-    int hiddenDim = 64;
-    int latentDim = 16;
+    int hiddenDim = 1024;
+    int latentDim = 128;
     float actorLR = 3e-4f;
     float criticLR = 3e-4f;
     float gamma = 0.99f;
@@ -24,11 +25,17 @@ struct TD3Config
     float policyNoise = 0.2f;
     float noiseClip = 0.5f;
     float explNoise = 0.1f;
-    int policyDelay = 8;
-    int batchSize = 16;
+    int policyDelay = 4;           // Was 8 - more frequent actor updates
+    int batchSize = 32;            // Was 16 - better amortization
     int bufferSize = 1000000;
-    int startSteps = 500;
+    int startSteps = 2000;         // Was 500 - more exploration initially
     int snapshotInterval = 10000;
+    
+    // PRIMALPHA: New hyperparameters
+    float herRatio = 0.5f;              // HER relabeling ratio
+    float intrinsicRewardScale = 0.1f;  // Curiosity reward weight
+    bool useAttention = true;           // Enable attention encoding
+    int ensembleSubset = 2;             // Number of critics to sample for target
 };
 
 class TD3Trainer
@@ -44,8 +51,8 @@ public:
     void SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices);
     void SelectActionResidual(const float* state, float* residualAction);
     
-    void Train(class ReplayBuffer& buffer);
-    void TrainWithVectorRewards(class ReplayBuffer& buffer);
+    void Train(ReplayBuffer& buffer);
+    void TrainWithVectorRewards(ReplayBuffer& buffer);
     
     void Save(const std::string& path) const;
     void Load(const std::string& path);
@@ -76,13 +83,22 @@ public:
     
     void SnapshotOpponent();
     bool SampleOpponent();
+    
+    // PRIMALPHA: New methods
+    void SetIntrinsicRewardScale(float scale) { mIntrinsicMotivation.SetCuriosityScale(scale); }
+    float GetAverageIntrinsicReward() const { return mIntrinsicMotivation.GetAverageIntrinsicReward(); }
+    void SetAttentionEnabled(bool enabled) { mConfig.useAttention = enabled; }
 
 private:
-    void UpdateCritic(class ReplayBuffer& buffer);
-    void UpdateActor(class ReplayBuffer& buffer);
+    void UpdateCritic(ReplayBuffer& buffer);
+    void UpdateActor(ReplayBuffer& buffer);
     void UpdateTargets();
-    void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
-    float ComputeCriticLoss(SpanNetwork& critic, const float* criticInput, int batchSize);
+    void UpdateCriticWithVectorRewards(ReplayBuffer& buffer);
+    
+    // PRIMALPHA: Ensemble critic methods
+    float ComputeEnsembleMinQ(const float* stateActionInput);
+    float ComputeEnsembleMeanQ(const float* stateActionInput);
+    float ComputeEnsembleStdDev(const float* stateActionInput);
     
     int mStateDim;
     int mActionDim;
@@ -94,6 +110,10 @@ private:
     SpanActorCritic mModel;
     OpponentPool mOpponentPool;
     
+    // PRIMALPHA: New components
+    IntrinsicMotivation mIntrinsicMotivation;
+    AttentionStateEncoder mAttentionEncoder;
+    
     AlignedVector32<float> mBatchStates;
     AlignedVector32<float> mBatchActions;
     AlignedVector32<float> mBatchRewards;
@@ -103,8 +123,7 @@ private:
     std::vector<VectorReward> mBatchVectorRewards;
     
     AlignedVector32<float> mNextActions;
-    AlignedVector32<float> mQ1Values;
-    AlignedVector32<float> mQ2Values;
+    AlignedVector32<float> mQValues[NUM_ENSEMBLE_CRITICS];  // Ensemble Q-values
     AlignedVector32<float> mTargetQ;
     
     AlignedVector32<float> mGrads;
@@ -115,11 +134,10 @@ private:
 
     AlignedVector32<float> mCriticInputBuffer;
     
-    // Pre-allocated buffers for batch operations
-    AlignedVector32<float> mActorOutputBuffer;
-    AlignedVector32<float> mCriticQBuffer;
-    AlignedVector32<float> mLatentZPos;
-    AlignedVector32<float> mLatentZVel;
+    // PRIMALPHA: Additional buffers
+    AlignedVector32<float> mAttendedStates;
+    AlignedVector32<float> mAttendedNextStates;
+    AlignedVector32<float> mIntrinsicRewards;
 
     int mStepCount = 0;
     int mUpdateCount = 0;

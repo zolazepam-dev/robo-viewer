@@ -21,6 +21,8 @@ cc_library(
         "LatentMemory.cpp",
         "OpponentPool.cpp",
         "InternalRobot.cpp",
+        "IntrinsicMotivation.cpp",
+        "AttentionEncoder.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -41,6 +43,8 @@ cc_library(
         "AlignedAllocator.h",
         "LockFreeQueue.h",
         "InternalRobot.h",
+        "IntrinsicMotivation.h",
+        "AttentionEncoder.h",
         "BatterySystem.h",
     ],
     deps = [
