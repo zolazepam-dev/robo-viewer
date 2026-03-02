@@ -100,8 +100,8 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     JPH::PhysicsSettings physicsSettings;
 
     // RL Optimization: Max speed with minimal stability tradeoff
-    physicsSettings.mNumVelocitySteps = 4;  // Double velocity steps
-    physicsSettings.mNumPositionSteps = 2;  // Double position steps
+    physicsSettings.mNumVelocitySteps = 2;
+    physicsSettings.mNumPositionSteps = 1;
     physicsSettings.mBaumgarte = 0.2f;
 
     mPhysicsSystem->SetPhysicsSettings(physicsSettings);
