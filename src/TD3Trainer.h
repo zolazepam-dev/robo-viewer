@@ -1,10 +1,11 @@
 #pragma once
 
-#include <memory>
-#include <random>
 #include <vector>
 #include <array>
 #include <cmath>
+#include <cstring>
+#include <random>
+#include <algorithm>
 
 #include "SpanNetwork.h"
 #include "LatentMemory.h"
@@ -94,6 +95,7 @@ private:
     void UpdateActor(ReplayBuffer& buffer);
     void UpdateTargets();
     void UpdateCriticWithVectorRewards(ReplayBuffer& buffer);
+    float ComputeCriticLoss(SpanNetwork& critic, const float* criticInput, int batchSize);
     
     // PRIMALPHA: Ensemble critic methods
     float ComputeEnsembleMinQ(const float* stateActionInput);
@@ -138,6 +140,10 @@ private:
     AlignedVector32<float> mAttendedStates;
     AlignedVector32<float> mAttendedNextStates;
     AlignedVector32<float> mIntrinsicRewards;
+    AlignedVector32<float> mActorOutputBuffer;
+    AlignedVector32<float> mCriticQBuffer;
+    AlignedVector32<float> mLatentZPos;
+    AlignedVector32<float> mLatentZVel;
 
     int mStepCount = 0;
     int mUpdateCount = 0;

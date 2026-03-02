@@ -127,19 +127,35 @@ void VectorizedEnv::HarvestAfterPhysics()
     // Harvest state from all environments after physics was updated externally
     // This is used when main_train.cpp handles action queuing and physics stepping
     const int actionDim = ACTIONS_PER_ROBOT;
-    for (int i = 0; i < mNumEnvs; ++i)
-    {
-        if (mAllDones[i]) continue;
+    
+    // Parallelize environment harvesting with std::thread (simple version)
+    const int numThreads = std::thread::hardware_concurrency() / 2; // Use half the cores for harvesting
+    std::vector<std::thread> workers;
+    int envsPerThread = (mNumEnvs + numThreads - 1) / numThreads;
+    
+    for (int t = 0; t < numThreads; ++t) {
+        int start = t * envsPerThread;
+        int end = std::min(start + envsPerThread, mNumEnvs);
         
-        int obsOffset = i * mObservationDim * 2;
-        float* obs1 = mAllObservations.data() + obsOffset;
-        float* obs2 = mAllObservations.data() + obsOffset + mObservationDim;
-        float* reward1 = mAllRewards.data() + (i * 2);
-        float* reward2 = mAllRewards.data() + (i * 2 + 1);
-        bool done = false;
+        workers.emplace_back([this, start, end]() {
+            for (int i = start; i < end; ++i) {
+                if (mAllDones[i]) continue;
+                
+                int obsOffset = i * mObservationDim * 2;
+                float* obs1 = mAllObservations.data() + obsOffset;
+                float* obs2 = mAllObservations.data() + obsOffset + mObservationDim;
+                float* reward1 = mAllRewards.data() + (i * 2);
+                float* reward2 = mAllRewards.data() + (i * 2 + 1);
+                bool done = false;
 
-        mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
-        mAllDones[i] = done;
+                mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
+                mAllDones[i] = done;
+            }
+        });
+    }
+    
+    for (auto& worker : workers) {
+        worker.join();
     }
     
     mAllVectorRewards.resize(mNumEnvs);

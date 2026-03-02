@@ -29,8 +29,8 @@ TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     mBatchVectorRewards.resize(batchSize);
     
     mNextActions.resize(batchSize * actionDim);
-    mQ1Values.resize(batchSize * 4);
-    mQ2Values.resize(batchSize * 4);
+    mQValues[0].resize(batchSize * 4);
+    mQValues[1].resize(batchSize * 4);
     mTargetQ.resize(batchSize);
     mGrads.resize(mModel.GetActor().GetNumWeights());
     
@@ -186,14 +186,14 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
     }
     
     // STEP 4: Target Q evaluation - BATCH FORWARD (both critics at once)
-    mModel.GetCritic1Target().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
-    mModel.GetCritic2Target().ForwardBatch(mCriticInputBuffer.data(), mQ2Values.data(), batchSize);
+    mModel.GetCritic1Target().ForwardBatch(mCriticInputBuffer.data(), mQValues[0].data(), batchSize);
+    mModel.GetCritic2Target().ForwardBatch(mCriticInputBuffer.data(), mQValues[1].data(), batchSize);
     
     // STEP 5: Compute target Q values (vectorized)
     for (int i = 0; i < batchSize; ++i)
     {
-        float q1 = mQ1Values[i * 4];
-        float q2 = mQ2Values[i * 4];
+        float q1 = mQValues[0][i * 4];
+        float q2 = mQValues[1][i * 4];
         float minQ = (q1 < q2) ? q1 : q2;  // Faster than std::min
         mTargetQ[i] = mBatchRewards[i] + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }
@@ -310,15 +310,15 @@ void TD3Trainer::UpdateCriticWithVectorRewards(ReplayBuffer& buffer)
     }
     
     // Target Q - BATCH
-    mModel.GetCritic1Target().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
-    mModel.GetCritic2Target().ForwardBatch(mCriticInputBuffer.data(), mQ2Values.data(), batchSize);
+    mModel.GetCritic1Target().ForwardBatch(mCriticInputBuffer.data(), mQValues[0].data(), batchSize);
+    mModel.GetCritic2Target().ForwardBatch(mCriticInputBuffer.data(), mQValues[1].data(), batchSize);
     
     // Compute targets with scalarized rewards
     for (int i = 0; i < batchSize; ++i)
     {
         float scalarReward = ComputeScalarReward(mBatchVectorRewards[i]);
-        float q1 = mQ1Values[i * 4];
-        float q2 = mQ2Values[i * 4];
+        float q1 = mQValues[0][i * 4];
+        float q2 = mQValues[1][i * 4];
         float minQ = (q1 < q2) ? q1 : q2;
         mTargetQ[i] = scalarReward + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }
@@ -400,12 +400,12 @@ void TD3Trainer::UpdateActor(ReplayBuffer& buffer)
     }
     
     // STEP 2: Compute baseline Q-value - BATCH FORWARD
-    mModel.GetCritic1().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
+    mModel.GetCritic1().ForwardBatch(mCriticInputBuffer.data(), mQValues[0].data(), batchSize);
     
     float baselineQ = 0.0f;
     for (int i = 0; i < batchSize; ++i)
     {
-        baselineQ += mQ1Values[i * 4];
+        baselineQ += mQValues[0][i * 4];
     }
     baselineQ /= batchSize;
     
@@ -420,11 +420,7 @@ void TD3Trainer::UpdateActor(ReplayBuffer& buffer)
         actor.SetAllWeights(weights);
         
         // Re-evaluate actions - BATCH FORWARD
-        for (int i = 0; i < batchSize; ++i)
-        {
-            const float* state = mBatchStates.data() + i * mStateDim;
-            actor.Forward(state, mActorOutputBuffer.data() + i * mActionDim);
-        }
+        mModel.GetActor().ForwardBatch(mBatchStates.data(), mActorOutputBuffer.data(), batchSize);
         ForwardMoLU_AVX2(mActorOutputBuffer.data(), mActionDim * batchSize);
         
         // Rebuild critic input with new actions
@@ -445,12 +441,12 @@ void TD3Trainer::UpdateActor(ReplayBuffer& buffer)
         }
         
         // Evaluate Q - BATCH FORWARD
-        mModel.GetCritic1().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
+        mModel.GetCritic1().ForwardBatch(mCriticInputBuffer.data(), mQValues[0].data(), batchSize);
         
         float perturbedQ = 0.0f;
         for (int i = 0; i < batchSize; ++i)
         {
-            perturbedQ += mQ1Values[i * 4];
+            perturbedQ += mQValues[0][i * 4];
         }
         perturbedQ /= batchSize;
         

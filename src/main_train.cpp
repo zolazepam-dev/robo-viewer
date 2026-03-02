@@ -83,7 +83,7 @@ void window_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 int main(int argc, char* argv[]) {
-    int numEnvs = 512;  // Increased from 1 to match NUM_PARALLEL_ENVS
+    int numEnvs = 1024;  // Doubled from 512 to better utilize physics system
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--envs" && i + 1 < argc) {
@@ -138,6 +138,18 @@ int main(int argc, char* argv[]) {
     int stateDim = vecEnv->GetObservationDim(); // Should be 256
     int actionDim = vecEnv->GetActionDim();      // Should be 56
     
+    // Pre-size static buffers to avoid per-step resizing
+    static AlignedVector32<float> obs1Batch;
+    static std::vector<int> indices1;
+    static AlignedVector32<float> obs2Batch;
+    static std::vector<int> indices2;
+    static AlignedVector32<float> robotActions;
+    obs1Batch.resize(numEnvs * stateDim);
+    indices1.resize(numEnvs);
+    obs2Batch.resize(numEnvs * stateDim);
+    indices2.resize(numEnvs);
+    robotActions.resize(numEnvs * 2 * actionDim);
+    
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
     TD3Trainer opponentTrainer(stateDim, actionDim, td3cfg); // League Play opponent
@@ -160,6 +172,10 @@ int main(int argc, char* argv[]) {
     float physicsHz = 120.0f;
     
     auto last_time = std::chrono::high_resolution_clock::now();
+    JPH::PhysicsSettings cachedSettings{};
+    float cachedGravityY = 0.0f;
+    bool settingsInitialized = false;
+    auto lastSettingsCheck = std::chrono::high_resolution_clock::now();
     long long totalSteps = 0;
     float sps = 0;
     int step_counter = 0;
@@ -219,39 +235,24 @@ int main(int argc, char* argv[]) {
         if (!ui.IsPaused()) {
             const auto& obs = vecEnv->GetObservations();
             int numEnvs = vecEnv->GetNumEnvs();
-            AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
-            
-            // Collect all robot 1 observations and environment indices
-            static AlignedVector32<float> obs1Batch;
-            static std::vector<int> indices1;
-            obs1Batch.resize(numEnvs * stateDim);
-            indices1.resize(numEnvs);
-            
+
+            // Single pass to gather both robots' observations and indices
             for (int i = 0; i < numEnvs; ++i) {
-                std::memcpy(obs1Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim), stateDim * sizeof(float));
+                const float* obsBase = (float*)obs.data() + (i * 2 * stateDim);
+                std::memcpy(obs1Batch.data() + i * stateDim, obsBase, stateDim * sizeof(float));
+                std::memcpy(obs2Batch.data() + i * stateDim, obsBase + stateDim, stateDim * sizeof(float));
                 indices1[i] = i * 2;
-            }
-            trainer.SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
-            
-            // Collect all robot 2 observations and environment indices
-            static AlignedVector32<float> obs2Batch;
-            static std::vector<int> indices2;
-            obs2Batch.resize(numEnvs * stateDim);
-            indices2.resize(numEnvs);
-            
-            for (int i = 0; i < numEnvs; ++i) {
-                std::memcpy(obs2Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim + stateDim), stateDim * sizeof(float));
                 indices2[i] = i * 2 + 1;
             }
-            
+
+            trainer.SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
             if (leaguePlayEnabled) {
                 opponentTrainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
             } else {
                 trainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
             }
-            
+
             for (int i = 0; i < numEnvs; ++i) {
-                // Adjust indexing for robotActions because we batched them separately
                 vecEnv->GetEnv(i).QueueActions(robotActions.data() + (i * actionDim), robotActions.data() + (numEnvs * actionDim + i * actionDim));
             }
             
@@ -261,18 +262,29 @@ int main(int argc, char* argv[]) {
             // HARVEST state after physics update - this calls CheckCollisions() and computes rewards!
             vecEnv->HarvestAfterPhysics();
             
-            // Apply physics settings from UI
-            {
+            // Apply physics settings from UI at a lower cadence to lighten the hot loop
+            auto settingsCheckNow = std::chrono::high_resolution_clock::now();
+            if (settingsCheckNow - lastSettingsCheck >= std::chrono::milliseconds(250)) {
                 const auto& phys = ui.GetPhysics();
-                JPH::PhysicsSettings settings;
-                settings.mNumVelocitySteps = phys.velocitySteps;
-                settings.mNumPositionSteps = phys.positionSteps;
-                settings.mBaumgarte = phys.Baumgarte;
-                settings.mPenetrationSlop = phys.penetrationSlop;
-                settings.mSpeculativeContactDistance = phys.speculativeContactDistance;
-                settings.mAllowSleeping = phys.allowSleep;
-                core->SetSettings(settings);
-                core->GetPhysicsSystem().SetGravity(JPH::Vec3(0.0f, phys.gravityY, 0.0f));
+                JPH::PhysicsSettings currentSettings;
+                currentSettings.mNumVelocitySteps = phys.velocitySteps;
+                currentSettings.mNumPositionSteps = phys.positionSteps;
+                currentSettings.mBaumgarte = phys.Baumgarte;
+                currentSettings.mPenetrationSlop = phys.penetrationSlop;
+                currentSettings.mSpeculativeContactDistance = phys.speculativeContactDistance;
+                currentSettings.mAllowSleeping = phys.allowSleep; // Keep disabled for training
+                float currentGravityY = phys.gravityY;
+
+                if (!settingsInitialized ||
+                    memcmp(&currentSettings, &cachedSettings, sizeof(JPH::PhysicsSettings)) != 0 ||
+                    currentGravityY != cachedGravityY) {
+                    core->SetSettings(currentSettings);
+                    core->GetPhysicsSystem().SetGravity(JPH::Vec3(0.0f, currentGravityY, 0.0f));
+                    cachedSettings = currentSettings;
+                    cachedGravityY = currentGravityY;
+                    settingsInitialized = true;
+                }
+                lastSettingsCheck = settingsCheckNow;
             }
             
             // Use batch observations from VectorizedEnv (already harvested in Step())
@@ -364,41 +376,44 @@ int main(int argc, char* argv[]) {
             // use zero/random actions instead of policy
         }
 
-        static auto lastSpsTime = now;
-        std::chrono::duration<float> spsElapsed = now - lastSpsTime;
-        if (spsElapsed.count() >= 1.0f) { 
-            // SPS = steps per second * numEnvs (each step processes all envs)
-            sps = (step_counter * vecEnv->GetNumEnvs()) / spsElapsed.count(); 
-            step_counter = 0; 
-            lastSpsTime = now;
-            
-            // Periodic battery status for rendered env (every 200 steps)
-            if (totalSteps > 0 && totalSteps % 200 == 0) {
-                int rIdx = ui.GetRenderEnvIdx();
-                auto& renv = vecEnv->GetEnv(rIdx);
-                auto& r1 = renv.GetRobot1Ref();
-                auto& r2 = renv.GetRobot2Ref();
-                std::cout << "\033[1;37m🔋 ENV[" << rIdx << "] Step " << totalSteps 
-                          << " | R1: " << r1.battery.GetState().currentCharge << "/1000"
-                          << " | R2: " << r2.battery.GetState().currentCharge << "/1000\033[0m" << std::endl;
-            } 
-            
-            // CSV Telemetry output for micro_board
-            if (!ui.IsPaused()) {
-                std::cout << totalSteps << ",SPS," << sps << "\n";
-                std::cout << totalSteps << ",Reward1," << currentRew1 << "\n";
-                std::cout << totalSteps << ",Reward2," << currentRew2 << "\n";
-                std::cout << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
+         static auto lastSpsTime = now;
+         static auto lastTelemetryTime = now;
+         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
+         if (spsElapsed.count() >= 1.0f) { 
+             // SPS = steps per second * numEnvs (each step processes all envs)
+             sps = (step_counter * vecEnv->GetNumEnvs()) / spsElapsed.count(); 
+             step_counter = 0; 
+             lastSpsTime = now;
+             
+             // Periodic battery status for rendered env (every 200 steps)
+             if (totalSteps > 0 && totalSteps % 200 == 0) {
+                 int rIdx = ui.GetRenderEnvIdx();
+                 auto& renv = vecEnv->GetEnv(rIdx);
+                 auto& r1 = renv.GetRobot1Ref();
+                 auto& r2 = renv.GetRobot2Ref();
+                 std::cout << "\033[1;37m🔋 ENV[" << rIdx << "] Step " << totalSteps 
+                           << " | R1: " << r1.battery.GetState().currentCharge << "/1000"
+                           << " | R2: " << r2.battery.GetState().currentCharge << "/1000\033[0m" << std::endl;
+             } 
+             
+             // CSV Telemetry output for micro_board (lower frequency to reduce I/O)
+             std::chrono::duration<float> telemetryElapsed = now - lastTelemetryTime;
+             if (!ui.IsPaused() && telemetryElapsed.count() >= 2.0f) { // Every 2 seconds
+                 std::cout << totalSteps << ",SPS," << sps << "\n";
+                 std::cout << totalSteps << ",Reward1," << currentRew1 << "\n";
+                 std::cout << totalSteps << ",Reward2," << currentRew2 << "\n";
+                 std::cout << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
 
-                if (telemetryFile.is_open()) {
-                    telemetryFile << totalSteps << ",SPS," << sps << "\n";
-                    telemetryFile << totalSteps << ",Reward1," << currentRew1 << "\n";
-                    telemetryFile << totalSteps << ",Reward2," << currentRew2 << "\n";
-                    telemetryFile << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
-                    telemetryFile.flush();
-                }
-            }
-        }
+                 if (telemetryFile.is_open()) {
+                     telemetryFile << totalSteps << ",SPS," << sps << "\n";
+                     telemetryFile << totalSteps << ",Reward1," << currentRew1 << "\n";
+                     telemetryFile << totalSteps << ",Reward2," << currentRew2 << "\n";
+                     telemetryFile << totalSteps << ",Buffer_Size," << buffer.Size() << "\n";
+                     telemetryFile.flush();
+                 }
+                 lastTelemetryTime = now;
+             }
+         }
 
         // Update HP and impulse display for the render environment
         auto& envHP = vecEnv->GetEnv(ui.GetRenderEnvIdx());

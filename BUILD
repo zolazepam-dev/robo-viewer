@@ -338,3 +338,13 @@ cc_binary(
     deps = ["//src:core"],
     copts = ["-std=c++17", "-O2"],
 )
+
+cc_binary(
+    name = "primalpha_test",
+    srcs = ["//src:primalpha_test.cpp"],
+    deps = [
+        "//src:core",
+        "@jolt//:jolt",
+    ],
+    copts = ["-std=c++17", "-O3", "-mavx2", "-mfma", "-march=native"],
+)

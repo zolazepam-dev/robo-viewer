@@ -32,8 +32,8 @@ void IntrinsicMotivation::Init(size_t stateDim, size_t actionDim, size_t latentD
     mPredictedAction.resize(actionDim);
     mForwardInput.resize(stateDim + actionDim);
     
-    mTempWeights.resize(mForwardModel.GetActor().GetNumWeights());
-    mOriginalWeights.resize(mForwardModel.GetActor().GetNumWeights());
+    mTempWeights.resize(mForwardModel.GetNumWeights());
+    mOriginalWeights.resize(mForwardModel.GetNumWeights());
 }
 
 float IntrinsicMotivation::ComputeIntrinsicReward(const float* state, const float* action,
