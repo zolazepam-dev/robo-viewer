@@ -79,9 +79,9 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     // Scale physics system capacities for Dimensional Ghosting
     const uint32_t bodiesPerEnv = 60; // 2 robots * 27 bodies + safety margin
-    const uint32_t maxBodies = std::max<uint32_t>(1024, mNumEnvs * bodiesPerEnv + 256);
-    const uint32_t numBodyMutexes = std::max<uint32_t>(1, mNumEnvs / 4); // Mutex per ~4 envs
-    const uint32_t maxBodyPairs = std::min<uint32_t>(65536, maxBodies * 4); // Cap at 64K
+    const uint32_t maxBodies = std::max<uint32_t>(2048, mNumEnvs * bodiesPerEnv + 256);
+    const uint32_t numBodyMutexes = std::max<uint32_t>(1, mNumEnvs / 2); // Mutex per ~2 envs
+    const uint32_t maxBodyPairs = std::min<uint32_t>(131072, maxBodies * 8); // Cap at 128K
     const uint32_t maxContactConstraints = maxBodyPairs;
 
     mPhysicsSystem = new JPH::PhysicsSystem();
