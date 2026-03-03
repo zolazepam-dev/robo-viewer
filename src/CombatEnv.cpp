@@ -1,6 +1,6 @@
 #include <Jolt/Jolt.h>
 #include "CombatEnv.h"
-#include "InternalRobot.h"
+#include "CombatRobot.h"
 
 #include <cmath>
 #include <iostream>
@@ -102,69 +102,28 @@ void CombatEnv::Reset()
     JPH::RVec3 pos1(-10.0f, 5.0f, 0.0f);
     JPH::RVec3 pos2(10.0f, 5.0f, 0.0f);
     
-    if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
-        // First time initialization: load robots
-        mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
-        mRobot1.type = RobotType::INTERNAL_ENGINE;
-        
-        mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
-        mRobot2.type = RobotType::INTERNAL_ENGINE;
-    } else {
-        // Reset robot 1
-        bodyInterface.SetPositionAndRotation(mRobot1.mainBodyId, pos1, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
-        bodyInterface.SetAngularVelocity(mRobot1.mainBodyId, JPH::Vec3::sZero());
-        for (int i = 0; i < NUM_SATELLITES; ++i) {
-            if (!mRobot1.satellites[i].coreBodyId.IsInvalid()) {
-                // For internal engine robots, reset engine positions to initial relative positions
-                if (mRobot1.type == RobotType::INTERNAL_ENGINE && i < 3) {
-                    JPH::RVec3 engPos = pos1 + JPH::RVec3((i - 1) * 0.1f, 0.0f, 0.0f);
-                    bodyInterface.SetPositionAndRotation(mRobot1.satellites[i].coreBodyId, engPos, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-                }
-                bodyInterface.SetLinearVelocity(mRobot1.satellites[i].coreBodyId, JPH::Vec3::sZero());
-                bodyInterface.SetAngularVelocity(mRobot1.satellites[i].coreBodyId, JPH::Vec3::sZero());
-            }
-            if (!mRobot1.satellites[i].spikeBodyId.IsInvalid()) {
-                bodyInterface.SetLinearVelocity(mRobot1.satellites[i].spikeBodyId, JPH::Vec3::sZero());
-                bodyInterface.SetAngularVelocity(mRobot1.satellites[i].spikeBodyId, JPH::Vec3::sZero());
-            }
-        }
-        
-        // Reset robot 2
-        bodyInterface.SetPositionAndRotation(mRobot2.mainBodyId, pos2, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
-        bodyInterface.SetAngularVelocity(mRobot2.mainBodyId, JPH::Vec3::sZero());
-        for (int i = 0; i < NUM_SATELLITES; ++i) {
-            if (!mRobot2.satellites[i].coreBodyId.IsInvalid()) {
-                // For internal engine robots, reset engine positions to initial relative positions
-                if (mRobot2.type == RobotType::INTERNAL_ENGINE && i < 3) {
-                    JPH::RVec3 engPos = pos2 + JPH::RVec3((i - 1) * 0.1f, 0.0f, 0.0f);
-                    bodyInterface.SetPositionAndRotation(mRobot2.satellites[i].coreBodyId, engPos, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
-                }
-                bodyInterface.SetLinearVelocity(mRobot2.satellites[i].coreBodyId, JPH::Vec3::sZero());
-                bodyInterface.SetAngularVelocity(mRobot2.satellites[i].coreBodyId, JPH::Vec3::sZero());
-            }
-            if (!mRobot2.satellites[i].spikeBodyId.IsInvalid()) {
-                bodyInterface.SetLinearVelocity(mRobot2.satellites[i].spikeBodyId, JPH::Vec3::sZero());
-                bodyInterface.SetAngularVelocity(mRobot2.satellites[i].spikeBodyId, JPH::Vec3::sZero());
-            }
-        }
-    }
+     if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
+         // First time initialization: load robots
+         mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
+         mRobot1.type = RobotType::SATELLITE;
+         
+         mRobot2 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
+         mRobot2.type = RobotType::SATELLITE;
+     } else {
+         // Reset robot 1 using CombatRobotLoader's ResetRobot method
+         mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
+         
+         // Reset robot 2 using CombatRobotLoader's ResetRobot method
+         mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
+     }
 }
 
 void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 {
     if (mDone) return;
     
-    if (mRobot1.type == RobotType::SATELLITE)
-        mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
-    else
-        InternalRobotLoader::ApplyInternalActions(mRobot1, actions1, mPhysicsSystem);
-
-    if (mRobot2.type == RobotType::SATELLITE)
-        mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
-    else
-        InternalRobotLoader::ApplyInternalActions(mRobot2, actions2, mPhysicsSystem);
+    mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
+    mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
 }
 
 void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done)
