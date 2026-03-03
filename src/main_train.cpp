@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
     ui.Init(window);
 
     // Initializing vectorized environments
-    VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs);
+    VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs, ui.GetStepsPerEpisode());
     vecEnv->Init();
 
     // Prepare Telemetry File for micro_board
@@ -378,12 +378,13 @@ int main(int argc, char* argv[]) {
 
         // Check for restart request from UI
         if (ui.ShouldRestartSim()) {
-            std::cout << "[main] Restarting with " << ui.GetConfig().numEnvs << " environments..." << std::endl;
+            std::cout << "[main] Restarting with " << ui.GetConfig().numEnvs << " environments, " 
+                      << ui.GetStepsPerEpisode() << " steps per episode..." << std::endl;
             
-            // Recreate VectorizedEnv with new count
+            // Recreate VectorizedEnv with new count and steps per episode
             vecEnv->Shutdown();
             delete vecEnv;
-            vecEnv = new VectorizedEnv(ui.GetConfig().numEnvs);
+            vecEnv = new VectorizedEnv(ui.GetConfig().numEnvs, ui.GetStepsPerEpisode());
             vecEnv->Init();
             
             // Reset stats
