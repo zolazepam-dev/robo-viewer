@@ -3,6 +3,7 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 #include <fstream>
+#include <iostream>
 #include <cmath>
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,12 @@ void OverlayUIRefactored::Init(GLFWwindow* window)
 {
     IMGUI_CHECKVERSION();
     mContext = ImGui::CreateContext();
+    
+    // Disable loading/saving of imgui.ini - always use defaults from config
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;  // Disable .ini file
+    io.WantSaveIniSettings = false;
+    
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
     
@@ -409,6 +416,28 @@ void OverlayUIRefactored::DrawTrainingTab()
     TOOLTIP("Maximum steps before episode reset")
     ImGui::SliderInt("Checkpoint Interval", &mConfig.checkpointInterval, 1000, 500000);
     TOOLTIP("Save model every N steps")
+    
+    if (mLoadedSettings.isLoaded) {
+        ImGui::Separator();
+        ImGui::TextColored(mColorWarning, "Settings file loaded - click Apply to use");
+        if (ImGui::Button("APPLY LOADED SETTINGS", ImVec2(200, 30))) {
+            // Copy loaded settings to active settings
+            mPhysics = mLoadedSettings.physics;
+            mRobotTune = mLoadedSettings.robot;
+            mConfig.numEnvs = mLoadedSettings.training.numEnvs;
+            mConfig.checkpointInterval = mLoadedSettings.training.checkpointInterval;
+            mConfig.checkpointDir = mLoadedSettings.training.checkpointDir;
+            mGraphics = mLoadedSettings.graphics;
+            
+            // Update local variables
+            mTimeScale = mPhysics.timeScale;
+            mStepsPerEpisode = mPhysics.stepsPerEpisode;
+            
+            mLoadedSettings.isLoaded = false;
+            std::cout << "[OverlayUI] Loaded settings applied to active config" << std::endl;
+        }
+        TOOLTIP("Apply the settings loaded from file")
+    }
     
     ImGui::Separator();
     ImGui::TextColored(mColorDim, "RUNTIME CONTROL");
@@ -966,47 +995,49 @@ void OverlayUIRefactored::LoadAllSettings(const std::string& path)
     json j;
     ifs >> j;
     
+    // Load into pending/loaded structure (NOT active settings)
     if (j.contains("physics")) {
-        mPhysics.gravityY = j["physics"].value("gravityY", -9.81f);
-        mPhysics.timestep = j["physics"].value("timestep", 1.0f/60.0f);
-        mPhysics.velocitySteps = j["physics"].value("velocitySteps", 4);
-        mPhysics.positionSteps = j["physics"].value("positionSteps", 2);
-        mPhysics.Baumgarte = j["physics"].value("Baumgarte", 0.2f);
-        mPhysics.penetrationSlop = j["physics"].value("penetrationSlop", 0.01f);
-        mPhysics.speculativeContactDistance = j["physics"].value("speculativeContactDistance", 0.01f);
-        mPhysics.allowSleep = j["physics"].value("allowSleep", false);
-        mPhysics.timeScale = j["physics"].value("timeScale", 1.0f);
-        mPhysics.stepsPerEpisode = j["physics"].value("stepsPerEpisode", 1000);
+        mLoadedSettings.physics.gravityY = j["physics"].value("gravityY", -9.81f);
+        mLoadedSettings.physics.timestep = j["physics"].value("timestep", 1.0f/60.0f);
+        mLoadedSettings.physics.velocitySteps = j["physics"].value("velocitySteps", 4);
+        mLoadedSettings.physics.positionSteps = j["physics"].value("positionSteps", 2);
+        mLoadedSettings.physics.Baumgarte = j["physics"].value("Baumgarte", 0.2f);
+        mLoadedSettings.physics.penetrationSlop = j["physics"].value("penetrationSlop", 0.01f);
+        mLoadedSettings.physics.speculativeContactDistance = j["physics"].value("speculativeContactDistance", 0.01f);
+        mLoadedSettings.physics.allowSleep = j["physics"].value("allowSleep", false);
+        mLoadedSettings.physics.timeScale = j["physics"].value("timeScale", 1.0f);
+        mLoadedSettings.physics.stepsPerEpisode = j["physics"].value("stepsPerEpisode", 1000);
     }
     
     if (j.contains("robot")) {
-        mRobotTune.enginePower = j["robot"].value("enginePower", 100.0f);
-        mRobotTune.reactionWheelPower = j["robot"].value("reactionWheelPower", 6000.0f);
-        mRobotTune.shellRadius = j["robot"].value("shellRadius", 2.0f);
-        mRobotTune.shellThickness = j["robot"].value("shellThickness", 0.3f);
-        mRobotTune.shellMass = j["robot"].value("shellMass", 25.0f);
-        mRobotTune.motorSpeed = j["robot"].value("motorSpeed", 10.0f);
-        mRobotTune.motorTorque = j["robot"].value("motorTorque", 450.0f);
+        mLoadedSettings.robot.enginePower = j["robot"].value("enginePower", 100.0f);
+        mLoadedSettings.robot.reactionWheelPower = j["robot"].value("reactionWheelPower", 6000.0f);
+        mLoadedSettings.robot.shellRadius = j["robot"].value("shellRadius", 2.0f);
+        mLoadedSettings.robot.shellThickness = j["robot"].value("shellThickness", 0.3f);
+        mLoadedSettings.robot.shellMass = j["robot"].value("shellMass", 25.0f);
+        mLoadedSettings.robot.motorSpeed = j["robot"].value("motorSpeed", 10.0f);
+        mLoadedSettings.robot.motorTorque = j["robot"].value("motorTorque", 450.0f);
     }
     
     if (j.contains("training")) {
-        mConfig.numEnvs = j["training"].value("numEnvs", 8);
-        mConfig.checkpointInterval = j["training"].value("checkpointInterval", 50000);
-        mConfig.checkpointDir = j["training"].value("checkpointDir", "checkpoints");
+        mLoadedSettings.training.numEnvs = j["training"].value("numEnvs", 8);
+        mLoadedSettings.training.checkpointInterval = j["training"].value("checkpointInterval", 50000);
+        mLoadedSettings.training.checkpointDir = j["training"].value("checkpointDir", "checkpoints");
     }
     
     if (j.contains("graphics")) {
-        mGraphics.showCollisionShapes = j["graphics"].value("showCollisionShapes", false);
-        mGraphics.showAABBs = j["graphics"].value("showAABBs", false);
-        mGraphics.showContactPoints = j["graphics"].value("showContactPoints", false);
-        mGraphics.showRobot1 = j["graphics"].value("showRobot1", true);
-        mGraphics.showRobot2 = j["graphics"].value("showRobot2", true);
-        mGraphics.showInternalEngines = j["graphics"].value("showInternalEngines", true);
-        mGraphics.cameraDistance = j["graphics"].value("cameraDistance", 20.0f);
-        mGraphics.cameraAzimuth = j["graphics"].value("cameraAzimuth", 45.0f);
-        mGraphics.cameraElevation = j["graphics"].value("cameraElevation", 30.0f);
+        mLoadedSettings.graphics.showCollisionShapes = j["graphics"].value("showCollisionShapes", false);
+        mLoadedSettings.graphics.showAABBs = j["graphics"].value("showAABBs", false);
+        mLoadedSettings.graphics.showContactPoints = j["graphics"].value("showContactPoints", false);
+        mLoadedSettings.graphics.showRobot1 = j["graphics"].value("showRobot1", true);
+        mLoadedSettings.graphics.showRobot2 = j["graphics"].value("showRobot2", true);
+        mLoadedSettings.graphics.showInternalEngines = j["graphics"].value("showInternalEngines", true);
+        mLoadedSettings.graphics.cameraDistance = j["graphics"].value("cameraDistance", 20.0f);
+        mLoadedSettings.graphics.cameraAzimuth = j["graphics"].value("cameraAzimuth", 45.0f);
+        mLoadedSettings.graphics.cameraElevation = j["graphics"].value("cameraElevation", 30.0f);
     }
     
-    mTimeScale = mPhysics.timeScale;
-    mStepsPerEpisode = mPhysics.stepsPerEpisode;
+    mLoadedSettings.isLoaded = true;
+    
+    std::cout << "[OverlayUI] Settings loaded from file - click Apply to use them" << std::endl;
 }

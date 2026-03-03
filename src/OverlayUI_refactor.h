@@ -49,6 +49,7 @@ struct TrainingConfigUI {
     bool saveRequested = false;
     bool loadRequested = false;
     bool manualTorqueOverride = false;
+    bool settingsLoaded = false;
 };
 
 struct GraphicsSettings {
@@ -61,6 +62,14 @@ struct GraphicsSettings {
     float cameraDistance = 20.0f;
     float cameraAzimuth = 45.0f;
     float cameraElevation = 30.0f;
+};
+
+struct LoadedSettings {
+    PhysicsTunables physics;
+    RobotTunables robot;
+    TrainingConfigUI training;
+    GraphicsSettings graphics;
+    bool isLoaded = false;
 };
 
 struct BatteryHistory {
@@ -142,6 +151,7 @@ public:
     const RobotTunables& GetRobots() const { return mRobotTune; }
     const GraphicsSettings& GetGraphics() const { return mGraphics; }
     const TrainingConfigUI& GetConfig() const { return mConfig; }
+    bool HasPendingSettings() const { return mLoadedSettings.isLoaded; }
     GraphSelect GetGraphSelect() const { return mCurrentGraph; }
     
     // Policy management
@@ -246,6 +256,7 @@ private:
     RobotTunables mRobotTune;
     GraphicsSettings mGraphics;
     TrainingConfigUI mConfig;
+    LoadedSettings mLoadedSettings;
     
     SpawnRequest mSpawnRequest;
     JPH::Vec3 mPendingSpawnPos;

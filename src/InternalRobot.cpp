@@ -164,6 +164,7 @@ CombatRobotData InternalRobotLoader::LoadInternalRobot(
     }
     robotData.mainBodyId = shellBody->GetID();
     bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
+    std::cout << "[InternalRobot] Created shell body with ID: " << robotData.mainBodyId.GetIndex() << std::endl;
 
     // --- INTERNAL ENGINES ---
     for (int i = 0; i < 3; ++i) {
@@ -210,7 +211,7 @@ void InternalRobotLoader::ApplyInternalActions(
     JPH::Vec3 totalMoment(0, 0, 0);
     float totalMass = 50.0f;  // Shell mass
     
-    float containmentRadius = 1.8f;
+    float containmentRadius = 1.8f;  // Back to original
 
     for (int i = 0; i < 3; ++i) {
         if (robot.satellites[i].coreBodyId.IsInvalid()) continue;
@@ -225,11 +226,21 @@ void InternalRobotLoader::ApplyInternalActions(
         totalMass += engineMass;
 
         // --- PREVENTATIVE CONTAINMENT ---
-        if (dist > 0.1f) {
-            float springK = 500.0f;
-            if (dist > containmentRadius) springK = 5000.0f;
-            JPH::Vec3 containmentForce = -relPos.Normalized() * (dist * springK);
-            bodyInterface.AddForce(robot.satellites[i].coreBodyId, containmentForce);
+        // Gentle spring + velocity damping to keep engines inside
+        if (dist > 0.05f) {
+            float springK = 100.0f;        // Gentle spring
+            float dampingK = 100.0f;        // Moderate damping
+            
+            // Get engine velocity
+            JPH::Vec3 engVel = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
+            
+            // Spring force toward shell center
+            JPH::Vec3 springForce = -relPos.Normalized() * (dist * springK);
+            
+            // Damping force
+            JPH::Vec3 dampingForce = -engVel * dampingK;
+            
+            bodyInterface.AddForce(robot.satellites[i].coreBodyId, springForce + dampingForce);
         }
 
         // --- ACTION FORCE ---

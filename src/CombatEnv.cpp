@@ -101,12 +101,23 @@ void CombatEnv::Reset()
     }
 
     // 2. Reset existing robots instead of destroying/recreating
-    // Spawn robots on opposite sides of KOTH point with random angle
-    float angle = static_cast<float>(rng()) * 6.28318f / 4294967295.0f;
-    float offsetX = std::cos(angle) * cfg.env.spawnOffset;
-    float offsetZ = std::sin(angle) * cfg.env.spawnOffset;
-    JPH::RVec3 pos1(mKothPoint.GetX() - offsetX, cfg.env.spawnHeight, mKothPoint.GetZ() - offsetZ);
-    JPH::RVec3 pos2(mKothPoint.GetX() + offsetX, cfg.env.spawnHeight, mKothPoint.GetZ() + offsetZ);
+    // Spawn robots on OPPOSITE SIDES of the arena (guaranteed far apart)
+    // Use fixed positions: robot1 at -X, robot2 at +X
+    float spawnDist = std::max(cfg.env.spawnOffset, 35.0f);  // Minimum 35m apart
+    
+    // Print for debugging
+    // std::cout << "[CombatEnv] spawn_offset=" << cfg.env.spawnOffset << " spawnDist=" << spawnDist << std::endl;
+    
+    // Robot 1: left side of arena
+    JPH::RVec3 pos1(-spawnDist, cfg.env.spawnHeight, 0.0f);
+    // Robot 2: right side of arena  
+    JPH::RVec3 pos2(spawnDist, cfg.env.spawnHeight, 0.0f);
+    
+    // Add some random Z offset for variety
+    float zOffset1 = (static_cast<float>(rng()) * 10.0f - 5.0f);
+    float zOffset2 = (static_cast<float>(rng()) * 10.0f - 5.0f);
+    pos1 = JPH::RVec3(pos1.GetX(), pos1.GetY(), zOffset1);
+    pos2 = JPH::RVec3(pos2.GetX(), pos2.GetY(), zOffset2);
     if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
         // First time initialization: load robots
         mRobot1 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
@@ -114,6 +125,8 @@ void CombatEnv::Reset()
         
         mRobot2 = InternalRobotLoader::LoadInternalRobot("robots/internal_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
         mRobot2.type = RobotType::INTERNAL_ENGINE;
+        std::cout << "[CombatEnv::Reset] Env " << mEnvIndex << " loaded - R1 body: " << mRobot1.mainBodyId.GetIndex() 
+                  << " R2 body: " << mRobot2.mainBodyId.GetIndex() << std::endl;
     } else {
         // Reset robot 1
         bodyInterface.SetPositionAndRotation(mRobot1.mainBodyId, pos1, JPH::Quat::sIdentity(), JPH::EActivation::Activate);
@@ -161,7 +174,7 @@ void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 {
     if (mDone) return;
     
-    const float dt = 1.0f / 60.0f;
+    const float dt = 1.0f / 120.0f;
     
     if (mRobot1.type == RobotType::SATELLITE)
         mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
@@ -383,8 +396,8 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
         }
     }
 
-    mRobotLoader->PerformLidarScan(const_cast<CombatRobotData&>(robot), mPhysicsSystem);
-    for (int i = 0; i < NUM_LIDAR_RAYS; ++i) obs[idx++] = robot.lidarDistances[i] / 20.0f;
+    // Lidar scan commented out for performance
+    for (int i = 0; i < NUM_LIDAR_RAYS; ++i) obs[idx++] = 20.0f / 20.0f;
 
     obs[idx++] = robot.hp / 100.0f;
     obs[idx++] = opponent.hp / 100.0f;
@@ -428,10 +441,13 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     float dist = static_cast<float>((pos2 - pos1).Length());
     
     float prox1 = 0.0f;
+    float prox2 = 0.0f;
     if (dist < cfg.reward.proximityRange) {
         prox1 = cfg.reward.proximityScale * (1.0f - (dist / cfg.reward.proximityRange)); 
+        prox2 = prox1;  // Symmetric - same distance for both robots
     } else {
-        prox1 = -cfg.reward.proximityFarPenalty * (dist - cfg.reward.proximityRange); // Scaling penalty for being far
+        prox1 = -cfg.reward.proximityFarPenalty * std::clamp(dist - cfg.reward.proximityRange, 0.0f, 200.0f);
+        prox2 = prox1;
     }
 
     // Directional Attack Reward (moving toward opponent)
@@ -445,7 +461,7 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
         float px = std::abs(p.GetX());
         float pz = std::abs(p.GetZ());
         float maxD = std::max(px, pz);
-        if (maxD > cfg.reward.wallStart) return -cfg.reward.wallPenaltyScale * (maxD - cfg.reward.wallStart); // Gradual penalty starting 4m from wall
+        if (maxD > cfg.reward.wallStart) return -cfg.reward.wallPenaltyScale * std::clamp(maxD - cfg.reward.wallStart, 0.0f, 100.0f); // Gradual penalty starting 4m from wall
         return 0.0f;
     };
     float wallPenalty1 = calcWallPenalty(pos1);
@@ -497,10 +513,14 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
 
     // Shape the damage reward to encourage engagement
     vr1.damage_dealt += (prox1 + approach1 + wallPenalty1);
-    vr2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
+    vr2.damage_dealt += (prox2 + approach2 + wallPenalty2); 
 
     r1 = vr1.Scalar();
     r2 = vr2.Scalar();
+    
+    // Clamp rewards to prevent explosion
+    r1 = std::clamp(r1, -100.0f, 100.0f);
+    r2 = std::clamp(r2, -100.0f, 100.0f);
     
     mReward1 = vr1;
     mReward2 = vr2;
