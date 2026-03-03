@@ -15,8 +15,8 @@
 // Global single instance of CombatContactListener
 CombatContactListener* gCombatContactListener = nullptr;
 
-VectorizedEnv::VectorizedEnv(int numEnvs)
-    : mNumEnvs(numEnvs)
+VectorizedEnv::VectorizedEnv(int numEnvs, int stepsPerEpisode)
+    : mNumEnvs(numEnvs), mStepsPerEpisode(stepsPerEpisode)
 {
 }
 
@@ -71,7 +71,7 @@ void VectorizedEnv::Init(bool initRobots)
         for (int i = 0; i < mNumEnvs; ++i)
         {
             std::cout << "[VectorizedEnv::Init] Initializing environment " << i << std::endl;
-            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader);
+            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader, mStepsPerEpisode);
             std::cout << "[VectorizedEnv::Init] Environment " << i << " initialized" << std::endl;
         }
 

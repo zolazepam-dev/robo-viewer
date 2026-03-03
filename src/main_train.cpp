@@ -261,8 +261,8 @@ int main(int argc, char* argv[]) {
             const auto& allDones = vecEnv->GetDones();
             const auto& allVectorRewards = vecEnv->GetVectorRewards();
             
-            // Only process render env for UI updates
-            int renderIdx = ui.GetRenderEnvIdx();
+            // Render only one environment (env 0) to avoid drawing the rest
+            const int renderIdx = 0;
             currentRew1 = allRewards[renderIdx * 2];
             currentRew2 = allRewards[renderIdx * 2 + 1];
             
@@ -369,12 +369,12 @@ int main(int argc, char* argv[]) {
         }
 
         // Update HP display
-        auto& envHP = vecEnv->GetEnv(ui.GetRenderEnvIdx());
+        auto& envHP = vecEnv->GetEnv(renderEnvIdx);
         ui.UpdateAgentHP(envHP.GetRobot1().hp, envHP.GetRobot2().hp);
 
         // Update UI stats every frame
         ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 
-                       ui.GetRenderEnvIdx(), vecEnv->GetNumEnvs());
+                        renderEnvIdx, vecEnv->GetNumEnvs());
 
         // Check for restart request from UI
         if (ui.ShouldRestartSim()) {
@@ -402,7 +402,7 @@ int main(int argc, char* argv[]) {
         const auto& graphics = ui.GetGraphics();
 
         if (renderEnabled && !headlessTurbo) {
-            gRenderer->Draw(vecEnv->GetGlobalPhysics(), gCam.position, ui.GetRenderEnvIdx(), gCam.front,
+            gRenderer->Draw(vecEnv->GetGlobalPhysics(), gCam.position, renderEnvIdx, gCam.front,
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                             graphics.showRobot1, graphics.showRobot2);
         } else {

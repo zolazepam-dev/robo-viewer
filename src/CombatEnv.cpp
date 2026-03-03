@@ -54,11 +54,12 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
     mForceReadingsPerEnv[envIdx][1].impulseMagnitude[0] += impulseMag;
 }
 
-void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader)
+void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, int stepsPerEpisode)
 {
     mEnvIndex = envIndex;
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
+    mStepsPerEpisode = stepsPerEpisode;
 
     Reset();
 }
@@ -146,7 +147,7 @@ void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* re
 
     CalculateRewards(*reward1, *reward2);
 
-    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= MAX_EPISODE_STEPS) {
+    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= mStepsPerEpisode) {
         mDone = true;
     }
     

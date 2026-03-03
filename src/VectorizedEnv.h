@@ -9,7 +9,7 @@
 class VectorizedEnv
 {
 public:
-    VectorizedEnv(int numEnvs);
+    VectorizedEnv(int numEnvs, int stepsPerEpisode = 7200);
     ~VectorizedEnv();
     VectorizedEnv(const VectorizedEnv& other) = default;
     VectorizedEnv& operator=(const VectorizedEnv& other) = default;
@@ -39,6 +39,7 @@ private:
     std::vector<CombatEnv> mEnvs;
 
     int mNumEnvs;
+    int mStepsPerEpisode;
     int mObservationDim = OBSERVATION_DIM; 
     int mActionDim = 56;
     
