@@ -3,10 +3,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary")
 cc_binary(
     name = "viewer",
     srcs = ["//src:main_train.cpp"],
-    data = [
-        "//robots:combat_bot.json",
-        "//robots:internal_bot.json",
-    ],
+    data = ["//robots:combat_bot.json"],
     deps = [
         "//src:core",
         "@glfw",
@@ -25,10 +22,7 @@ cc_binary(
 cc_binary(
     name = "train",
     srcs = ["//src:main_train.cpp"],
-    data = [
-        "//robots:combat_bot.json",
-        "//robots:internal_bot.json",
-    ],
+    data = ["//robots:combat_bot.json"],
     deps = [
         "//src:core",
         "@glfw",
@@ -111,10 +105,7 @@ cc_binary(
 cc_binary(
     name = "train_headless",
     srcs = ["//src:main_train_headless.cpp"],
-    data = [
-        "//robots:combat_bot.json",
-        "//robots:internal_bot.json",
-    ],
+    data = ["//robots:combat_bot.json"],
     deps = [
         "//src:core",
         "@nlohmann_json//:json",
