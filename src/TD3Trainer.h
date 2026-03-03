@@ -79,9 +79,10 @@ public:
 
 private:
     void UpdateCritic(class ReplayBuffer& buffer);
-    void UpdateActor();
+    void UpdateActor(class ReplayBuffer& buffer);
     void UpdateTargets();
     void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
+    float ComputeCriticLoss(class SpanNetwork& critic, const float* criticInput, int batchSize);
     
     int mStateDim;
     int mActionDim;
@@ -113,6 +114,10 @@ private:
     std::vector<int> mSampledIndices;
 
     AlignedVector32<float> mCriticInputBuffer;
+    AlignedVector32<float> mActorOutputBuffer;
+    AlignedVector32<float> mCriticQBuffer;
+    AlignedVector32<float> mLatentZPos;
+    AlignedVector32<float> mLatentZVel;
 
     int mStepCount = 0;
     int mUpdateCount = 0;
