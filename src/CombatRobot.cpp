@@ -198,8 +198,8 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         
         for (int axis = (int)JPH::SixDOFConstraintSettings::EAxis::RotationX; axis <= (int)JPH::SixDOFConstraintSettings::EAxis::RotationZ; ++axis) {
             rotSettings.mMotorSettings[axis].mSpringSettings.mFrequency = 0.0f; // Pure velocity motor
-            rotSettings.mMotorSettings[axis].mMinTorqueLimit = -50.0f;
-            rotSettings.mMotorSettings[axis].mMaxTorqueLimit = 50.0f;
+            rotSettings.mMotorSettings[axis].mMinTorqueLimit = -500.0f;
+            rotSettings.mMotorSettings[axis].mMaxTorqueLimit = 500.0f;
         }
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
@@ -264,8 +264,8 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         slideSettings.mLimitsMin = slideMin;
         slideSettings.mLimitsMax = slideMax;
         slideSettings.mMotorSettings.mSpringSettings.mFrequency = 0.0f; // Pure velocity
-        slideSettings.mMotorSettings.mMinForceLimit = -100.0f;
-        slideSettings.mMotorSettings.mMaxForceLimit = 100.0f;
+         slideSettings.mMotorSettings.mMinForceLimit = -500.0f;
+        slideSettings.mMotorSettings.mMaxForceLimit = 500.0f;
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
@@ -274,9 +274,9 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         
         robotData.satellites[i].slideJoint->SetMotorState(JPH::EMotorState::Velocity);
 
-        robotData.satellites[i].pidX = PIDController{50.0f, 0.0f, 10.0f, 0.0f, 0.0f};
-        robotData.satellites[i].pidY = PIDController{50.0f, 0.0f, 10.0f, 0.0f, 0.0f};
-        robotData.satellites[i].pidZ = PIDController{50.0f, 0.0f, 10.0f, 0.0f, 0.0f};
+         robotData.satellites[i].pidX = PIDController{200.0f, 5.0f, 50.0f, 0.0f, 0.0f};
+        robotData.satellites[i].pidY = PIDController{200.0f, 5.0f, 50.0f, 0.0f, 0.0f};
+        robotData.satellites[i].pidZ = PIDController{200.0f, 5.0f, 50.0f, 0.0f, 0.0f};
     }
 
     auto loadEnd = std::chrono::high_resolution_clock::now();
