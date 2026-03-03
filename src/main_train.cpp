@@ -105,7 +105,6 @@ int main(int argc, char* argv[]) {
 
     OverlayUIRefactored ui;
     ui.Init(window);
-    ui.LoadAllSettings(checkpointDir + "/settings.json");
 
     // Initializing vectorized environments
     VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs);
@@ -423,7 +422,7 @@ int main(int argc, char* argv[]) {
         ui.DrawAllTabs();
         ImGui::End();
         ui.Render();
-        ui.SaveAllSettings(checkpointDir + "/settings.json");
+
         glfwSwapBuffers(window);
     }
 

@@ -129,9 +129,7 @@ public:
     bool GetSpawnRequest(SpawnRequest& outRequest);
     void SetSpawnClickPosition(const JPH::Vec3& pos);
     
-    // Settings persistence
-    void SaveAllSettings(const std::string& path);
-    void LoadAllSettings(const std::string& path);
+
     
     /*
     ========================================
