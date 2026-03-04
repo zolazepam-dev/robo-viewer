@@ -3,6 +3,7 @@
 // STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
 #include <vector>
+#include "PhysicsCore.h"
 
 #include <GL/glew.h>
 #include <glm/glm.hpp>
@@ -28,10 +29,10 @@ public:
     Renderer(int width, int height);
     ~Renderer();
 
-    void Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex = 0, 
-              const glm::vec3& cameraFront = glm::vec3(0.0f, 0.0f, -1.0f),
-              bool showCollisionShapes = false, bool showAABBs = false, bool showContactPoints = false,
-              bool showRobot1 = true, bool showRobot2 = true);
+     void Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex = 0,
+               const glm::vec3& cameraFront = glm::vec3(0.0f, 0.0f, -1.0f),
+               bool showCollisionShapes = false, bool showAABBs = false, bool showContactPoints = false,
+               bool showRobot1 = true, bool showRobot2 = true);
     void Resize(int width, int height);
 
 private:

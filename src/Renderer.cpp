@@ -332,7 +332,7 @@ Renderer::~Renderer()
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
 
-void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront,
+void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront,
                     bool showCollisionShapes, bool showAABBs, bool showContactPoints, bool showRobot1, bool showRobot2)
 {
     // TEMPORARILY DISABLE DEBUG DRAWING - causes crashes
@@ -342,7 +342,10 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
     glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (physicsSystem == nullptr || mProgram == 0) return;
+    if (physicsCore == nullptr || mProgram == 0) return;
+
+    JPH::PhysicsSystem* physicsSystem = &physicsCore->GetPhysicsSystem();
+    JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
 
     mView = glm::lookAt(cameraPos, cameraPos + cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
     mViewPosition = cameraPos;
@@ -359,19 +362,17 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
         glUniform1f(mLightIntensityLoc[i], mLights[i].intensity);
     }
 
-    JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
-    
-    JPH::BodyIDVector bodies;
-    physicsSystem->GetBodies(bodies);
-
     const JPH::ObjectLayer staticLayer = Layers::STATIC;
     const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
     const JPH::ObjectLayer ghostLayer = Layers::GHOST_BASE + envIndex;
+    const std::vector<JPH::ObjectLayer> relevantLayers = { staticLayer, envBaseLayer, ghostLayer };
+
+    JPH::BodyIDVector bodies;
+    physicsCore->GetBodiesByLayers(bodies, relevantLayers);
+
 
     auto renderBody = [&](const JPH::BodyID& body_id, float forcedAlpha = -1.0f) {
         JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
-        if (layer != staticLayer && layer != envBaseLayer && layer != ghostLayer) return;
-
         JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
         const JPH::Shape* shape_ptr = shape.GetPtr();
         if (shape_ptr == nullptr) return;

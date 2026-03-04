@@ -1,3 +1,11 @@
+/**
+ * @file PhysicsCore.cpp
+ * @brief Implementation of the PhysicsCore class
+ * 
+ * Contains the implementation for the high-performance Jolt Physics system manager,
+ * including thread pinning, memory management, and simulation stepping.
+ */
+
 // STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
 #include <Jolt/RegisterTypes.h>
@@ -13,11 +21,27 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 
 
+/**
+ * @brief Destructor for PhysicsCore
+ */
 PhysicsCore::~PhysicsCore()
 {
     Shutdown();
 }
 
+/**
+ * @brief Initialize the physics system
+ * 
+ * This method initializes the Jolt Physics system with optimizations for
+ * reinforcement learning, including:
+ * - Thread pinning for maximum CPU utilization
+ * - Memory pooling for zero-allocation physics loop
+ * - Dimensional Ghosting configuration
+ * - Optimal physics settings for RL
+ * 
+ * @param numParallelEnvs Number of parallel environments to support
+ * @return True if initialization succeeded
+ */
 bool PhysicsCore::Init(uint32_t numParallelEnvs)
 {
     if (mInitialized) return true;
@@ -25,6 +49,7 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
 
     JPH::RegisterDefaultAllocator();
 
+    // Allocate temporary memory for physics simulation
     uint32_t tempAllocSize = 256 * 1024 * 1024;
     mTempAllocator = new JPH::TempAllocatorImpl(tempAllocSize);
 
@@ -34,6 +59,7 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     // We strictly spawn exactly 10 worker threads and pin them to Cores 1-5 (Threads 1-5, 7-11).
     uint32_t joltWorkerThreads = 10;
 
+    // Create thread pool for physics jobs
     mJobSystem = new JPH::JobSystemThreadPool(
         JPH::cMaxPhysicsJobs,
         JPH::cMaxPhysicsBarriers,
@@ -73,6 +99,7 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
         JPH::RegisterTypes();
     });
 
+    // Create layer interfaces and filters
     mBroadPhaseLayerInterface = new BPLayerInterfaceImpl(mNumEnvs);
     mObjectVsBroadPhaseLayerFilter = new ObjectVsBroadPhaseLayerFilterImpl();
     mObjectLayerPairFilter = new ObjectLayerPairFilterImpl();
@@ -84,6 +111,7 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     const uint32_t maxBodyPairs = std::min<uint32_t>(131072, maxBodies * 8); // Cap at 128K
     const uint32_t maxContactConstraints = maxBodyPairs;
 
+    // Initialize physics system
     mPhysicsSystem = new JPH::PhysicsSystem();
     mPhysicsSystem->Init(
         maxBodies,
@@ -95,8 +123,10 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
         *mObjectLayerPairFilter
     );
 
+    // Set gravity to Earth's gravity (9.81 m/s² downward)
     mPhysicsSystem->SetGravity(JPH::Vec3(0.0f, -9.81f, 0.0f));
 
+    // Configure physics settings for optimal RL performance
     JPH::PhysicsSettings physicsSettings;
 
     // RL Optimization: Max speed with minimal stability tradeoff
@@ -112,6 +142,11 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     return true;
 }
 
+/**
+ * @brief Shutdown the physics system
+ * 
+ * Cleans up all resources allocated by the physics system.
+ */
 void PhysicsCore::Shutdown()
 {
     if (!mInitialized) return;
@@ -143,6 +178,51 @@ void PhysicsCore::Shutdown()
     mTempAllocator = nullptr;
 
     mInitialized = false;
+}
+
+/**
+ * @brief Step the physics simulation
+ * 
+ * Runs a single physics simulation step with optimized settings for
+ * high-throughput reinforcement learning.
+ * 
+ * @param deltaTime Time to simulate in seconds
+ */
+void PhysicsCore::GetBodiesByLayers(JPH::BodyIDVector& outBodies, const std::vector<JPH::ObjectLayer>& layers) const
+{
+    outBodies.clear();
+    if (!mInitialized || !mPhysicsSystem) return;
+
+    JPH::BodyIDVector allBodies;
+    mPhysicsSystem->GetBodies(allBodies);
+
+    const JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+
+    for (const JPH::BodyID& bodyId : allBodies) {
+        if (bodyId.IsInvalid()) continue;
+        JPH::ObjectLayer layer = bodyInterface.GetObjectLayer(bodyId);
+        if (std::find(layers.begin(), layers.end(), layer) != layers.end()) {
+            outBodies.push_back(bodyId);
+        }
+    }
+}
+
+void PhysicsCore::GetBodiesByLayer(JPH::BodyIDVector& outBodies, JPH::ObjectLayer layer) const
+{
+    outBodies.clear();
+    if (!mInitialized || !mPhysicsSystem) return;
+
+    JPH::BodyIDVector allBodies;
+    mPhysicsSystem->GetBodies(allBodies);
+
+    const JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+
+    for (const JPH::BodyID& bodyId : allBodies) {
+        if (bodyId.IsInvalid()) continue;
+        if (bodyInterface.GetObjectLayer(bodyId) == layer) {
+            outBodies.push_back(bodyId);
+        }
+    }
 }
 
 void PhysicsCore::Step(float deltaTime)

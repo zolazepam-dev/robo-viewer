@@ -261,10 +261,9 @@ int main(int argc, char* argv[]) {
             const auto& allDones = vecEnv->GetDones();
             const auto& allVectorRewards = vecEnv->GetVectorRewards();
             
-            // Render only one environment (env 0) to avoid drawing the rest
-            const int renderIdx = 0;
-            currentRew1 = allRewards[renderIdx * 2];
-            currentRew2 = allRewards[renderIdx * 2 + 1];
+            // Render only one environment to avoid drawing the rest
+            currentRew1 = allRewards[renderEnvIdx * 2];
+            currentRew2 = allRewards[renderEnvIdx * 2 + 1];
             
             // Add transitions to replay buffer
             for (int i = 0; i < numEnvs; ++i) {
@@ -285,7 +284,7 @@ int main(int argc, char* argv[]) {
                     float dmgTaken = vr.damage_taken;
                     float energy = vr.energy_used;
                     
-                    if (i == renderIdx) {
+                    if (i == renderEnvIdx) {
                         ui.PushRewardData(dmgDealt, dmgTaken, 0.0f, energy, dmgDealt - dmgTaken * 0.5f);
                     }
                     
@@ -403,7 +402,7 @@ int main(int argc, char* argv[]) {
         const auto& graphics = ui.GetGraphics();
 
         if (renderEnabled && !headlessTurbo) {
-            gRenderer->Draw(vecEnv->GetGlobalPhysics(), gCam.position, renderEnvIdx, gCam.front,
+            gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front,
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                             graphics.showRobot1, graphics.showRobot2);
         } else {

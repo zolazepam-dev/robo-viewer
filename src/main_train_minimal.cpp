@@ -11,7 +11,7 @@ int main() {
     
     try {
         std::cout << "Creating VectorizedEnv(1)" << std::endl;
-        VectorizedEnv vecEnv(1);
+        VectorizedEnv vecEnv(1, 7200); // Default 7200 steps per episode
         
         std::cout << "Calling Init()" << std::endl;
         vecEnv.Init();

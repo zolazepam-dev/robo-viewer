@@ -203,7 +203,7 @@ int main() {
         glClearColor(0.01f, 0.01f, 0.02f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        renderer.Draw(&physicsCore.GetPhysicsSystem(), glm::vec3(camX, camY, camZ), 0);
+        renderer.Draw(&physicsCore, glm::vec3(camX, camY, camZ), 0);
         
         // ImGui UI
         ImGui_ImplOpenGL3_NewFrame();
