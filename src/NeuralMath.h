@@ -55,6 +55,9 @@ void FMAVector_AVX2(float* dst, const float* a, const float* b, size_t size);
 void Softmax_AVX2(float* data, size_t size);
 void LayerNorm_AVX2(float* data, size_t size, const float* gamma, const float* beta);
 
+// Memory safety utilities
+size_t GetAvailableMemoryBytes();
+
 void MatMul_AVX2(const float* A, const float* B, float* C, 
                  size_t M, size_t K, size_t N);
 

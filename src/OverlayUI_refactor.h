@@ -49,6 +49,26 @@ struct TrainingConfigUI {
     bool manualTorqueOverride = false;
 };
 
+struct RobotConfiguration {
+    std::string name;
+    std::string configFile;
+    float enginePower;
+    float reactionWheelPower;
+    float shellRadius;
+    float shellThickness;
+    float shellMass;
+    float motorSpeed;
+    float motorTorque;
+};
+
+struct RobotSelectionUI {
+    int selectedRobotIndex = 0;
+    std::vector<RobotConfiguration> availableRobots;
+    bool loadConfigRequested = false;
+    bool createCheckpointFolderRequested = false;
+    std::string newCheckpointFolderName = "new_checkpoint";
+};
+
 struct GraphicsSettings {
     bool showCollisionShapes = false;
     bool showAABBs = false;
@@ -116,6 +136,11 @@ public:
     bool GetAndClearLoadRequest(std::string& outName);
     bool GetAndClearGraphRequest();
     bool GetManualOverride() const { return mManualOverride; }
+    
+    // Robot configuration management
+    bool GetAndClearLoadConfigRequest();
+    bool GetAndClearCreateCheckpointFolderRequest(std::string& outFolderName);
+    const std::string& GetSelectedRobotType() const;
     
     void DrawAllTabs();
     
@@ -208,6 +233,7 @@ private:
     RobotTunables mRobotTune;
     GraphicsSettings mGraphics;
     TrainingConfigUI mConfig;
+    RobotSelectionUI mRobotSelection;
     
     SpawnRequest mSpawnRequest;
     JPH::Vec3 mPendingSpawnPos;

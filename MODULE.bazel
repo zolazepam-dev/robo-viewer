@@ -4,7 +4,7 @@ module(
 )
 
 # --- Core Dependencies ---
-bazel_dep(name = "rules_cc", version = "0.2.17") # Bumped to the stable BCR version
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 
 # --- Graphics & Math Stack (Native BCR) ---
@@ -12,7 +12,7 @@ bazel_dep(name = "glfw", version = "3.4.0")
 bazel_dep(name = "glm", version = "1.0.1")
 bazel_dep(name = "glew", version = "2.2.0")
 bazel_dep(name = "nlohmann_json", version = "3.11.3")
-bazel_dep(name = "imgui", version = "1.92.2") # Replaces your custom http_archive!
+bazel_dep(name = "imgui", version = "1.92.2")
 bazel_dep(name = "tinyxml2", version = "10.0.0")
 
 # --- External Physics Engine (Jolt) ---
@@ -35,4 +35,20 @@ http_archive(
     sha256 = "8dbd93433cca4355e4eb75f99778d0806de3d2693217ed811a7a516b23e3510d",
     strip_prefix = "morphologica-4.1",
     url = "https://github.com/ABRG-Models/morphologica/archive/refs/tags/v4.1.tar.gz",
+)
+
+# Assimp (headers) with system linkopts
+http_archive(
+    name = "assimp",
+    url = "https://github.com/assimp/assimp/archive/refs/tags/v5.3.1.tar.gz",
+    strip_prefix = "assimp-5.3.1",
+    build_file = "@//third_party:assimp.BUILD",
+)
+
+# VHACD for convex decomposition of dynamic meshes
+http_archive(
+    name = "vhacd",
+    url = "https://github.com/kmammou/v-hacd/archive/refs/heads/master.zip",
+    strip_prefix = "v-hacd-master",
+    build_file = "@//third_party:vhacd.BUILD",
 )

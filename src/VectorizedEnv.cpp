@@ -78,9 +78,11 @@ void VectorizedEnv::Init(bool initRobots)
         std::cout << "[VectorizedEnv::Init] All environments initialized" << std::endl;
 
         mObservationDim = mEnvs[0].GetObservationDim();
+        mActionDim = mEnvs[0].GetRobot1Ref().config.actionsPerRobot;
         mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
         mAllRewards.resize(mNumEnvs * 2, 0.0f);
         mAllDones.resize(mNumEnvs, false);
+        mAllVectorRewards.resize(mNumEnvs);
     }
 
     std::cout << "[VectorizedEnv::Init] Optimizing broad phase" << std::endl;
@@ -90,7 +92,7 @@ void VectorizedEnv::Init(bool initRobots)
 
 void VectorizedEnv::Step(const AlignedVector32<float>& actions)
 {
-    const int actionDim = ACTIONS_PER_ROBOT;
+    const int actionDim = mActionDim;
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
@@ -114,7 +116,6 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
         mAllDones[i] = done;
     }
     
-    mAllVectorRewards.resize(mNumEnvs);
     for (int i = 0; i < mNumEnvs; ++i) {
         if (mAllDones[i]) continue;
         mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();

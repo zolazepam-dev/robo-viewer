@@ -14,6 +14,10 @@
 #include <vector>
 #include <array>
 #include <cmath>
+#include <nlohmann/json.hpp>
+
+// For JSON parsing
+using json = nlohmann::json;
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyID.h>
@@ -22,18 +26,77 @@
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Collision/GroupFilterTable.h>
 
-/** Number of satellites per robot */
-constexpr int NUM_SATELLITES = 6;
-/** Number of actions per satellite */
-constexpr int ACTIONS_PER_SATELLITE = 4;
-/** Dimension of reaction wheel control */
-constexpr int REACTION_WHEEL_DIM = 4;
-/** Total number of actions per robot */
-constexpr int ACTIONS_PER_ROBOT = 56; // Matching VectorizedEnv: 6*4=24 for satellites, then reaction wheels and bursts at end
-/** Number of LIDAR rays */
-constexpr int NUM_LIDAR_RAYS = 10;
-/** Observation vector dimension */
-constexpr int OBSERVATION_DIM = 256; // Expanded for all sensors + padding
+/**
+ * @struct RobotConfig
+ * @brief Comprehensive configuration for a combat robot
+ * 
+ * Encapsulates all robot-specific parameters, loaded from JSON configuration files.
+ * Provides default values for backward compatibility.
+ */
+struct RobotConfig
+{
+    // Core dimensions and mass
+    float coreRadius = 0.5f;
+    float coreMass = 13.0f;
+    float coreFriction = 0.5f;
+    float coreRestitution = 0.2f;
+    float coreLinearDamping = 0.1f;
+    float coreAngularDamping = 0.1f;
+
+    // Satellite configuration
+    struct Satellite
+    {
+        float offsetAngle = 0.0f; // degrees
+        float elevation = 0.0f; // degrees
+        float distance = 1.4f;
+        float radius = 0.1f;
+        float mass = 3.5f;
+        float friction = 0.5f;
+        float restitution = 0.2f;
+        float linearDamping = 0.1f;
+        float angularDamping = 0.1f;
+    };
+    std::vector<Satellite> satellites;
+
+    // Spike configuration
+    float spikeHalfHeight = 0.2f;
+    float spikeRadius = 0.02f;
+    float spikeMass = 0.5f;
+    float spikeFriction = 0.0f;
+    float spikeRestitution = 0.3f;
+    float spikeConvexRadius = 0.01f;
+
+    // Joint parameters
+    float jointDamping = 0.8f;
+    float jointArmature = 0.5f;
+    float motorTorque = 450.0f;
+    float slideMin = 0.0f;
+    float slideMax = 0.5f;
+    float motorMinTorqueLimit = -500.0f;
+    float motorMaxTorqueLimit = 500.0f;
+
+    // Sensor parameters
+    int numLidarRays = 10;
+    float lidarMaxDistance = 20.0f;
+
+    // Action parameters
+    int actionsPerSatellite = 4;
+    int reactionWheelDim = 4;
+    float rotationScale = 25.0f;
+    float slideScale = 100.0f;
+    float reactionTorqueScale = 5000.0f;
+
+    // Calculated dimensions (set dynamically)
+    int numSatellites = 0;
+    int actionsPerRobot = 0;
+    int observationDim = 256; // Default, will be calculated dynamically
+
+    /** @brief Load configuration from JSON */
+    static RobotConfig LoadFromJSON(const nlohmann::json& config);
+
+    /** @brief Calculate dynamic dimensions */
+    void CalculateDimensions();
+};
 
 /**
  * @struct ForceSensorReading
@@ -41,17 +104,14 @@ constexpr int OBSERVATION_DIM = 256; // Expanded for all sensors + padding
  */
 struct ForceSensorReading
 {
-    float impulseMagnitude[NUM_SATELLITES] = {0.0f}; ///< Impulse magnitude per satellite
-    float jointStress[NUM_SATELLITES] = {0.0f}; ///< Joint stress per satellite
+    std::vector<float> impulseMagnitude; ///< Impulse magnitude per satellite
+    std::vector<float> jointStress; ///< Joint stress per satellite
 
     /** @brief Reset all sensor readings to zero */
-    void Reset()
+    void Reset(int numSatellites)
     {
-        for (int i = 0; i < NUM_SATELLITES; ++i)
-        {
-            impulseMagnitude[i] = 0.0f;
-            jointStress[i] = 0.0f;
-        }
+        impulseMagnitude.resize(numSatellites, 0.0f);
+        jointStress.resize(numSatellites, 0.0f);
     }
 };
 
@@ -138,7 +198,7 @@ struct CombatRobotData
 {
     RobotType type = RobotType::SATELLITE; ///< Robot type
     JPH::BodyID mainBodyId; ///< Main body ID
-    std::array<SatelliteData, NUM_SATELLITES> satellites; ///< Satellite data
+    std::vector<SatelliteData> satellites; ///< Satellite data
     float hp = 100.0f; ///< Current health points
 
     uint32_t envIndex = 0; ///< Environment index
@@ -152,12 +212,14 @@ struct CombatRobotData
 
     ResidualActionScale actionScale; ///< Action scaling factors
 
-    std::array<float, ACTIONS_PER_ROBOT> baseActions{}; ///< Base PID control actions
-    std::array<float, ACTIONS_PER_ROBOT> residualActions{}; ///< RL residual actions
-    std::array<float, ACTIONS_PER_ROBOT> finalActions{}; ///< Final blended actions
+    std::vector<float> baseActions; ///< Base PID control actions
+    std::vector<float> residualActions; ///< RL residual actions
+    std::vector<float> finalActions; ///< Final blended actions
     
-    float observationBuffer[OBSERVATION_DIM]; ///< Observation buffer
-    float lidarDistances[NUM_LIDAR_RAYS]; ///< LIDAR distance readings
+    std::vector<float> observationBuffer; ///< Observation buffer
+    std::vector<float> lidarDistances; ///< LIDAR distance readings
+
+    RobotConfig config; ///< Robot configuration
 };
 
 /**
@@ -268,6 +330,6 @@ private:
      */
     void BlendResidualWithBase(CombatRobotData& robot);
     
-    static const JPH::Vec3 mLidarDirections[NUM_LIDAR_RAYS]; ///< LIDAR ray directions
+    static std::vector<JPH::Vec3> CreateLidarDirections(int numRays);
     static JPH::Ref<JPH::GroupFilterTable> mGroupFilter; ///< Collision group filter
 };

@@ -14,6 +14,8 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
         "@tinyxml2//:tinyxml2",
+        "@assimp//:assimp",
+        "@vhacd//:vhacd",
     ],
     copts = [
         "-std=c++17",
@@ -79,6 +81,8 @@ cc_library(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
         "@tinyxml2//:tinyxml2",
+        "@assimp//:assimp",
+        "@vhacd//:vhacd",
         ":linalg_utils",
     ],
     visibility = ["//visibility:public"],

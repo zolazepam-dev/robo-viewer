@@ -34,10 +34,23 @@ constexpr float DAMAGE_MULTIPLIER = 5.0f;
 /** Maximum number of steps per episode */
 constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz
 
-/** Dimension of force sensor readings */
-constexpr int FORCE_SENSOR_DIM = NUM_SATELLITES * 2;
-/** Base observation dimension */
-constexpr int OBSERVATION_BASE_DIM = 18 + (NUM_SATELLITES * 6) + (NUM_SATELLITES * 3) + (NUM_SATELLITES * 3);
+/**
+ * @brief Calculate force sensor dimension from number of satellites
+ * @param numSatellites Number of satellites
+ * @return Force sensor dimension
+ */
+constexpr int GetForceSensorDim(int numSatellites) {
+    return numSatellites * 2;
+}
+
+/**
+ * @brief Calculate base observation dimension from number of satellites
+ * @param numSatellites Number of satellites
+ * @return Base observation dimension
+ */
+constexpr int GetObservationBaseDim(int numSatellites) {
+    return 18 + (numSatellites * 6) + (numSatellites * 3) + (numSatellites * 3);
+}
 
 /**
  * @class CombatContactListener
@@ -89,11 +102,12 @@ public:
     /**
      * @brief Reset force sensor readings for an environment
      * @param envIdx Environment index
+     * @param numSatellites Number of satellites per robot
      */
-    void ResetForceReadings(uint32_t envIdx)
+    void ResetForceReadings(uint32_t envIdx, int numSatellites)
     {
-        mForceReadingsPerEnv[envIdx][0].Reset();
-        mForceReadingsPerEnv[envIdx][1].Reset();
+        mForceReadingsPerEnv[envIdx][0].Reset(numSatellites);
+        mForceReadingsPerEnv[envIdx][1].Reset(numSatellites);
     }
 
     /**
@@ -220,7 +234,7 @@ private:
     uint32_t mEnvIndex = 0; ///< Environment index
     int mStepCount = 0; ///< Current step count
     bool mDone = false; ///< Done flag
-    int mObservationDim = OBSERVATION_DIM; ///< Observation dimension
+    int mObservationDim = 256; ///< Observation dimension
 
     JPH::RVec3 mKothPoint{0,0,0}; ///< King of the Hill point
     JPH::BodyID mKothVisualId; ///< King of the Hill visual body ID

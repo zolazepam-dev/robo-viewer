@@ -1,27 +1,52 @@
 {
   "core": {
     "radius": 0.5,
-    "mass": 13.0
+    "mass": 13.0,
+    "friction": 0.5,
+    "restitution": 0.2,
+    "linear_damping": 0.1,
+    "angular_damping": 0.1
   },
   "satellites": [
-    { "id": 1, "offset_angle": 0, "elevation": 0, "distance": 1.4 },
-    { "id": 2, "offset_angle": 72, "elevation": 0, "distance": 1.4 },
-    { "id": 3, "offset_angle": 144, "elevation": 0, "distance": 1.4 },
-    { "id": 4, "offset_angle": 216, "elevation": 0, "distance": 1.4 },
-    { "id": 5, "offset_angle": 288, "elevation": 0, "distance": 1.4 },
-    { "id": 6, "offset_angle": 0, "elevation": 45, "distance": 1.4 },
-    { "id": 7, "offset_angle": 90, "elevation": 45, "distance": 1.4 },
-    { "id": 8, "offset_angle": 180, "elevation": 45, "distance": 1.4 },
-    { "id": 9, "offset_angle": 270, "elevation": 45, "distance": 1.4 },
-    { "id": 10, "offset_angle": 0, "elevation": -45, "distance": 1.4 },
-    { "id": 11, "offset_angle": 90, "elevation": -45, "distance": 1.4 },
-    { "id": 12, "offset_angle": 180, "elevation": -45, "distance": 1.4 },
-    { "id": 13, "offset_angle": 270, "elevation": -45, "distance": 1.4 }
+    { "id": 1, "offset_angle": 0, "elevation": 0, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 2, "offset_angle": 72, "elevation": 0, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 3, "offset_angle": 144, "elevation": 0, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 4, "offset_angle": 216, "elevation": 0, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 5, "offset_angle": 288, "elevation": 0, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 6, "offset_angle": 0, "elevation": 45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 7, "offset_angle": 90, "elevation": 45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 8, "offset_angle": 180, "elevation": 45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 9, "offset_angle": 270, "elevation": 45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 10, "offset_angle": 0, "elevation": -45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 11, "offset_angle": 90, "elevation": -45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 12, "offset_angle": 180, "elevation": -45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 },
+    { "id": 13, "offset_angle": 270, "elevation": -45, "distance": 1.4, "radius": 0.1, "mass": 3.5, "friction": 0.5, "restitution": 0.2, "linear_damping": 0.1, "angular_damping": 0.1 }
   ],
+  "spike": {
+    "half_height": 0.2,
+    "radius": 0.02,
+    "mass": 0.5,
+    "friction": 0.0,
+    "restitution": 0.3,
+    "convex_radius": 0.01
+  },
   "joints": {
-    "hinge_damping": 0.8,
-    "hinge_armature": 0.5,
+    "hinge_damping": 0.95,
+    "hinge_armature": 1.0,
     "motor_torque": 1500.0,
-    "slide_range": [0.0, 1.5]
+    "motor_min_torque": -500.0,
+    "motor_max_torque": 500.0,
+    "slide_range": [0.0, 0.5]
+  },
+  "sensors": {
+    "lidar_rays": 10,
+    "lidar_max_distance": 20.0
+  },
+  "actions": {
+    "per_satellite": 4,
+    "reaction_wheel_dim": 4,
+    "rotation_scale": 25.0,
+    "slide_scale": 100.0,
+    "reaction_torque_scale": 5000.0
   }
 }

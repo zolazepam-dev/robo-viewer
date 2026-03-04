@@ -323,17 +323,68 @@ int main(int argc, char* argv[]) {
             step_counter += 1;
         }
 
-        std::string saveName;
-        if (ui.GetAndClearSaveRequest(saveName)) {
-            trainer.Save(checkpointDir + "/" + saveName + ".bin");
-        }
-        std::string loadName;
-        if (ui.GetAndClearLoadRequest(loadName)) {
-            trainer.Load(checkpointDir + "/" + loadName + ".bin");
-        }
+     // Handle robot configuration and checkpoint folder requests
+         if (ui.GetAndClearLoadConfigRequest()) {
+             std::string robotType = ui.GetSelectedRobotType();
+             std::cout << "[main_train] Loading robot configuration: " << robotType << std::endl;
+             
+             // Create robot-specific checkpoint directory
+             checkpointDir = (home ? std::string(home) : ".") + "/.joltrl/checkpoints/" + robotType;
+             EnsureDir(checkpointDir);
+             
+             // Reset the environment with new robot configuration
+             vecEnv->Shutdown();
+             delete vecEnv;
+             vecEnv = new VectorizedEnv(numEnvs, ui.GetStepsPerEpisode());
+             vecEnv->Init();
+             
+             // Initialize fresh brain model
+             int stateDim = vecEnv->GetObservationDim();
+             int actionDim = vecEnv->GetActionDim();
+             TD3Config td3cfg;
+             trainer = TD3Trainer(stateDim, actionDim, td3cfg);
+             opponentTrainer = TD3Trainer(stateDim, actionDim, td3cfg);
+             buffer = ReplayBuffer(td3cfg.bufferSize, stateDim, actionDim);
+             
+             // Sync opponent to start identical to main agent
+             opponentTrainer.GetModel().GetActor().SetAllWeights(trainer.GetModel().GetActor().GetAllWeights());
+             
+             // Reset stats
+             totalSteps = 0;
+             mEpisodes = 0;
+             r1Wins = 0;
+             r2Wins = 0;
+             
+             // Update telemetry file path
+             telemetryPath = checkpointDir + "/telemetry.csv";
+             telemetryFile.close();
+             telemetryFile.open(telemetryPath, std::ios::trunc);
+             if (telemetryFile.is_open()) {
+                 telemetryFile << "Step,Tag,Value\n";
+             }
+             
+             std::cout << "[main_train] Robot configuration loaded successfully. Checkpoints will be saved to: " << checkpointDir << std::endl;
+         }
+         
+         std::string newCheckpointFolderName;
+         if (ui.GetAndClearCreateCheckpointFolderRequest(newCheckpointFolderName)) {
+             std::string newCheckpointDir = checkpointDir + "/" + newCheckpointFolderName;
+             EnsureDir(newCheckpointDir);
+             std::cout << "[main_train] Created new checkpoint folder: " << newCheckpointDir << std::endl;
+         }
+         
+         std::string saveName;
+         if (ui.GetAndClearSaveRequest(saveName)) {
+             trainer.Save(checkpointDir + "/" + saveName + ".bin");
+         }
+         std::string loadName;
+         if (ui.GetAndClearLoadRequest(loadName)) {
+             trainer.Load(checkpointDir + "/" + loadName + ".bin");
+         }
 
         if (ui.GetAndClearGraphRequest()) {
             std::string cmd = "./micro_board_gui " + telemetryPath + " &";
+            std::cout << "[main_train] Current working directory: " << fs::current_path() << std::endl;
             std::cout << "[main_train] Launching 3D Graph: " << cmd << std::endl;
             system(cmd.c_str());
         }
@@ -428,6 +479,7 @@ int main(int argc, char* argv[]) {
 
     trainer.Save(checkpointDir + "/model_final.bin");
     delete gRenderer;
+    vecEnv->Shutdown();
     delete vecEnv;
     ui.Shutdown();
     glfwTerminate();

@@ -155,7 +155,12 @@ void RobotConfig::CalculateDimensions()
 {
     numSatellites = static_cast<int>(satellites.size());
     actionsPerRobot = numSatellites * actionsPerSatellite + reactionWheelDim;
-    observationDim = 256; // Default, can be dynamically calculated if needed
+    
+    // Calculate actual required observation dimension based on robot configuration
+    int actualObservationDim = 38 + (numSatellites * 12) + numLidarRays;
+    
+    // Pad to next multiple of 8 for SIMD alignment
+    observationDim = ((actualObservationDim + 7) / 8) * 8;
 }
 
 /**

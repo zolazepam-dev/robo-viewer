@@ -27,6 +27,14 @@ OverlayUIRefactored::OverlayUIRefactored()
     for (int i = 0; i < 4; ++i) {
         mPhysicsHistory[i].reserve(HISTORY_MAX);
     }
+    
+    // Initialize available robot configurations
+    mRobotSelection.availableRobots = {
+        { "Internal Engine Bot", "internal_engine.json", 100.0f, 6000.0f, 2.0f, 0.3f, 100.0f, 10.0f, 450.0f },
+        { "Shell Bot", "shell_bot.json", 80.0f, 4000.0f, 2.5f, 0.5f, 150.0f, 8.0f, 600.0f },
+        { "Wedge Bot", "wedge_bot.json", 120.0f, 5000.0f, 1.8f, 0.4f, 120.0f, 12.0f, 500.0f },
+        { "Drum Bot", "drum_bot.json", 90.0f, 7000.0f, 2.2f, 0.35f, 130.0f, 15.0f, 700.0f }
+    };
 }
 
 void OverlayUIRefactored::Init(GLFWwindow* window)
@@ -367,6 +375,71 @@ void OverlayUIRefactored::DrawPhysicsTab()
 
 void OverlayUIRefactored::DrawRobotsTab()
 {
+    ImGui::TextColored(mColorAccent, "ROBOT CONFIGURATION");
+    ImGui::Separator();
+    
+    // Robot selection dropdown
+    const char* robotNames[4] = {
+        "Internal Engine Bot",
+        "Shell Bot",
+        "Wedge Bot",
+        "Drum Bot"
+    };
+    
+    ImGui::TextColored(mColorDim, "SELECT ROBOT TYPE");
+    ImGui::Separator();
+    if (ImGui::Combo("Robot Type", &mRobotSelection.selectedRobotIndex, robotNames, 4)) {
+        // Apply selected robot's parameters
+        const RobotConfiguration& selected = mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex];
+        mRobotTune.enginePower = selected.enginePower;
+        mRobotTune.reactionWheelPower = selected.reactionWheelPower;
+        mRobotTune.shellRadius = selected.shellRadius;
+        mRobotTune.shellThickness = selected.shellThickness;
+        mRobotTune.shellMass = selected.shellMass;
+        mRobotTune.motorSpeed = selected.motorSpeed;
+        mRobotTune.motorTorque = selected.motorTorque;
+    }
+    TOOLTIP("Select a predefined robot configuration")
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorDim, "CURRENT ROBOT STATS");
+    ImGui::Separator();
+    
+    const RobotConfiguration& currentRobot = mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex];
+    ImGui::Text("Name: %s", currentRobot.name.c_str());
+    ImGui::Text("Config File: %s", currentRobot.configFile.c_str());
+    ImGui::Text("Engine Power: %.1f N", currentRobot.enginePower);
+    ImGui::Text("Reaction Wheel Power: %.1f Nm", currentRobot.reactionWheelPower);
+    ImGui::Text("Shell Radius: %.2f m", currentRobot.shellRadius);
+    ImGui::Text("Shell Thickness: %.2f m", currentRobot.shellThickness);
+    ImGui::Text("Shell Mass: %.1f kg", currentRobot.shellMass);
+    ImGui::Text("Motor Speed: %.1f rad/s", currentRobot.motorSpeed);
+    ImGui::Text("Motor Torque: %.1f Nm", currentRobot.motorTorque);
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorDim, "CONFIGURATION MANAGEMENT");
+    ImGui::Separator();
+    
+    if (ImGui::Button("LOAD ROBOT CONFIGURATION", ImVec2(200, 30))) {
+        mRobotSelection.loadConfigRequested = true;
+    }
+    TOOLTIP("Load selected robot configuration from file")
+    ImGui::SameLine();
+    if (ImGui::Button("CREATE NEW CHECKPOINT FOLDER", ImVec2(200, 30))) {
+        mRobotSelection.createCheckpointFolderRequested = true;
+    }
+    TOOLTIP("Create a new checkpoint folder for the selected robot type")
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorDim, "NEW CHECKPOINT FOLDER NAME");
+    ImGui::Separator();
+    static char folderNameBuf[256] = "new_checkpoint";
+    if (ImGui::InputText("Folder Name", folderNameBuf, sizeof(folderNameBuf))) {
+        mRobotSelection.newCheckpointFolderName = folderNameBuf;
+    }
+    TOOLTIP("Name for the new checkpoint folder")
+    
+    ImGui::Separator();
     ImGui::TextColored(mColorAccent, "ROBOT PARAMETERS");
     ImGui::Separator();
     
@@ -413,6 +486,8 @@ void OverlayUIRefactored::DrawRobotsTab()
     ImGui::Text("DEBUG: mRobotTune.shellMass = %.1f", mRobotTune.shellMass);
     ImGui::Text("DEBUG: mRobotTune.motorSpeed = %.1f", mRobotTune.motorSpeed);
     ImGui::Text("DEBUG: mRobotTune.motorTorque = %.1f", mRobotTune.motorTorque);
+    ImGui::Text("DEBUG: Selected Robot Index = %d", mRobotSelection.selectedRobotIndex);
+    ImGui::Text("DEBUG: Selected Robot Name = %s", mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name.c_str());
 }
 
 void OverlayUIRefactored::DrawGraphicsTab()
@@ -742,6 +817,30 @@ bool OverlayUIRefactored::GetSpawnRequest(SpawnRequest& outRequest)
 void OverlayUIRefactored::SetSpawnClickPosition(const JPH::Vec3& pos)
 {
     mPendingSpawnPos = pos;
+}
+
+bool OverlayUIRefactored::GetAndClearLoadConfigRequest()
+{
+    if (mRobotSelection.loadConfigRequested) {
+        mRobotSelection.loadConfigRequested = false;
+        return true;
+    }
+    return false;
+}
+
+bool OverlayUIRefactored::GetAndClearCreateCheckpointFolderRequest(std::string& outFolderName)
+{
+    if (mRobotSelection.createCheckpointFolderRequested) {
+        outFolderName = mRobotSelection.newCheckpointFolderName;
+        mRobotSelection.createCheckpointFolderRequested = false;
+        return true;
+    }
+    return false;
+}
+
+const std::string& OverlayUIRefactored::GetSelectedRobotType() const
+{
+    return mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name;
 }
 
 

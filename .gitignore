@@ -75,3 +75,6 @@ pyramid_preview.png
 
 # Session files
 session-ses_*.md
+
+.gemini/
+gha-creds-*.json

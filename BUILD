@@ -274,23 +274,7 @@ cc_binary(
     ],
 )
 
-cc_library(
-    name = "local_morphologica",
-    hdrs = glob(["morphologica/morph/**/*.h", "morphologica/morph/**/*.hpp"]),
-    includes = ["morphologica"],
-    copts = ["-std=c++20"],
-    deps = [
-        "@glfw",
-        "@glm",
-        "@glew//:glew_static",
-    ],
-    linkopts = [
-        "-lGL",
-        "-lfreetype",
-        "-lpthread",
-    ],
-    visibility = ["//visibility:public"],
-)
+
 
 cc_binary(
     name = "micro_board_simple",

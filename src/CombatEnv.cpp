@@ -9,6 +9,7 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/EstimateCollisionResponse.h>
 
 void CombatContactListener::OnContactAdded(const JPH::Body& body1, const JPH::Body& body2,
                                             const JPH::ContactManifold& manifold, JPH::ContactSettings& settings)
@@ -49,7 +50,20 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
 
     if (envIdx >= NUM_PARALLEL_ENVS) return;
 
-    float impulseMag = manifold.mPenetrationDepth * manifold.mWorldSpaceNormal.Length();
+    // Calculate actual impulse magnitude from contact manifold using Jolt's EstimateCollisionResponse
+    JPH::CollisionEstimationResult result;
+    float combinedFriction = 0.5f; // Default friction value (can be adjusted)
+    float combinedRestitution = 0.3f; // Default restitution value (can be adjusted)
+    JPH::EstimateCollisionResponse(body1, body2, manifold, result, combinedFriction, combinedRestitution);
+
+    // Sum up all impulse magnitudes from contact points
+    float impulseMag = 0.0f;
+    for (const auto& impulse : result.mImpulses) {
+        impulseMag += impulse.mContactImpulse;
+        impulseMag += impulse.mFrictionImpulse1;
+        impulseMag += impulse.mFrictionImpulse2;
+    }
+
     mForceReadingsPerEnv[envIdx][0].impulseMagnitude[0] += impulseMag;
     mForceReadingsPerEnv[envIdx][1].impulseMagnitude[0] += impulseMag;
 }
@@ -62,6 +76,13 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mStepsPerEpisode = stepsPerEpisode;
 
     Reset();
+    
+    // Set observation dimension from robot configuration
+    mObservationDim = mRobot1.config.observationDim;
+    
+    // Ensure observation buffers are properly sized
+    mRobot1.observationBuffer.resize(mObservationDim);
+    mRobot2.observationBuffer.resize(mObservationDim);
 }
 
 void CombatEnv::Reset()
@@ -82,7 +103,9 @@ void CombatEnv::Reset()
     mRobot2.totalDamageTaken = 0.0f;
     mRobot1.totalEnergyUsed = 0.0f;
     mRobot2.totalEnergyUsed = 0.0f;
-    CombatContactListener::Get().ResetForceReadings(mEnvIndex);
+    // Reset force sensors with configured number of satellites
+    int numSatellites = mRobot1.config.numSatellites;
+    CombatContactListener::Get().ResetForceReadings(mEnvIndex, numSatellites);
 
     // Randomize KOTH point
     static std::mt19937 rng(std::random_device{}());
@@ -166,7 +189,7 @@ void CombatEnv::CheckCollisions()
         JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
         
         if (attacker.type == RobotType::SATELLITE) {
-            for (int i = 0; i < NUM_SATELLITES; ++i) {
+            for (int i = 0; i < attacker.config.numSatellites; ++i) {
                 if (attacker.satellites[i].spikeBodyId.IsInvalid()) continue;
                 JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
                 if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
@@ -203,7 +226,7 @@ void CombatEnv::UpdateForceSensors()
     CombatContactListener& listener = CombatContactListener::Get();
     auto updateStress = [&](CombatRobotData& r, int rIdx) {
         if (r.mainBodyId.IsInvalid()) return;
-        for (int i = 0; i < NUM_SATELLITES; ++i) {
+        for (int i = 0; i < r.config.numSatellites; ++i) {
             if (r.satellites[i].rotationJoint) {
                 listener.GetForceReading(mEnvIndex, rIdx).jointStress[i] = r.satellites[i].rotationJoint->GetTotalLambdaPosition().Length() * 0.001f;
             }
@@ -217,7 +240,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
                                         const CombatRobotData& opponent, const ForceSensorReading& forces)
 {
     if (robot.mainBodyId.IsInvalid() || opponent.mainBodyId.IsInvalid()) {
-        std::memset(obs, 0, OBSERVATION_DIM * sizeof(float));
+        std::memset(obs, 0, robot.config.observationDim * sizeof(float));
         return;
     }
     JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
@@ -246,7 +269,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     obs[idx++] = (float)relKoth.GetZ() / 20.0f;
 
     // Satellite / Engine states
-    for (int i = 0; i < NUM_SATELLITES; ++i) {
+    for (int i = 0; i < robot.config.numSatellites; ++i) {
         if (!robot.satellites[i].coreBodyId.IsInvalid()) {
             JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
             JPH::Vec3 v = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
@@ -258,7 +281,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     }
 
     // My Spikes
-    for (int i = 0; i < NUM_SATELLITES; ++i) {
+    for (int i = 0; i < robot.config.numSatellites; ++i) {
         if (!robot.satellites[i].spikeBodyId.IsInvalid()) {
             JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].spikeBodyId);
             obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
@@ -268,7 +291,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     }
 
     // Opponent Spikes
-    for (int i = 0; i < NUM_SATELLITES; ++i) {
+    for (int i = 0; i < opponent.config.numSatellites; ++i) {
         if (!opponent.satellites[i].spikeBodyId.IsInvalid()) {
             JPH::RVec3 p = bodyInterface.GetPosition(opponent.satellites[i].spikeBodyId);
             obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
@@ -278,7 +301,7 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     }
 
     mRobotLoader->PerformLidarScan(const_cast<CombatRobotData&>(robot), mPhysicsSystem);
-    for (int i = 0; i < NUM_LIDAR_RAYS; ++i) obs[idx++] = robot.lidarDistances[i] / 20.0f;
+    for (int i = 0; i < robot.config.numLidarRays; ++i) obs[idx++] = robot.lidarDistances[i] / robot.config.lidarMaxDistance;
 
     obs[idx++] = robot.hp / 100.0f;
     obs[idx++] = opponent.hp / 100.0f;
@@ -287,8 +310,20 @@ void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
     obs[idx++] = (robot.hp - opponent.hp) / 100.0f;
     
     // Forces
-    for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.impulseMagnitude[i];
-    for (int i = 0; i < NUM_SATELLITES; ++i) obs[idx++] = forces.jointStress[i];
+    for (int i = 0; i < robot.config.numSatellites; ++i) {
+        if (i < forces.impulseMagnitude.size()) {
+            obs[idx++] = forces.impulseMagnitude[i];
+        } else {
+            obs[idx++] = 0.0f;
+        }
+    }
+    for (int i = 0; i < robot.config.numSatellites; ++i) {
+        if (i < forces.jointStress.size()) {
+            obs[idx++] = forces.jointStress[i];
+        } else {
+            obs[idx++] = 0.0f;
+        }
+    }
 
     // Current Mass Observations (for the new mass-shifting feature)
     obs[idx++] = bodyInterface.GetShape(robot.mainBodyId)->GetMassProperties().mMass / 50.0f;

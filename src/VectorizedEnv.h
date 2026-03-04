@@ -40,7 +40,7 @@ private:
 
     int mNumEnvs;
     int mStepsPerEpisode;
-    int mObservationDim = OBSERVATION_DIM; 
+    int mObservationDim = 256; 
     int mActionDim = 56;
     
     AlignedVector32<float> mAllObservations;

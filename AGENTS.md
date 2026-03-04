@@ -135,6 +135,19 @@ SpanNetwork network;
 network.Init(configs, rng);
 ```
 
+## Model Context Protocol (MCP) Integration
+
+JOLTrl leverages the Model Context Protocol (MCP) to extend agent capabilities. The following MCP servers are configured in `.ai/mcp/mcp_config.json`:
+
+- **Search & Retrieval**: Brave Search, Exa, Tavily, Firecrawl.
+- **System & Debugging**: GDB, Ripgrep, Git.
+- **Storage & Memory**: SQLite, DuckDB, Memory, Filesystem.
+- **Automation**: Playwright, Puppeteer, Fetch.
+- **Utilities**: Time, Sequential Thinking.
+
+### Usage
+Agents can utilize these tools for deep research, automated testing, and complex debugging tasks. Ensure the corresponding API keys are managed securely via the ignored `.ai/` directory.
+
 ## Project Structure
 
 ```
