@@ -34,7 +34,8 @@ CombatRobotData InternalRobotLoader::LoadInternalRobot(
     robotData.mainBodyId = JPH::BodyID(); 
     robotData.type = RobotType::INTERNAL_ENGINE;
     
-    for(int i=0; i<NUM_SATELLITES; ++i) {
+    robotData.satellites.resize(3); // Internal robot has 3 engines, not satellites
+    for(int i=0; i<3; ++i) {
         robotData.satellites[i].coreBodyId = JPH::BodyID();
         robotData.satellites[i].spikeBodyId = JPH::BodyID();
     }
@@ -49,6 +50,9 @@ CombatRobotData InternalRobotLoader::LoadInternalRobot(
     }
     json config;
     file >> config;
+
+    // Load robot configuration (for internal robot type)
+    robotData.config = RobotConfig::LoadFromJSON(config);
 
     float shellRadius = config["shell"].value("radius", 2.0f);
     float thickness = config["shell"].value("thickness", 0.3f); // Use config or default to thicker

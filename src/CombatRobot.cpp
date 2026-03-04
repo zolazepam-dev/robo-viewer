@@ -27,6 +27,12 @@
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 
 #include "PhysicsCore.h"
+#ifndef NUM_LIDAR_RAYS
+constexpr int NUM_LIDAR_RAYS = 10;
+#endif
+#ifndef NUM_SATELLITES
+constexpr int NUM_SATELLITES = 4;
+#endif
 
 // Define the static member
 JPH::Ref<JPH::GroupFilterTable> CombatRobotLoader::mGroupFilter = nullptr;
@@ -34,23 +40,167 @@ JPH::Ref<JPH::GroupFilterTable> CombatRobotLoader::mGroupFilter = nullptr;
 using json = nlohmann::json;
 
 /**
- * @brief LIDAR directions for 360-degree scanning
- * 
- * These directions define the 10 LIDAR rays used for sensing the environment.
- * The rays are evenly distributed around the robot's core.
+ * @brief Load RobotConfig from JSON configuration
+ * @param config JSON object containing robot configuration
+ * @return Loaded RobotConfig
  */
-const JPH::Vec3 CombatRobotLoader::mLidarDirections[NUM_LIDAR_RAYS] = {
-    JPH::Vec3(1.0f, 0.0f, 0.0f),        // Right
-    JPH::Vec3(0.707f, 0.0f, 0.707f),   // Right-Forward
-    JPH::Vec3(0.707f, 0.0f, -0.707f),  // Right-Back
-    JPH::Vec3(0.5f, 0.0f, 0.866f),     // Forward-Right
-    JPH::Vec3(0.5f, 0.0f, -0.866f),    // Back-Right
-    JPH::Vec3(0.0f, 0.0f, 1.0f),       // Forward
-    JPH::Vec3(0.0f, 0.0f, -1.0f),      // Back
-    JPH::Vec3(-1.0f, 0.0f, 0.0f),      // Left
-    JPH::Vec3(0.0f, 1.0f, 0.0f),       // Up
-    JPH::Vec3(0.0f, -1.0f, 0.0f)       // Down
-};
+RobotConfig RobotConfig::LoadFromJSON(const json& config)
+{
+    RobotConfig robotConfig;
+
+    // Load core configuration
+    if (config.contains("core"))
+    {
+        const auto& core = config["core"];
+        robotConfig.coreRadius = core.value("radius", 0.5f);
+        robotConfig.coreMass = core.value("mass", 13.0f);
+        robotConfig.coreFriction = core.value("friction", 0.5f);
+        robotConfig.coreRestitution = core.value("restitution", 0.2f);
+        robotConfig.coreLinearDamping = core.value("linear_damping", 0.1f);
+        robotConfig.coreAngularDamping = core.value("angular_damping", 0.1f);
+    }
+
+    // Load satellite configuration
+    if (config.contains("satellites") && config["satellites"].is_array())
+    {
+        const auto& satellites = config["satellites"];
+        for (const auto& satConfig : satellites)
+        {
+            RobotConfig::Satellite satellite;
+            satellite.offsetAngle = satConfig.value("offset_angle", 0.0f);
+            satellite.elevation = satConfig.value("elevation", 0.0f);
+            satellite.distance = satConfig.value("distance", 1.4f);
+            satellite.radius = satConfig.value("radius", 0.1f);
+            satellite.mass = satConfig.value("mass", 3.5f);
+            satellite.friction = satConfig.value("friction", 0.5f);
+            satellite.restitution = satConfig.value("restitution", 0.2f);
+            satellite.linearDamping = satConfig.value("linear_damping", 0.1f);
+            satellite.angularDamping = satConfig.value("angular_damping", 0.1f);
+            robotConfig.satellites.push_back(satellite);
+        }
+    }
+    else
+    {
+        // Default satellite configuration (6 satellites)
+        std::vector<float> azimuths = {0.0f, 72.0f, 144.0f, 216.0f, 288.0f, 0.0f};
+        std::vector<float> elevations = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 45.0f};
+        for (size_t i = 0; i < 6; ++i)
+        {
+            RobotConfig::Satellite satellite;
+            satellite.offsetAngle = azimuths[i];
+            satellite.elevation = elevations[i];
+            robotConfig.satellites.push_back(satellite);
+        }
+    }
+
+    // Load spike configuration
+    if (config.contains("spike"))
+    {
+        const auto& spike = config["spike"];
+        robotConfig.spikeHalfHeight = spike.value("half_height", 0.2f);
+        robotConfig.spikeRadius = spike.value("radius", 0.02f);
+        robotConfig.spikeMass = spike.value("mass", 0.5f);
+        robotConfig.spikeFriction = spike.value("friction", 0.0f);
+        robotConfig.spikeRestitution = spike.value("restitution", 0.3f);
+        robotConfig.spikeConvexRadius = spike.value("convex_radius", 0.01f);
+    }
+
+    // Load joint configuration
+    if (config.contains("joints"))
+    {
+        const auto& joints = config["joints"];
+        robotConfig.jointDamping = joints.value("hinge_damping", 0.8f);
+        robotConfig.jointArmature = joints.value("hinge_armature", 0.5f);
+        robotConfig.motorTorque = joints.value("motor_torque", 450.0f);
+        
+        if (joints["slide_range"].is_array() && joints["slide_range"].size() >= 2)
+        {
+            robotConfig.slideMin = joints["slide_range"][0].get<float>();
+            robotConfig.slideMax = joints["slide_range"][1].get<float>();
+        }
+        
+        robotConfig.motorMinTorqueLimit = joints.value("motor_min_torque", -500.0f);
+        robotConfig.motorMaxTorqueLimit = joints.value("motor_max_torque", 500.0f);
+    }
+
+    // Load sensor configuration
+    if (config.contains("sensors"))
+    {
+        const auto& sensors = config["sensors"];
+        robotConfig.numLidarRays = sensors.value("lidar_rays", 10);
+        robotConfig.lidarMaxDistance = sensors.value("lidar_max_distance", 20.0f);
+    }
+
+    // Load action configuration
+    if (config.contains("actions"))
+    {
+        const auto& actions = config["actions"];
+        robotConfig.actionsPerSatellite = actions.value("per_satellite", 4);
+        robotConfig.reactionWheelDim = actions.value("reaction_wheel_dim", 4);
+        robotConfig.rotationScale = actions.value("rotation_scale", 25.0f);
+        robotConfig.slideScale = actions.value("slide_scale", 100.0f);
+        robotConfig.reactionTorqueScale = actions.value("reaction_torque_scale", 5000.0f);
+    }
+
+    // Calculate dynamic dimensions
+    robotConfig.CalculateDimensions();
+
+    return robotConfig;
+}
+
+/**
+ * @brief Calculate dynamic dimensions based on configuration
+ */
+void RobotConfig::CalculateDimensions()
+{
+    numSatellites = static_cast<int>(satellites.size());
+    actionsPerRobot = numSatellites * actionsPerSatellite + reactionWheelDim;
+    observationDim = 256; // Default, can be dynamically calculated if needed
+}
+
+/**
+ * @brief Create LIDAR directions for 360-degree scanning
+ * 
+ * Generates evenly distributed LIDAR rays based on the configured number of rays.
+ * 
+ * @param numRays Number of LIDAR rays to generate
+ * @return Vector of LIDAR ray directions
+ */
+std::vector<JPH::Vec3> CombatRobotLoader::CreateLidarDirections(int numRays)
+{
+    std::vector<JPH::Vec3> directions;
+    directions.reserve(numRays);
+
+    // If numRays is 10, use the legacy configuration for compatibility
+    if (numRays == 10)
+    {
+        directions = {
+            JPH::Vec3(1.0f, 0.0f, 0.0f),        // Right
+            JPH::Vec3(0.707f, 0.0f, 0.707f),   // Right-Forward
+            JPH::Vec3(0.707f, 0.0f, -0.707f),  // Right-Back
+            JPH::Vec3(0.5f, 0.0f, 0.866f),     // Forward-Right
+            JPH::Vec3(0.5f, 0.0f, -0.866f),    // Back-Right
+            JPH::Vec3(0.0f, 0.0f, 1.0f),       // Forward
+            JPH::Vec3(0.0f, 0.0f, -1.0f),      // Back
+            JPH::Vec3(-1.0f, 0.0f, 0.0f),      // Left
+            JPH::Vec3(0.0f, 1.0f, 0.0f),       // Up
+            JPH::Vec3(0.0f, -1.0f, 0.0f)       // Down
+        };
+    }
+    else
+    {
+        // Generate evenly distributed rays around the robot
+        for (int i = 0; i < numRays; ++i)
+        {
+            float angle = 2.0f * 3.14159f * i / numRays;
+            float x = std::cos(angle);
+            float z = std::sin(angle);
+            directions.emplace_back(x, 0.0f, z);
+        }
+    }
+
+    return directions;
+}
 
 /**
  * @brief Load a combat robot from a configuration file
@@ -88,6 +238,13 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     robotData.hp = 100.0f;
     robotData.totalEnergyUsed = 0.0f;
     robotData.collisionGroup = envIndex * 2 + robotIndex;
+    
+    // Initialize vector fields
+    robotData.baseActions.resize(robotData.config.actionsPerRobot);
+    robotData.residualActions.resize(robotData.config.actionsPerRobot);
+    robotData.finalActions.resize(robotData.config.actionsPerRobot);
+    robotData.observationBuffer.resize(robotData.config.observationDim);
+    robotData.lidarDistances.resize(robotData.config.numLidarRays);
 
     std::ifstream file(configPath);
     if (!file.is_open())
@@ -98,6 +255,9 @@ CombatRobotData CombatRobotLoader::LoadRobot(
 
     json config;
     file >> config;
+
+    // Load robot configuration
+    robotData.config = RobotConfig::LoadFromJSON(config);
 
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
 
@@ -117,11 +277,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         // -----------------------------------
     }
 
-    const float coreRadius = config["core"].value("radius", 0.5f);
-    const float coreMass = 13.0f; // Reverted from 40.0
-    
-    JPH::SphereShapeSettings coreShapeSettings(coreRadius);
-    coreShapeSettings.SetDensity(coreMass / (4.0f / 3.0f * 3.14159f * coreRadius * coreRadius * coreRadius));
+    // Create core body using configuration
+    JPH::SphereShapeSettings coreShapeSettings(robotData.config.coreRadius);
+    coreShapeSettings.SetDensity(robotData.config.coreMass / (4.0f / 3.0f * 3.14159f * 
+        pow(robotData.config.coreRadius, 3)));
     
     auto coreResult = coreShapeSettings.Create();
     if (coreResult.HasError()) throw std::runtime_error("Core Shape Error: " + std::string(coreResult.GetError().c_str()));
@@ -135,10 +294,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         ghostLayer
     );
 
-    coreSettings.mFriction = 0.5f;
-    coreSettings.mRestitution = 0.2f;
-    coreSettings.mLinearDamping = 0.1f;
-    coreSettings.mAngularDamping = 0.1f;
+    coreSettings.mFriction = robotData.config.coreFriction;
+    coreSettings.mRestitution = robotData.config.coreRestitution;
+    coreSettings.mLinearDamping = robotData.config.coreLinearDamping;
+    coreSettings.mAngularDamping = robotData.config.coreAngularDamping;
     coreSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
     coreSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
     coreSettings.mCollisionGroup.SetSubGroupID(0);
@@ -148,33 +307,16 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     robotData.mainBodyId = coreBody->GetID();
     bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
 
-    const auto& satellitesConfig = config["satellites"];
-    
-    float jointDamping = 0.8f;
-    float jointArmature = 0.5f;
-    float motorTorque = 450.0f;
-    float slideMin = 0.0f;
-    float slideMax = 0.5f;
-    
-    if (config.contains("joints"))
-    {
-        jointDamping = config["joints"].value("hinge_damping", 0.8f);
-        jointArmature = config["joints"].value("hinge_armature", 0.5f);
-        motorTorque = config["joints"].value("motor_torque", 450.0f);
-        if (config["joints"]["slide_range"].is_array() && config["joints"]["slide_range"].size() >= 2)
-        {
-            slideMin = config["joints"]["slide_range"][0].get<float>();
-            slideMax = config["joints"]["slide_range"][1].get<float>();
-        }
-    }
-
     std::cout << "[LoadRobot" << robotIndex << "] Step 5: Entering satellite loop" << std::endl;
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    robotData.satellites.resize(robotData.config.numSatellites);
+    
+    for (int i = 0; i < robotData.config.numSatellites; ++i)
     {
         std::cout << "[LoadRobot" << robotIndex << "] Step 5." << i << ".1: Processing satellite " << i << std::endl;
-        const float azimuth = JPH::DegreesToRadians(satellitesConfig[i].value("offset_angle", 0.0f));
-        const float elevation = JPH::DegreesToRadians(satellitesConfig[i].value("elevation", 0.0f));
-        const float dist = satellitesConfig[i].value("distance", 1.4f);
+        const RobotConfig::Satellite& satConfig = robotData.config.satellites[i];
+        const float azimuth = JPH::DegreesToRadians(satConfig.offsetAngle);
+        const float elevation = JPH::DegreesToRadians(satConfig.elevation);
+        const float dist = satConfig.distance;
         
         JPH::RVec3 satPos = position + JPH::RVec3(
             dist * std::cos(elevation) * std::cos(azimuth),
@@ -182,11 +324,9 @@ CombatRobotData CombatRobotLoader::LoadRobot(
             dist * std::cos(elevation) * std::sin(azimuth)
         );
 
-        const float satRadius = 0.1f;
-        const float satMass = 3.5f;
-        
-        JPH::SphereShapeSettings sphereSettings(satRadius);
-        sphereSettings.SetDensity(satMass / (4.0f / 3.0f * 3.14159f * satRadius * satRadius * satRadius));
+        JPH::SphereShapeSettings sphereSettings(satConfig.radius);
+        sphereSettings.SetDensity(satConfig.mass / (4.0f / 3.0f * 3.14159f * 
+            pow(satConfig.radius, 3)));
         
         auto satResult = sphereSettings.Create();
         if (satResult.HasError()) throw std::runtime_error("Sat Shape Error: " + std::string(satResult.GetError().c_str()));
@@ -200,10 +340,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
             ghostLayer
         );
 
-        satSettings.mFriction = 0.5f;
-        satSettings.mRestitution = 0.2f;
-        satSettings.mLinearDamping = 0.1f;
-        satSettings.mAngularDamping = 0.1f;
+        satSettings.mFriction = satConfig.friction;
+        satSettings.mRestitution = satConfig.restitution;
+        satSettings.mLinearDamping = satConfig.linearDamping;
+        satSettings.mAngularDamping = satConfig.angularDamping;
         satSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
         satSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
         satSettings.mCollisionGroup.SetSubGroupID(i + 1);
@@ -243,13 +383,14 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         robotData.satellites[i].rotationJoint->SetMotorState(
             JPH::SixDOFConstraintSettings::EAxis::RotationZ, JPH::EMotorState::Velocity);
 
-        const float spikeHalfHeight = 0.2f;
-        const float spikeRadius = 0.02f;
-        const float spikeMass = 0.5f;
-        
-        // MUST specify a custom convex radius (e.g., 0.01f) that is strictly smaller than the spikeRadius (0.02f)
-        JPH::CylinderShapeSettings spikeShapeSettings(spikeHalfHeight, spikeRadius, 0.01f);
-        spikeShapeSettings.SetDensity(spikeMass / (3.14159f * spikeRadius * spikeRadius * 2.0f * spikeHalfHeight));
+        // Create spike body using configuration
+        JPH::CylinderShapeSettings spikeShapeSettings(
+            robotData.config.spikeHalfHeight,
+            robotData.config.spikeRadius,
+            robotData.config.spikeConvexRadius
+        );
+        spikeShapeSettings.SetDensity(robotData.config.spikeMass / (3.14159f * 
+            pow(robotData.config.spikeRadius, 2) * 2.0f * robotData.config.spikeHalfHeight));
         
         auto spikeResult = spikeShapeSettings.Create();
         if (spikeResult.HasError()) throw std::runtime_error("Spike Shape Error: " + std::string(spikeResult.GetError().c_str()));
@@ -263,7 +404,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         
         JPH::Quat spikeRotation = JPH::Quat::sFromTo(JPH::Vec3::sAxisY(), direction);
 
-        JPH::RVec3 spikePos = satPos + JPH::RVec3(direction * (satRadius + spikeHalfHeight));
+        JPH::RVec3 spikePos = satPos + JPH::RVec3(direction * (satConfig.radius + robotData.config.spikeHalfHeight));
 
         JPH::BodyCreationSettings spikeSettings(
             spikeShape,
@@ -273,12 +414,12 @@ CombatRobotData CombatRobotLoader::LoadRobot(
             ghostLayer
         );
 
-        spikeSettings.mFriction = 0.0f;
-        spikeSettings.mRestitution = 0.3f;
+        spikeSettings.mFriction = robotData.config.spikeFriction;
+        spikeSettings.mRestitution = robotData.config.spikeRestitution;
         spikeSettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
         spikeSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
         spikeSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
-        spikeSettings.mCollisionGroup.SetSubGroupID(NUM_SATELLITES + i + 1);
+        spikeSettings.mCollisionGroup.SetSubGroupID(robotData.config.numSatellites + i + 1);
 
         JPH::Body* spikeBody = bodyInterface.CreateBody(spikeSettings);
         if (!spikeBody) throw std::runtime_error("FATAL: Failed to create body!");
@@ -290,11 +431,11 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         slideSettings.mPoint1 = spikePos;
         slideSettings.mPoint2 = spikePos;
         slideSettings.SetSliderAxis(direction);
-        slideSettings.mLimitsMin = slideMin;
-        slideSettings.mLimitsMax = slideMax;
+        slideSettings.mLimitsMin = robotData.config.slideMin;
+        slideSettings.mLimitsMax = robotData.config.slideMax;
         slideSettings.mMotorSettings.mSpringSettings.mFrequency = 0.0f; // Pure velocity
-         slideSettings.mMotorSettings.mMinForceLimit = -500.0f;
-        slideSettings.mMotorSettings.mMaxForceLimit = 500.0f;
+        slideSettings.mMotorSettings.mMinForceLimit = robotData.config.motorMinTorqueLimit;
+        slideSettings.mMotorSettings.mMaxForceLimit = robotData.config.motorMaxTorqueLimit;
 
         robotData.satellites[i].slideJoint = static_cast<JPH::SliderConstraint*>(
             bodyInterface.CreateConstraint(&slideSettings, satBody->GetID(), spikeBody->GetID()));
@@ -341,32 +482,12 @@ void CombatRobotLoader::ResetRobot(
                                          JPH::EActivation::Activate);
     bodyInterface.SetLinearAndAngularVelocity(robot.mainBodyId, JPH::Vec3::sZero(), JPH::Vec3::sZero());
 
-    const float distance = 1.4f;
-    
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
-        float azimuth, elevation;
-        
-        switch (i)
-        {
-            case 0: azimuth = 0.0f; elevation = 0.0f; break;
-            case 1: azimuth = 72.0f; elevation = 0.0f; break;
-            case 2: azimuth = 144.0f; elevation = 0.0f; break;
-            case 3: azimuth = 216.0f; elevation = 0.0f; break;
-            case 4: azimuth = 288.0f; elevation = 0.0f; break;
-            case 5: azimuth = 0.0f; elevation = 45.0f; break;
-            case 6: azimuth = 90.0f; elevation = 45.0f; break;
-            case 7: azimuth = 180.0f; elevation = 45.0f; break;
-            case 8: azimuth = 270.0f; elevation = 45.0f; break;
-            case 9: azimuth = 0.0f; elevation = -45.0f; break;
-            case 10: azimuth = 90.0f; elevation = -45.0f; break;
-            case 11: azimuth = 180.0f; elevation = -45.0f; break;
-            case 12: azimuth = 270.0f; elevation = -45.0f; break;
-            default: azimuth = 0.0f; elevation = 0.0f;
-        }
-        
-        azimuth = JPH::DegreesToRadians(azimuth);
-        elevation = JPH::DegreesToRadians(elevation);
+        const RobotConfig::Satellite& satConfig = robot.config.satellites[i];
+        const float azimuth = JPH::DegreesToRadians(satConfig.offsetAngle);
+        const float elevation = JPH::DegreesToRadians(satConfig.elevation);
+        const float distance = satConfig.distance;
         
         JPH::RVec3 satPos = spawnPosition + JPH::RVec3(
             distance * std::cos(elevation) * std::cos(azimuth),
@@ -423,7 +544,7 @@ void CombatRobotLoader::ComputeBasePIDActions(
 {
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
         JPH::Vec3 angVel = bodyInterface.GetAngularVelocity(robot.satellites[i].coreBodyId);
         
@@ -431,10 +552,10 @@ void CombatRobotLoader::ComputeBasePIDActions(
         float torqueY = robot.satellites[i].pidY.Compute(0.0f, angVel.GetY(), dt);
         float torqueZ = robot.satellites[i].pidZ.Compute(0.0f, angVel.GetZ(), dt);
 
-        robot.baseActions[i * ACTIONS_PER_SATELLITE + 0] = torqueX;
-        robot.baseActions[i * ACTIONS_PER_SATELLITE + 1] = torqueY;
-        robot.baseActions[i * ACTIONS_PER_SATELLITE + 2] = torqueZ;
-        robot.baseActions[i * ACTIONS_PER_SATELLITE + 3] = 0.0f;
+        robot.baseActions[i * robot.config.actionsPerSatellite + 0] = torqueX;
+        robot.baseActions[i * robot.config.actionsPerSatellite + 1] = torqueY;
+        robot.baseActions[i * robot.config.actionsPerSatellite + 2] = torqueZ;
+        robot.baseActions[i * robot.config.actionsPerSatellite + 3] = 0.0f;
     }
 }
 
@@ -448,9 +569,9 @@ void CombatRobotLoader::ComputeBasePIDActions(
  */
 void CombatRobotLoader::BlendResidualWithBase(CombatRobotData& robot)
 {
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
-        int base = i * ACTIONS_PER_SATELLITE;
+        int base = i * robot.config.actionsPerSatellite;
         // PID output (baseActions) is already in target velocity units
         // Model output (residualActions) is -1 to 1, scaled by actionScale
         robot.finalActions[base + 0] = robot.baseActions[base + 0] + robot.residualActions[base + 0] * robot.actionScale.rotationScale;
@@ -461,7 +582,8 @@ void CombatRobotLoader::BlendResidualWithBase(CombatRobotData& robot)
     
     // For reaction wheels and burst, we just pass them through to ApplyActions
     // (ApplyActions will handle their specific scales)
-    for (int i = NUM_SATELLITES * ACTIONS_PER_SATELLITE; i < ACTIONS_PER_ROBOT; ++i)
+    int satelliteActions = robot.config.numSatellites * robot.config.actionsPerSatellite;
+    for (int i = satelliteActions; i < robot.config.actionsPerRobot; ++i)
     {
         robot.finalActions[i] = robot.residualActions[i];
     }
@@ -485,13 +607,13 @@ void CombatRobotLoader::ApplyActions(
     JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
     float energySum = 0.0f;
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
         // actions here are already blended and scaled if coming from ApplyResidualActions
-        const float vx = actions[i * ACTIONS_PER_SATELLITE + 0];
-        const float vy = actions[i * ACTIONS_PER_SATELLITE + 1];
-        const float vz = actions[i * ACTIONS_PER_SATELLITE + 2];
-        const float slideVel = actions[i * ACTIONS_PER_SATELLITE + 3];
+        const float vx = actions[i * robot.config.actionsPerSatellite + 0];
+        const float vy = actions[i * robot.config.actionsPerSatellite + 1];
+        const float vz = actions[i * robot.config.actionsPerSatellite + 2];
+        const float slideVel = actions[i * robot.config.actionsPerSatellite + 3];
 
         if (robot.satellites[i].rotationJoint != nullptr)
         {
@@ -507,24 +629,26 @@ void CombatRobotLoader::ApplyActions(
         energySum += std::abs(vx) + std::abs(vy) + std::abs(vz) + std::abs(slideVel);
     }
 
-    const float reactionTorqueScale = 5000.0f;
-    // Indices 52, 53, 54 for reaction torque, 55 for burst
+    const float reactionTorqueScale = robot.config.reactionTorqueScale;
+    // Indices after satellite actions for reaction torque, burst is last
+    int satelliteActions = robot.config.numSatellites * robot.config.actionsPerSatellite;
     JPH::Vec3 reactionTorque(
-        actions[52] * reactionTorqueScale,
-        actions[53] * reactionTorqueScale,
-        actions[54] * reactionTorqueScale
+        actions[satelliteActions] * reactionTorqueScale,
+        actions[satelliteActions + 1] * reactionTorqueScale,
+        actions[satelliteActions + 2] * reactionTorqueScale
     );
     bodyInterface.AddTorque(robot.mainBodyId, reactionTorque);
 
-    const float omniSpikeBurst = actions[55] * robot.actionScale.slideScale;
-    for (int i = 0; i < NUM_SATELLITES; ++i)
-    {
-        if (robot.satellites[i].slideJoint != nullptr)
-        {
-            float currentVel = robot.satellites[i].slideJoint->GetTargetVelocity();
-            robot.satellites[i].slideJoint->SetTargetVelocity(currentVel + omniSpikeBurst);
-        }
-    }
+    // // Omni spike burst functionality disabled
+    // const float omniSpikeBurst = actions[satelliteActions + 3] * robot.actionScale.slideScale;
+    // for (int i = 0; i < robot.config.numSatellites; ++i)
+    // {
+    //     if (robot.satellites[i].slideJoint != nullptr)
+    //     {
+    //         float currentVel = robot.satellites[i].slideJoint->GetTargetVelocity();
+    //         robot.satellites[i].slideJoint->SetTargetVelocity(currentVel + omniSpikeBurst);
+    //     }
+    // }
 
     robot.totalEnergyUsed += energySum * 0.001f;
 }
@@ -545,7 +669,7 @@ void CombatRobotLoader::ApplyResidualActions(
     JPH::PhysicsSystem* physicsSystem)
 {
     // 1. Store the residual actions from the model
-    for (int i = 0; i < ACTIONS_PER_ROBOT; ++i)
+    for (int i = 0; i < robot.config.actionsPerRobot; ++i)
     {
         robot.residualActions[i] = residualActions[i];
     }
@@ -579,20 +703,22 @@ void CombatRobotLoader::PerformLidarScan(
     JPH::RVec3 rootPos = bodyInterface.GetPosition(robot.mainBodyId);
     JPH::Quat rootRot = bodyInterface.GetRotation(robot.mainBodyId);
     
-    const float maxDistance = 20.0f;
+    const float maxDistance = robot.config.lidarMaxDistance;
     
     const JPH::NarrowPhaseQuery& narrowPhaseQuery = physicsSystem->GetNarrowPhaseQuery();
     
     JPH::IgnoreMultipleBodiesFilter bodyFilter;
     bodyFilter.IgnoreBody(robot.mainBodyId);
-    for (int i = 0; i < NUM_SATELLITES; ++i) {
+    for (int i = 0; i < robot.config.numSatellites; ++i) {
         if (!robot.satellites[i].coreBodyId.IsInvalid()) bodyFilter.IgnoreBody(robot.satellites[i].coreBodyId);
         if (!robot.satellites[i].spikeBodyId.IsInvalid()) bodyFilter.IgnoreBody(robot.satellites[i].spikeBodyId);
     }
     
-    for (int i = 0; i < NUM_LIDAR_RAYS; ++i)
+    std::vector<JPH::Vec3> lidarDirections = CreateLidarDirections(robot.config.numLidarRays);
+    
+    for (int i = 0; i < robot.config.numLidarRays; ++i)
     {
-        JPH::Vec3 worldDir = rootRot * mLidarDirections[i];
+        JPH::Vec3 worldDir = rootRot * lidarDirections[i];
         
         JPH::RRayCast ray;
         ray.mOrigin = rootPos;
@@ -662,7 +788,7 @@ void CombatRobotLoader::GetObservations(
     observations[idx++] = oppVel.GetY();
     observations[idx++] = oppVel.GetZ();
 
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
         JPH::RVec3 pos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
         JPH::Vec3 vel = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
@@ -680,9 +806,9 @@ void CombatRobotLoader::GetObservations(
     }
 
     PerformLidarScan(robot, physicsSystem);
-    for (int i = 0; i < NUM_LIDAR_RAYS; ++i)
+    for (int i = 0; i < robot.config.numLidarRays; ++i)
     {
-        observations[idx++] = robot.lidarDistances[i] / 20.0f;
+        observations[idx++] = robot.lidarDistances[i] / robot.config.lidarMaxDistance;
     }
 
     observations[idx++] = robot.hp / 100.0f;
@@ -722,16 +848,22 @@ void CombatRobotLoader::GetObservations(
     observations[idx++] = robot.totalDamageTaken / 100.0f;
     observations[idx++] = robot.episodeSteps / 1000.0f;
     
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
-        observations[idx++] = forces.impulseMagnitude[i];
+        if (i < forces.impulseMagnitude.size())
+            observations[idx++] = forces.impulseMagnitude[i];
+        else
+            observations[idx++] = 0.0f;
     }
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
-        observations[idx++] = forces.jointStress[i];
+        if (i < forces.jointStress.size())
+            observations[idx++] = forces.jointStress[i];
+        else
+            observations[idx++] = 0.0f;
     }
     
-    for (int i = 0; i < NUM_SATELLITES; ++i)
+    for (int i = 0; i < robot.config.numSatellites; ++i)
     {
         JPH::RVec3 satPos = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
         observations[idx++] = static_cast<float>(satPos.GetY()) / 10.0f;

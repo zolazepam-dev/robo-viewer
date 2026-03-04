@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
@@ -18,6 +19,8 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 
@@ -33,6 +36,12 @@ struct MJCFBodyInstance
     JPH::RVec3 worldPos {0, 0, 0};
     JPH::Quat worldRot = JPH::Quat::sIdentity();
     bool isStatic = false;
+};
+
+struct MeshData
+{
+    std::vector<JPH::Vec3> vertices;
+    std::vector<uint32_t> indices;
 };
 
 JPH::Vec3 ParseVec3(const char* str, const JPH::Vec3& def = JPH::Vec3::sZero())
@@ -55,7 +64,32 @@ JPH::Quat ParseEuler(const char* str)
     return JPH::Quat::sEulerAngles(JPH::Vec3(JPH::DegreesToRadians(rx), JPH::DegreesToRadians(ry), JPH::DegreesToRadians(rz)));
 }
 
-JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom)
+static bool LoadBinarySTL(const std::filesystem::path& path, std::vector<JPH::Vec3>& outVerts, std::vector<uint32_t>& outIdx)
+{
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) return false;
+    char header[80];
+    f.read(header, 80);
+    uint32_t triCount = 0;
+    f.read(reinterpret_cast<char*>(&triCount), sizeof(uint32_t));
+    outVerts.reserve(triCount * 3);
+    outIdx.reserve(triCount * 3);
+    for (uint32_t i = 0; i < triCount; ++i) {
+        float n[3]; f.read(reinterpret_cast<char*>(n), sizeof(float) * 3);
+        for (int v = 0; v < 3; ++v) {
+            float p[3]; f.read(reinterpret_cast<char*>(p), sizeof(float) * 3);
+            outVerts.emplace_back(p[0], p[1], p[2]);
+            outIdx.push_back(static_cast<uint32_t>(outVerts.size() - 1));
+        }
+        uint16_t attr; f.read(reinterpret_cast<char*>(&attr), sizeof(uint16_t));
+        if (!f.good()) return false;
+    }
+    return true;
+}
+
+JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom,
+                                    const std::unordered_map<std::string, MeshData>& meshCache,
+                                    bool isDynamic)
 {
     const char* type = geom->Attribute("type");
     std::string t = type ? type : "box";
@@ -92,11 +126,51 @@ JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom)
         return res.HasError() ? nullptr : res.Get();
     }
     if (t == "mesh") {
-        // Placeholder for mesh geoms: approximate with small sphere to keep hierarchy valid
-        float radius = geom->FloatAttribute("size", 0.05f);
-        JPH::SphereShapeSettings settings(radius);
-        auto res = settings.Create();
-        return res.HasError() ? nullptr : res.Get();
+        const char* meshName = geom->Attribute("mesh");
+        if (!meshName) {
+            std::cerr << "RobotLoader: mesh geom missing mesh attribute" << std::endl;
+            return nullptr;
+        }
+        auto it = meshCache.find(meshName);
+        if (it == meshCache.end() || it->second.vertices.empty()) {
+            std::cerr << "RobotLoader: mesh asset not found or empty: " << meshName << std::endl;
+            return nullptr;
+        }
+        const MeshData& md = it->second;
+        if (isDynamic) {
+            JPH::ConvexHullShapeSettings hull(md.vertices.data(), md.vertices.size());
+            auto res = hull.Create();
+            if (!res.HasError()) return res.Get();
+            std::cerr << "RobotLoader: hull failed for mesh " << meshName << " falling back sphere" << std::endl;
+            JPH::SphereShapeSettings settings(0.05f);
+            auto res2 = settings.Create();
+            return res2.HasError() ? nullptr : res2.Get();
+        } else {
+            // Convert to Jolt's format
+            JPH::VertexList vertices;
+            for (const JPH::Vec3& v : md.vertices) {
+                vertices.push_back(JPH::Float3(v.GetX(), v.GetY(), v.GetZ()));
+            }
+
+            JPH::IndexedTriangleList triangles;
+            for (size_t i = 0; i < md.indices.size(); i += 3) {
+                if (i + 2 < md.indices.size()) {
+                    triangles.push_back(JPH::IndexedTriangle(
+                        static_cast<uint32_t>(md.indices[i]),
+                        static_cast<uint32_t>(md.indices[i + 1]),
+                        static_cast<uint32_t>(md.indices[i + 2])
+                    ));
+                }
+            }
+
+            JPH::MeshShapeSettings tri(vertices, triangles);
+            auto res = tri.Create();
+            if (!res.HasError()) return res.Get();
+            std::cerr << "RobotLoader: tri mesh failed for mesh " << meshName << " falling back sphere" << std::endl;
+            JPH::SphereShapeSettings settings(0.05f);
+            auto res2 = settings.Create();
+            return res2.HasError() ? nullptr : res2.Get();
+        }
     }
     std::cerr << "RobotLoader: Unsupported MJCF geom type: " << t << std::endl;
     return nullptr;
@@ -108,6 +182,7 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
                         JPH::BodyInterface& bodyInterface,
                         JPH::PhysicsSystem& physicsSystem,
                         const JPH::ObjectLayer dynamicLayer,
+                        const std::unordered_map<std::string, MeshData>& meshCache,
                         std::map<std::string, JPH::BodyID>& bodyMap,
                         RobotData& outData)
 {
@@ -125,11 +200,11 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
     float mass = 1.0f;
     bool isStatic = false;
     if (geom) {
-        shape = ParseGeomShape(geom);
         if (geom->Attribute("mass")) mass = geom->FloatAttribute("mass", 1.0f);
         if (geom->Attribute("density")) {
             // ignore density for now
         }
+        shape = ParseGeomShape(geom, meshCache, mass > 0.0f);
     }
 
     // Freejoint or no joints => root is dynamic unless mass==0
@@ -167,7 +242,7 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
         JPH::RVec3 childWorldPos = worldPos + worldRot * JPH::RVec3(childLocalPos);
         JPH::Quat childWorldRot = worldRot * childLocalRot;
 
-        BuildMJCFRecursive(child, worldPos, worldRot, bodyInterface, physicsSystem, dynamicLayer, bodyMap, outData);
+        BuildMJCFRecursive(child, worldPos, worldRot, bodyInterface, physicsSystem, dynamicLayer, meshCache, bodyMap, outData);
 
         // Find joint inside child (hinge/slide)
         const tinyxml2::XMLElement* joint = child->FirstChildElement("joint");
@@ -216,6 +291,115 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
     }
 }
 
+// Lightweight default resolver for geom/joint attributes (single inheritance)
+struct MJCFDefaults
+{
+    // class name -> map of attr key->value (string raw)
+    std::unordered_map<std::string, std::map<std::string, std::string>> geomDefaults;
+    std::unordered_map<std::string, std::map<std::string, std::string>> jointDefaults;
+
+    void Ingest(const tinyxml2::XMLElement* defaults)
+    {
+        for (const tinyxml2::XMLElement* d = defaults; d; d = d->NextSiblingElement("default")) {
+            const char* cls = d->Attribute("class");
+            std::string name = cls ? cls : "";
+            // geom child
+            if (const tinyxml2::XMLElement* g = d->FirstChildElement("geom")) {
+                auto& bucket = geomDefaults[name];
+                for (const tinyxml2::XMLAttribute* a = g->FirstAttribute(); a; a = a->Next()) {
+                    bucket[a->Name()] = a->Value();
+                }
+            }
+            // joint child
+            if (const tinyxml2::XMLElement* j = d->FirstChildElement("joint")) {
+                auto& bucket = jointDefaults[name];
+                for (const tinyxml2::XMLAttribute* a = j->FirstAttribute(); a; a = a->Next()) {
+                    bucket[a->Name()] = a->Value();
+                }
+            }
+        }
+    }
+
+    // Merge class defaults onto element attributes; element wins
+    void ApplyGeomDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
+    {
+        const char* cls = elem->Attribute("class");
+        if (cls) {
+            auto it = geomDefaults.find(cls);
+            if (it != geomDefaults.end()) {
+                out.insert(it->second.begin(), it->second.end());
+            }
+        }
+        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
+            out[a->Name()] = a->Value();
+        }
+    }
+
+    void ApplyJointDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
+    {
+        const char* cls = elem->Attribute("class");
+        if (cls) {
+            auto it = jointDefaults.find(cls);
+            if (it != jointDefaults.end()) {
+                out.insert(it->second.begin(), it->second.end());
+            }
+        }
+        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
+            out[a->Name()] = a->Value();
+        }
+    }
+};
+
+struct MJCFContext
+{
+    MJCFDefaults defaults;
+    std::filesystem::path baseDir;
+    std::filesystem::path meshDir;
+};
+
+static const tinyxml2::XMLElement* ResolveInclude(const tinyxml2::XMLElement* mjRoot, const MJCFContext& ctx, const std::string& file, tinyxml2::XMLDocument& outDoc)
+{
+    std::filesystem::path inc = ctx.baseDir / file;
+    if (outDoc.LoadFile(inc.string().c_str()) != tinyxml2::XML_SUCCESS) {
+        std::cerr << "RobotLoader: Failed to load include MJCF " << inc << std::endl;
+        return nullptr;
+    }
+    return outDoc.FirstChildElement("mujoco");
+}
+
+// Wrapper to gather <worldbody> bodies from root + includes
+static void ProcessWorlds(const tinyxml2::XMLElement* mj,
+                          JPH::BodyInterface& body_interface,
+                          JPH::PhysicsSystem& physics,
+                          const MJCFContext& ctx,
+                          const JPH::ObjectLayer dynamicLayer,
+                          const std::unordered_map<std::string, MeshData>& meshCache,
+                          std::map<std::string, JPH::BodyID>& body_map,
+                          RobotData& robot_data)
+{
+    auto process_world = [&](const tinyxml2::XMLElement* wb) {
+        for (const tinyxml2::XMLElement* body = wb->FirstChildElement("body"); body; body = body->NextSiblingElement("body")) {
+            BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, physics, dynamicLayer, meshCache, body_map, robot_data);
+        }
+    };
+
+    if (const tinyxml2::XMLElement* wb = mj->FirstChildElement("worldbody")) {
+        process_world(wb);
+    }
+
+    // Single-level include resolution
+    for (const tinyxml2::XMLElement* inc = mj->FirstChildElement("include"); inc; inc = inc->NextSiblingElement("include")) {
+        const char* file = inc->Attribute("file");
+        if (!file) continue;
+        tinyxml2::XMLDocument incDoc;
+        const tinyxml2::XMLElement* incRoot = ResolveInclude(mj, ctx, file, incDoc);
+        if (!incRoot) continue;
+        if (const tinyxml2::XMLElement* incWorld = incRoot->FirstChildElement("worldbody")) {
+            process_world(incWorld);
+        }
+    }
+}
+
 bool HasXmlExtension(const std::string& path)
 {
     auto pos = path.find_last_of('.');
@@ -249,43 +433,33 @@ RobotData RobotLoader::LoadRobot(const std::string& filepath, JPH::PhysicsSystem
             std::cerr << "RobotLoader: Not an MJCF file (missing <mujoco>)" << std::endl;
             return robot_data;
         }
+        MJCFContext ctx;
+        ctx.baseDir = xml_path.parent_path();
+        if (const tinyxml2::XMLElement* comp = mj->FirstChildElement("compiler")) {
+            const char* meshdir = comp->Attribute("meshdir");
+            if (meshdir) ctx.meshDir = ctx.baseDir / meshdir;
+        }
+        ctx.defaults.Ingest(mj->FirstChildElement("default"));
+        // Load mesh assets
+        std::unordered_map<std::string, MeshData> meshCache;
+        if (const tinyxml2::XMLElement* assets = mj->FirstChildElement("asset")) {
+            for (const tinyxml2::XMLElement* m = assets->FirstChildElement("mesh"); m; m = m->NextSiblingElement("mesh")) {
+                const char* name = m->Attribute("name");
+                const char* file = m->Attribute("file");
+                if (!name || !file) continue;
+                std::filesystem::path meshPath = ctx.meshDir.empty() ? ctx.baseDir / file : ctx.meshDir / file;
+                MeshData data;
+                if (!LoadBinarySTL(meshPath, data.vertices, data.indices)) {
+                    std::cerr << "RobotLoader: failed to load mesh file " << meshPath << std::endl;
+                    continue;
+                }
+                meshCache[name] = std::move(data);
+            }
+        }
         JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
         const JPH::ObjectLayer dynamicLayer = Layers::MOVING_BASE;
-
-        const tinyxml2::XMLElement* world = mj->FirstChildElement("worldbody");
-        if (!world) {
-            std::cerr << "RobotLoader: MJCF missing <worldbody>" << std::endl;
-            return robot_data;
-        }
-
         std::map<std::string, JPH::BodyID> body_map;
-
-        auto process_world = [&](const tinyxml2::XMLElement* wb) {
-            for (const tinyxml2::XMLElement* body = wb->FirstChildElement("body"); body; body = body->NextSiblingElement("body")) {
-                BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, *physicsSystem, dynamicLayer, body_map, robot_data);
-            }
-        };
-
-        // Process main world
-        process_world(world);
-
-        // Process includes (single-level)
-        std::filesystem::path base_dir = std::filesystem::path(filepath).parent_path();
-        for (const tinyxml2::XMLElement* inc = mj->FirstChildElement("include"); inc; inc = inc->NextSiblingElement("include")) {
-            const char* incFile = inc->Attribute("file");
-            if (!incFile) continue;
-            std::filesystem::path inc_path = base_dir / incFile;
-            tinyxml2::XMLDocument incDoc;
-            if (incDoc.LoadFile(inc_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
-                std::cerr << "RobotLoader: Failed to load include MJCF " << inc_path << std::endl;
-                continue;
-            }
-            const tinyxml2::XMLElement* incRoot = incDoc.FirstChildElement("mujoco");
-            if (!incRoot) continue;
-            const tinyxml2::XMLElement* incWorld = incRoot->FirstChildElement("worldbody");
-            if (!incWorld) continue;
-            process_world(incWorld);
-        }
+        ProcessWorlds(mj, body_interface, *physicsSystem, ctx, dynamicLayer, meshCache, body_map, robot_data);
         return robot_data;
     }
 
