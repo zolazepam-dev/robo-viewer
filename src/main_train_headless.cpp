@@ -33,11 +33,41 @@ void EnsureDir(const std::string& path) {
 int main(int argc, char* argv[]) {
     TrainingConfig config;
     
+    // Debug command line
+    std::cout << "[JOLTrl DEBUG] Command line arguments:";
+    for (int i = 0; i < argc; i++) {
+        std::cout << " " << argv[i];
+    }
+    std::cout << std::endl;
+    
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
+        std::cout << "[JOLTrl DEBUG] Parsing arg[" << i << "]: \"" << arg << "\"" << std::endl;
+        
+        // Handle --arg=value syntax
+        size_t equalsPos = arg.find('=');
+        if (equalsPos != std::string::npos) {
+            std::string key = arg.substr(0, equalsPos);
+            std::string value = arg.substr(equalsPos + 1);
+            
+            if (key == "--envs") {
+                config.numParallelEnvs = std::stoi(value);
+                std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << std::endl;
+            } else if (key == "--checkpoint-interval") {
+                config.checkpointInterval = std::stoi(value);
+            } else if (key == "--max-steps") {
+                config.maxSteps = std::stoi(value);
+            } else if (key == "--checkpoint-dir") {
+                config.checkpointDir = value;
+            }
+            continue;
+        }
+        
+        // Handle --arg value syntax
         if (arg == "--envs" && i + 1 < argc) {
             config.numParallelEnvs = std::stoi(argv[++i]);
+            std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << std::endl;
         } else if (arg == "--checkpoint-interval" && i + 1 < argc) {
             config.checkpointInterval = std::stoi(argv[++i]);
         } else if (arg == "--max-steps" && i + 1 < argc) {
@@ -52,7 +82,7 @@ int main(int argc, char* argv[]) {
     
     // Initialize Training Environment (Headless)
     std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << std::endl;
-    VectorizedEnv vecEnv(config.numParallelEnvs);
+    VectorizedEnv vecEnv(config.numParallelEnvs, 7200); // Default 7200 steps per episode
     vecEnv.Init();
     
     int stateDim = vecEnv.GetObservationDim();
@@ -157,8 +187,28 @@ int main(int argc, char* argv[]) {
         auto currentTime = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastStatsTime).count();
         
-        if (elapsed >= 5) { 
-            auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
+        // Output SPS every 500 steps for testing
+        if (totalSteps % 500 == 0) {
+            auto totalElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() / 1000.0f;
+            if (totalElapsed > 0.1f) { // At least 100ms elapsed
+                sps = totalSteps / totalElapsed;
+                currentAvg = 0;
+                int count = std::min(rewardIdx, 100);
+                for(int i=0; i<count; i++) {
+                    int idx = (rewardIdx - count + i) % 100;
+                    if (idx < 0) idx += 100; 
+                    currentAvg += avgRewards[idx];
+                }
+                if (rewardIdx > 0) currentAvg /= count;
+                
+                std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
+                          << " | SPS: " << (int)sps 
+                          << " | Episodes: " << episodes 
+                          << " | Avg Reward: " << currentAvg << std::endl;
+            }
+        }
+        
+        if (elapsed >= 1 && (totalSteps - lastSteps) > 0) { 
             sps = (totalSteps - lastSteps) / (float)elapsed;
             lastSteps = totalSteps;
             lastStatsTime = currentTime;
@@ -172,10 +222,12 @@ int main(int argc, char* argv[]) {
             }
             if (rewardIdx > 0) currentAvg /= count;
             
-            std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
-                      << " | SPS: " << (int)sps 
-                      << " | Episodes: " << episodes 
-                      << " | Avg Reward: " << currentAvg << std::endl;
+            if (sps > 100) { // Ignore invalid SPS values
+                std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
+                          << " | SPS: " << (int)sps 
+                          << " | Episodes: " << episodes 
+                          << " | Avg Reward: " << currentAvg << std::endl;
+            }
         }
         
         if (totalSteps % config.checkpointInterval == 0) {
