@@ -1,5 +1,33 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
+cc_binary(
+    name = "mjcf_viewer",
+    srcs = ["mjcf_viewer.cpp"],
+    deps = [
+        ":core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+        "@tinyxml2//:tinyxml2",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = [
+        "-lGL",
+        "-lpthread",
+    ],
+)
+
 exports_files(glob(["*.cpp"]))
 
 cc_library(
@@ -39,6 +67,7 @@ cc_library(
         "AlignedAllocator.h",
         "LockFreeQueue.h",
         "InternalRobot.h",
+        "ArmaEigenUtils.h",
     ],
     deps = [
         "@glfw",
@@ -49,6 +78,8 @@ cc_library(
         "@imgui//:imgui",
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
+        "@tinyxml2//:tinyxml2",
+        ":linalg_utils",
     ],
     visibility = ["//visibility:public"],
     copts = [
@@ -58,6 +89,16 @@ cc_library(
         "-mfma",
         "-march=native"
     ],
+)
+
+cc_library(
+    name = "linalg_utils",
+    hdrs = ["ArmaEigenUtils.h"],
+    copts = [
+        "-I/usr/include/eigen3",
+    ],
+    linkopts = ["-larmadillo"],
+    visibility = ["//visibility:public"],
 )
 
 cc_binary(

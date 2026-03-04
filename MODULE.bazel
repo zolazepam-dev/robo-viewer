@@ -13,6 +13,7 @@ bazel_dep(name = "glm", version = "1.0.1")
 bazel_dep(name = "glew", version = "2.2.0")
 bazel_dep(name = "nlohmann_json", version = "3.11.3")
 bazel_dep(name = "imgui", version = "1.92.2") # Replaces your custom http_archive!
+bazel_dep(name = "tinyxml2", version = "10.0.0")
 
 # --- External Physics Engine (Jolt) ---
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")

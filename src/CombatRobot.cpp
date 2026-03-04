@@ -1,3 +1,11 @@
+/**
+ * @file CombatRobot.cpp
+ * @brief Implementation of the CombatRobotLoader class
+ * 
+ * This file implements all the functionality for loading, controlling, and
+ * observing combat robots in the JOLTrl reinforcement learning environment.
+ */
+
 #include <stdexcept>
 #include <Jolt/Jolt.h>
 #include "CombatRobot.h"
@@ -25,19 +33,40 @@ JPH::Ref<JPH::GroupFilterTable> CombatRobotLoader::mGroupFilter = nullptr;
 
 using json = nlohmann::json;
 
+/**
+ * @brief LIDAR directions for 360-degree scanning
+ * 
+ * These directions define the 10 LIDAR rays used for sensing the environment.
+ * The rays are evenly distributed around the robot's core.
+ */
 const JPH::Vec3 CombatRobotLoader::mLidarDirections[NUM_LIDAR_RAYS] = {
-    JPH::Vec3(1.0f, 0.0f, 0.0f),
-    JPH::Vec3(0.707f, 0.0f, 0.707f),
-    JPH::Vec3(0.707f, 0.0f, -0.707f),
-    JPH::Vec3(0.5f, 0.0f, 0.866f),
-    JPH::Vec3(0.5f, 0.0f, -0.866f),
-    JPH::Vec3(0.0f, 0.0f, 1.0f),
-    JPH::Vec3(0.0f, 0.0f, -1.0f),
-    JPH::Vec3(-1.0f, 0.0f, 0.0f),
-    JPH::Vec3(0.0f, 1.0f, 0.0f),
-    JPH::Vec3(0.0f, -1.0f, 0.0f)
+    JPH::Vec3(1.0f, 0.0f, 0.0f),        // Right
+    JPH::Vec3(0.707f, 0.0f, 0.707f),   // Right-Forward
+    JPH::Vec3(0.707f, 0.0f, -0.707f),  // Right-Back
+    JPH::Vec3(0.5f, 0.0f, 0.866f),     // Forward-Right
+    JPH::Vec3(0.5f, 0.0f, -0.866f),    // Back-Right
+    JPH::Vec3(0.0f, 0.0f, 1.0f),       // Forward
+    JPH::Vec3(0.0f, 0.0f, -1.0f),      // Back
+    JPH::Vec3(-1.0f, 0.0f, 0.0f),      // Left
+    JPH::Vec3(0.0f, 1.0f, 0.0f),       // Up
+    JPH::Vec3(0.0f, -1.0f, 0.0f)       // Down
 };
 
+/**
+ * @brief Load a combat robot from a configuration file
+ * 
+ * This function loads a combat robot from a JSON configuration file, creates all
+ * its physical components, and adds them to the physics system.
+ * 
+ * @param configPath Path to the JSON configuration file
+ * @param physicsSystem Pointer to the Jolt Physics system
+ * @param position Spawn position of the robot
+ * @param envIndex Environment index for collision filtering
+ * @param robotIndex Robot index within the environment
+ * @return CombatRobotData structure containing the loaded robot
+ * 
+ * @throws std::runtime_error If there's an error loading the robot
+ */
 CombatRobotData CombatRobotLoader::LoadRobot(
     const std::string& configPath,
     JPH::PhysicsSystem* physicsSystem,
@@ -286,6 +315,16 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     return robotData;
 }
 
+/**
+ * @brief Reset a combat robot to its initial state
+ * 
+ * This function resets a robot to its initial state by moving all its parts
+ * to the spawn position and resetting all internal state.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param physicsSystem Pointer to the Jolt Physics system
+ * @param spawnPosition Spawn position for the robot
+ */
 void CombatRobotLoader::ResetRobot(
     CombatRobotData& robot,
     JPH::PhysicsSystem* physicsSystem,
@@ -367,6 +406,16 @@ void CombatRobotLoader::ResetRobot(
     }
 }
 
+/**
+ * @brief Compute base PID control actions for the robot
+ * 
+ * This function calculates the base control actions using PID controllers
+ * to stabilize the satellite rotations.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param physicsSystem Pointer to the Jolt Physics system
+ * @param dt Time step in seconds
+ */
 void CombatRobotLoader::ComputeBasePIDActions(
     CombatRobotData& robot,
     JPH::PhysicsSystem* physicsSystem,
@@ -389,6 +438,14 @@ void CombatRobotLoader::ComputeBasePIDActions(
     }
 }
 
+/**
+ * @brief Blend residual actions with base PID control
+ * 
+ * This function blends the residual actions from the RL model with the base
+ * PID control actions to produce the final control signals.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ */
 void CombatRobotLoader::BlendResidualWithBase(CombatRobotData& robot)
 {
     for (int i = 0; i < NUM_SATELLITES; ++i)
@@ -410,6 +467,16 @@ void CombatRobotLoader::BlendResidualWithBase(CombatRobotData& robot)
     }
 }
 
+/**
+ * @brief Apply control actions to the robot
+ * 
+ * This function applies the control actions to the robot's physical components,
+ * including satellite rotations, spike slides, reaction wheels, and spike bursts.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param actions Action vector containing control signals
+ * @param physicsSystem Pointer to the Jolt Physics system
+ */
 void CombatRobotLoader::ApplyActions(
     CombatRobotData& robot,
     const float* actions,
@@ -462,6 +529,16 @@ void CombatRobotLoader::ApplyActions(
     robot.totalEnergyUsed += energySum * 0.001f;
 }
 
+/**
+ * @brief Apply residual actions with PID base control
+ * 
+ * This function applies residual actions from the RL model, combining them
+ * with PID base control for stable operation.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param residualActions Residual action vector from the RL model
+ * @param physicsSystem Pointer to the Jolt Physics system
+ */
 void CombatRobotLoader::ApplyResidualActions(
     CombatRobotData& robot,
     const float* residualActions,
@@ -484,6 +561,15 @@ void CombatRobotLoader::ApplyResidualActions(
     ApplyActions(robot, robot.finalActions.data(), physicsSystem);
 }
 
+/**
+ * @brief Perform a LIDAR scan for the robot
+ * 
+ * This function performs a 360-degree LIDAR scan around the robot's core,
+ * measuring distances to obstacles in 10 different directions.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param physicsSystem Pointer to the Jolt Physics system
+ */
 void CombatRobotLoader::PerformLidarScan(
     CombatRobotData& robot,
     JPH::PhysicsSystem* physicsSystem)
@@ -527,6 +613,19 @@ void CombatRobotLoader::PerformLidarScan(
     }
 }
 
+/**
+ * @brief Get observations for the robot
+ * 
+ * This function collects all sensory observations from the robot's environment
+ * and opponent, formatting them into a single observation vector for the
+ * reinforcement learning algorithm.
+ * 
+ * @param robot Reference to the CombatRobotData structure
+ * @param opponent Reference to the opponent's CombatRobotData structure
+ * @param observations Output buffer for the observation vector
+ * @param forces Force sensor readings
+ * @param physicsSystem Pointer to the Jolt Physics system
+ */
 void CombatRobotLoader::GetObservations(
     CombatRobotData& robot,
     const CombatRobotData& opponent,

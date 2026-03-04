@@ -7,6 +7,7 @@
 #include <map>
 #include <sstream>
 #include <algorithm>
+#include <filesystem>
 
 #include <nlohmann/json.hpp>
 #include <tinyxml2.h>
@@ -87,6 +88,13 @@ JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom)
         float radius = size.GetX();
         float halfHeight = size.GetY();
         JPH::CylinderShapeSettings settings(halfHeight, radius);
+        auto res = settings.Create();
+        return res.HasError() ? nullptr : res.Get();
+    }
+    if (t == "mesh") {
+        // Placeholder for mesh geoms: approximate with small sphere to keep hierarchy valid
+        float radius = geom->FloatAttribute("size", 0.05f);
+        JPH::SphereShapeSettings settings(radius);
         auto res = settings.Create();
         return res.HasError() ? nullptr : res.Get();
     }
@@ -230,8 +238,9 @@ RobotData RobotLoader::LoadRobot(const std::string& filepath, JPH::PhysicsSystem
 
     // --- MJCF path ---
     if (HasXmlExtension(filepath)) {
+        std::filesystem::path xml_path = std::filesystem::absolute(filepath);
         tinyxml2::XMLDocument doc;
-        if (doc.LoadFile(filepath.c_str()) != tinyxml2::XML_SUCCESS) {
+        if (doc.LoadFile(xml_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
             std::cerr << "RobotLoader: Failed to load MJCF " << filepath << std::endl;
             return robot_data;
         }
@@ -250,8 +259,32 @@ RobotData RobotLoader::LoadRobot(const std::string& filepath, JPH::PhysicsSystem
         }
 
         std::map<std::string, JPH::BodyID> body_map;
-        for (const tinyxml2::XMLElement* body = world->FirstChildElement("body"); body; body = body->NextSiblingElement("body")) {
-            BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, *physicsSystem, dynamicLayer, body_map, robot_data);
+
+        auto process_world = [&](const tinyxml2::XMLElement* wb) {
+            for (const tinyxml2::XMLElement* body = wb->FirstChildElement("body"); body; body = body->NextSiblingElement("body")) {
+                BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, *physicsSystem, dynamicLayer, body_map, robot_data);
+            }
+        };
+
+        // Process main world
+        process_world(world);
+
+        // Process includes (single-level)
+        std::filesystem::path base_dir = std::filesystem::path(filepath).parent_path();
+        for (const tinyxml2::XMLElement* inc = mj->FirstChildElement("include"); inc; inc = inc->NextSiblingElement("include")) {
+            const char* incFile = inc->Attribute("file");
+            if (!incFile) continue;
+            std::filesystem::path inc_path = base_dir / incFile;
+            tinyxml2::XMLDocument incDoc;
+            if (incDoc.LoadFile(inc_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
+                std::cerr << "RobotLoader: Failed to load include MJCF " << inc_path << std::endl;
+                continue;
+            }
+            const tinyxml2::XMLElement* incRoot = incDoc.FirstChildElement("mujoco");
+            if (!incRoot) continue;
+            const tinyxml2::XMLElement* incWorld = incRoot->FirstChildElement("worldbody");
+            if (!incWorld) continue;
+            process_world(incWorld);
         }
         return robot_data;
     }

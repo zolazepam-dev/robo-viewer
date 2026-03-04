@@ -1,37 +1,77 @@
-# Bazel output symlinks
+# Bazel build output
 bazel-bin
 bazel-out
 bazel-robo-viewer
 bazel-testlogs
+bazel-micro_board
+external
 
-# Build artifacts
+# Build artifacts and executables
 *.o
 *.a
 *.so
 *.dylib
+*.exe
+*.bin
+bulletproof_viewer
 
-# IDE
+# Build directories
+build/
+debug_room_viewer/
+random_robot_demo/
+random_room_demo/
+robot_demo/
+room_demo/
+sphere_demo/
+
+# IDE and editor files
 .idea/
 .clwb/
 *.swp
 *.swo
+.cache/
+.ai/
+.aiassistant/
+kilo-code/
+tenacious-debugger/
+tenacious-debugger.skill
 
-# Python
+# Python files
 __pycache__/
 *.pyc
 *.pyo
 
-# Logs and temp files
+# Log and temporary files
 *.log
 *.tmp
+*.csv
 imgui.ini
+debugrec
 
-# Models and checkpoints
+# RL training files
 checkpoints/
 saved_models/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node.js/Bun
 node_modules/
+package-lock.json
+bun.lock
+
+# Backup files
+*.bak
+*_backup.txt
+*.zip
+src.zip
+
+# Generated files
+compile_commands.json
+dodecahedron_preview.png
+dodecahedron_rotation.gif
+pyramid_preview.png
+
+# Session files
 session-ses_*.md

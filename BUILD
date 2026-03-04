@@ -155,6 +155,24 @@ cc_binary(
 )
 
 cc_binary(
+    name = "end_to_end_test",
+    srcs = ["//src:end_to_end_test.cpp"],
+    data = ["//robots:combat_bot.json"],
+    deps = [
+        "//src:core",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native"
+    ],
+)
+
+cc_binary(
     name = "test_json_load",
     srcs = ["//src:test_json_load.cpp"],
     data = ["//robots:combat_bot.json"],

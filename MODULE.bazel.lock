@@ -176,6 +176,8 @@
     "https://bcr.bazel.build/modules/stardoc/0.7.1/MODULE.bazel": "3548faea4ee5dda5580f9af150e79d0f6aea934fc60c1cc50f4efdd9420759e7",
     "https://bcr.bazel.build/modules/stardoc/0.7.2/MODULE.bazel": "fc152419aa2ea0f51c29583fab1e8c99ddefd5b3778421845606ee628629e0e5",
     "https://bcr.bazel.build/modules/stardoc/0.7.2/source.json": "58b029e5e901d6802967754adf0a9056747e8176f017cfe3607c0851f4d42216",
+    "https://bcr.bazel.build/modules/tinyxml2/10.0.0/MODULE.bazel": "7c2c2fd7f9bd767e5c98eeb46385dba08c81be321d885ed077da9383e85aebc7",
+    "https://bcr.bazel.build/modules/tinyxml2/10.0.0/source.json": "e6f10ec3ed2d93b165a6556ec0cca75f3f1f1b508494c618ed398d38919947a0",
     "https://bcr.bazel.build/modules/upb/0.0.0-20220923-a547704/MODULE.bazel": "7298990c00040a0e2f121f6c32544bab27d4452f80d9ce51349b1a28f3005c43",
     "https://bcr.bazel.build/modules/xcb-proto/1.17.0/MODULE.bazel": "13062923a9e615a2f4d284a3f28e467536f7abcfd79d2c04c2acf3837e9da31b",
     "https://bcr.bazel.build/modules/xcb-proto/1.17.0/source.json": "3d92c10e4231af96624f13a047f0ded4495450ef9776aa30626d485e5dd73d77",
