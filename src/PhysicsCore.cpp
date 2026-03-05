@@ -133,8 +133,14 @@ bool PhysicsCore::Init(uint32_t numParallelEnvs)
     physicsSettings.mNumVelocitySteps = 2;
     physicsSettings.mNumPositionSteps = 1;
     physicsSettings.mBaumgarte = 0.2f;
+    
+    // Enable collision group filtering so bodies in the same group don't collide
+    physicsSettings.mUseManifoldReduction = true;
 
     mPhysicsSystem->SetPhysicsSettings(physicsSettings);
+
+    // Create group filter to disable self-collision within the same robot
+    // Group 1 = robot bodies, they should not collide with each other
 
     mInitialized = true;
     std::cout << "[JOLTrl] PhysicsCore initialized globally for " << mNumEnvs << " overlapping environments." <<

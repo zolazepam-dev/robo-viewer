@@ -19,14 +19,78 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 
 #include "PhysicsCore.h"
 
 namespace {
+
+// Lightweight default resolver for geom/joint attributes (single inheritance)
+struct MJCFDefaults
+{
+    // class name -> map of attr key->value (string raw)
+    std::unordered_map<std::string, std::map<std::string, std::string>> geomDefaults;
+    std::unordered_map<std::string, std::map<std::string, std::string>> jointDefaults;
+
+    void Ingest(const tinyxml2::XMLElement* defaults)
+    {
+        for (const tinyxml2::XMLElement* d = defaults; d; d = d->NextSiblingElement("default")) {
+            const char* cls = d->Attribute("class");
+            std::string name = cls ? cls : "";
+            // geom child
+            if (const tinyxml2::XMLElement* g = d->FirstChildElement("geom")) {
+                auto& bucket = geomDefaults[name];
+                for (const tinyxml2::XMLAttribute* a = g->FirstAttribute(); a; a = a->Next()) {
+                    bucket[a->Name()] = a->Value();
+                }
+            }
+            // joint child
+            if (const tinyxml2::XMLElement* j = d->FirstChildElement("joint")) {
+                auto& bucket = jointDefaults[name];
+                for (const tinyxml2::XMLAttribute* a = j->FirstAttribute(); a; a = a->Next()) {
+                    bucket[a->Name()] = a->Value();
+                }
+            }
+        }
+    }
+
+    // Merge class defaults onto element attributes; element wins
+    void ApplyGeomDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
+    {
+        const char* cls = elem->Attribute("class");
+        if (cls) {
+            auto it = geomDefaults.find(cls);
+            if (it != geomDefaults.end()) {
+                out.insert(it->second.begin(), it->second.end());
+            }
+        }
+        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
+            out[a->Name()] = a->Value();
+        }
+    }
+
+    void ApplyJointDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
+    {
+        const char* cls = elem->Attribute("class");
+        if (cls) {
+            auto it = jointDefaults.find(cls);
+            if (it != jointDefaults.end()) {
+                out.insert(it->second.begin(), it->second.end());
+            }
+        }
+        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
+            out[a->Name()] = a->Value();
+        }
+    }
+};
 
 struct MJCFBodyInstance
 {
@@ -51,6 +115,17 @@ JPH::Vec3 ParseVec3(const char* str, const JPH::Vec3& def = JPH::Vec3::sZero())
     std::stringstream ss(str);
     ss >> x >> y >> z;
     if (ss.fail()) return def;
+    // Convert MuJoCo (Z-up) to Jolt (Y-up): (x,y,z) -> (x,z,y)
+    return JPH::Vec3(x, z, y);
+}
+
+JPH::Vec3 ParseVec3Raw(const char* str, const JPH::Vec3& def = JPH::Vec3::sZero())
+{
+    if (!str) return def;
+    float x=0,y=0,z=0;
+    std::stringstream ss(str);
+    ss >> x >> y >> z;
+    if (ss.fail()) return def;
     return JPH::Vec3(x, y, z);
 }
 
@@ -61,7 +136,23 @@ JPH::Quat ParseEuler(const char* str)
     std::stringstream ss(str);
     ss >> rx >> ry >> rz;
     if (ss.fail()) return JPH::Quat::sIdentity();
-    return JPH::Quat::sEulerAngles(JPH::Vec3(JPH::DegreesToRadians(rx), JPH::DegreesToRadians(ry), JPH::DegreesToRadians(rz)));
+    // Convert MuJoCo Euler (Z-up) to Jolt (Y-up): rotate around (x, z, y)
+    return JPH::Quat::sEulerAngles(JPH::Vec3(JPH::DegreesToRadians(rx), JPH::DegreesToRadians(rz), JPH::DegreesToRadians(ry)));
+}
+
+// Compute rotation that aligns local Z axis with target direction
+JPH::Quat RotationFromZAxis(const JPH::Vec3& targetDir)
+{
+    JPH::Vec3 zAxis(0, 0, 1);
+    JPH::Vec3 dir = targetDir.Normalized();
+    if (dir.IsNearZero()) return JPH::Quat::sIdentity();
+    // Handle parallel/anti-parallel cases
+    float dot = zAxis.Dot(dir);
+    if (dot > 0.9999f) return JPH::Quat::sIdentity();
+    if (dot < -0.9999f) return JPH::Quat::sRotation(JPH::Vec3::sAxisX(), JPH::JPH_PI);
+    JPH::Vec3 axis = zAxis.Cross(dir).Normalized();
+    float angle = acosf(dot);
+    return JPH::Quat::sRotation(axis, angle);
 }
 
 static bool LoadBinarySTL(const std::filesystem::path& path, std::vector<JPH::Vec3>& outVerts, std::vector<uint32_t>& outIdx)
@@ -93,6 +184,8 @@ JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom,
 {
     const char* type = geom->Attribute("type");
     std::string t = type ? type : "box";
+    const char* geomName = geom->Attribute("name");
+    std::cout << "RobotLoader: ParseGeomShape name='" << (geomName ? geomName : "") << "' type=" << t << std::endl;
     if (t == "sphere") {
         float radius = geom->FloatAttribute("size", 0.5f);
         JPH::SphereShapeSettings settings(radius);
@@ -117,11 +210,97 @@ JPH::Ref<JPH::Shape> ParseGeomShape(const tinyxml2::XMLElement* geom,
         return res.HasError() ? nullptr : res.Get();
     }
     if (t == "cylinder") {
-        // MuJoCo cylinder: size[0] = radius, size[1] = half-height (z)
-        JPH::Vec3 size = ParseVec3(geom->Attribute("size"), JPH::Vec3(0.1f, 0.1f, 0.1f));
-        float radius = size.GetX();
-        float halfHeight = size.GetY();
-        JPH::CylinderShapeSettings settings(halfHeight, radius);
+        const char* fromtoStr = geom->Attribute("fromto");
+        if (fromtoStr) {
+            std::cout << "RobotLoader: parsing cylinder fromto='" << fromtoStr << "'" << std::endl;
+            // cylinder defined by two endpoints
+            float x1, y1, z1, x2, y2, z2;
+            std::stringstream ss(fromtoStr);
+            ss >> x1 >> y1 >> z1 >> x2 >> y2 >> z2;
+            JPH::Vec3 p1(x1, z1, y1), p2(x2, z2, y2); // MuJoCo (Z-up) to Jolt (Y-up)
+            if (ss.fail()) {
+                std::cerr << "RobotLoader: invalid fromto attribute: " << fromtoStr << std::endl;
+                return nullptr;
+            }
+            JPH::Vec3 delta = p2 - p1;
+            float length = delta.Length();
+            if (length < 1e-6f) {
+                std::cerr << "RobotLoader: fromto endpoints coincide" << std::endl;
+                return nullptr;
+            }
+            JPH::Vec3 dir = delta / length;
+            JPH::Vec3 midpoint = (p1 + p2) * 0.5f;
+            float radius = geom->FloatAttribute("size", 0.1f); // size is radius
+            float halfHeight = length * 0.5f;
+            JPH::CylinderShapeSettings cylSettings(halfHeight, radius);
+            auto cylRes = cylSettings.Create();
+            if (cylRes.HasError()) return nullptr;
+            JPH::Ref<JPH::Shape> cylinder = cylRes.Get();
+            // Rotate cylinder from Z axis to dir, then translate to midpoint
+            JPH::RotatedTranslatedShapeSettings rtSettings(midpoint, RotationFromZAxis(dir), cylinder);
+            auto rtRes = rtSettings.Create();
+            return rtRes.HasError() ? nullptr : rtRes.Get();
+        } else {
+            // MuJoCo cylinder: size[0] = radius, size[1] = half-height (z)
+            JPH::Vec3 size = ParseVec3(geom->Attribute("size"), JPH::Vec3(0.1f, 0.1f, 0.1f));
+            float radius = size.GetX();
+            float halfHeight = size.GetY();
+            JPH::CylinderShapeSettings settings(halfHeight, radius);
+            auto res = settings.Create();
+            return res.HasError() ? nullptr : res.Get();
+        }
+    }
+    if (t == "capsule") {
+        const char* fromtoStr = geom->Attribute("fromto");
+        if (fromtoStr) {
+            // Capsule defined by two endpoints (line segment) and radius
+            float x1, y1, z1, x2, y2, z2;
+            std::stringstream ss(fromtoStr);
+            ss >> x1 >> y1 >> z1 >> x2 >> y2 >> z2;
+            JPH::Vec3 p1(x1, z1, y1), p2(x2, z2, y2); // MuJoCo (Z-up) to Jolt (Y-up)
+            if (ss.fail()) {
+                std::cerr << "RobotLoader: invalid capsule fromto: " << fromtoStr << std::endl;
+                return nullptr;
+            }
+            JPH::Vec3 delta = p2 - p1;
+            float length = delta.Length();
+            if (length < 1e-6f) {
+                // Degenerate capsule - use sphere
+                float radius = geom->FloatAttribute("size", 0.1f);
+                JPH::SphereShapeSettings settings(radius);
+                auto res = settings.Create();
+                return res.HasError() ? nullptr : res.Get();
+            }
+            JPH::Vec3 dir = delta.Normalized();
+            JPH::Vec3 midpoint = (p1 + p2) * 0.5f;
+            float radius = geom->FloatAttribute("size", 0.1f);
+            float halfHeight = length * 0.5f;
+            JPH::CapsuleShapeSettings capsuleSettings(halfHeight, radius);
+            auto capsuleRes = capsuleSettings.Create();
+            if (capsuleRes.HasError()) return nullptr;
+            JPH::Ref<JPH::Shape> capsule = capsuleRes.Get();
+            // Rotate capsule from Y axis to dir, then translate to midpoint
+            JPH::RotatedTranslatedShapeSettings rtSettings(midpoint, RotationFromZAxis(dir), capsule);
+            auto rtRes = rtSettings.Create();
+            return rtRes.HasError() ? nullptr : rtRes.Get();
+        } else {
+            // Simple capsule along local Y axis
+            JPH::Vec3 size = ParseVec3(geom->Attribute("size"), JPH::Vec3(0.1f, 0.1f, 0.1f));
+            float radius = size.GetX();
+            float halfHeight = size.GetY();
+            JPH::CapsuleShapeSettings settings(halfHeight, radius);
+            auto res = settings.Create();
+            return res.HasError() ? nullptr : res.Get();
+        }
+    }
+    if (t == "plane") {
+        // MuJoCo plane: size="x y z" where x,y are half-widths, z is ignored (zero thickness)
+        // Approximate with a thin box of thickness 0.01
+        JPH::Vec3 size = ParseVec3(geom->Attribute("size"), JPH::Vec3(1.0f, 1.0f, 0.0f));
+        float halfWidth = size.GetX();
+        float halfDepth = size.GetY();
+        float halfThickness = 0.005f; // very thin
+        JPH::BoxShapeSettings settings(JPH::Vec3(halfWidth, halfDepth, halfThickness));
         auto res = settings.Create();
         return res.HasError() ? nullptr : res.Get();
     }
@@ -183,32 +362,108 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
                         JPH::PhysicsSystem& physicsSystem,
                         const JPH::ObjectLayer dynamicLayer,
                         const std::unordered_map<std::string, MeshData>& meshCache,
+                        const MJCFDefaults& defaults,
                         std::map<std::string, JPH::BodyID>& bodyMap,
                         RobotData& outData)
 {
     JPH::Vec3 localPos = ParseVec3(bodyElem->Attribute("pos"));
     JPH::Quat localRot = ParseEuler(bodyElem->Attribute("euler"));
-    JPH::RVec3 worldPos = parentPos + parentRot * JPH::RVec3(localPos);
-    JPH::Quat worldRot = parentRot * localRot;
 
     const char* bodyName = bodyElem->Attribute("name");
     std::string name = bodyName ? bodyName : "";
 
-    // Geom (take first)
-    const tinyxml2::XMLElement* geom = bodyElem->FirstChildElement("geom");
-    JPH::Ref<JPH::Shape> shape;
-    float mass = 1.0f;
-    bool isStatic = false;
-    if (geom) {
-        if (geom->Attribute("mass")) mass = geom->FloatAttribute("mass", 1.0f);
-        if (geom->Attribute("density")) {
-            // ignore density for now
+    // Special handling for satellite bodies - use the position of their core geom
+    // The core geom position is in the body's LOCAL frame, must be rotated by body's euler
+    if (name.find("_s") != std::string::npos) {
+        for (const tinyxml2::XMLElement* geom = bodyElem->FirstChildElement("geom"); geom; geom = geom->NextSiblingElement("geom")) {
+            const char* geomName = geom->Attribute("name");
+            if (geomName && std::string(geomName).find("core") != std::string::npos) {
+                JPH::Vec3 corePosLocal = ParseVec3(geom->Attribute("pos"));
+                if (!corePosLocal.IsNearZero()) {
+                    // Rotate core position by body's local rotation to get effective local position
+                    localPos = localRot * corePosLocal;
+                    break;
+                }
+            }
         }
-        shape = ParseGeomShape(geom, meshCache, mass > 0.0f);
+    }
+    
+    JPH::RVec3 worldPos = parentPos + parentRot * JPH::RVec3(localPos);
+    JPH::Quat worldRot = parentRot * localRot;
+
+    struct SubShape {
+        JPH::Ref<JPH::Shape> shape;
+        JPH::Vec3 pos;
+        JPH::Quat rot;
+    };
+    std::vector<SubShape> subShapes;
+    
+    // MJCF mass handling: body mass overrides geom masses; if neither, default to 1.0
+    float bodyMass = -1.0f;
+    if (bodyElem->Attribute("mass")) {
+        bodyMass = bodyElem->FloatAttribute("mass");
+    }
+    
+    float totalGeomMass = 0.0f;
+    bool hasGeomMass = false;
+    
+    // Process all geoms
+    for (const tinyxml2::XMLElement* geom = bodyElem->FirstChildElement("geom"); geom; geom = geom->NextSiblingElement("geom")) {
+        // Apply defaults to geom
+        std::map<std::string, std::string> geomAttrs;
+        defaults.ApplyGeomDefaults(geom, geomAttrs);
+        
+        float geomMass = -1.0f;
+        auto massIt = geomAttrs.find("mass");
+        if (massIt != geomAttrs.end()) {
+            try {
+                geomMass = std::stof(massIt->second);
+            } catch (...) {
+                geomMass = -1.0f;
+            }
+        }
+        
+        if (geomMass > 0.0f) {
+            totalGeomMass += geomMass;
+            hasGeomMass = true;
+        }
+        
+        // Parse geom local transform
+        JPH::Vec3 geomPos = ParseVec3(geom->Attribute("pos"));
+        JPH::Quat geomRot = ParseEuler(geom->Attribute("euler"));
+        JPH::Ref<JPH::Shape> geomShape = ParseGeomShape(geom, meshCache, true);
+        if (geomShape) {
+            subShapes.push_back({geomShape, geomPos, geomRot});
+        }
+    }
+    
+    // Determine final mass: body mass > geom masses > default
+    float finalMass = (bodyMass >= 0.0f) ? bodyMass : (hasGeomMass ? totalGeomMass : 1.0f);
+    
+    JPH::Ref<JPH::Shape> shape;
+    if (subShapes.empty()) {
+        // default tiny sphere
+        JPH::SphereShapeSettings s(0.1f);
+        auto res = s.Create();
+        shape = res.HasError() ? nullptr : res.Get();
+    } else if (subShapes.size() == 1) {
+        // single geom: always create RotatedTranslatedShape (handles zero offset)
+        const SubShape& sub = subShapes.front();
+        JPH::RotatedTranslatedShapeSettings rtSettings(sub.pos, sub.rot, sub.shape);
+        auto rtRes = rtSettings.Create();
+        shape = rtRes.HasError() ? nullptr : rtRes.Get();
+    } else {
+        // multiple geoms: create StaticCompoundShape
+        JPH::StaticCompoundShapeSettings comp;
+        for (const auto& sub : subShapes) {
+            comp.AddShape(sub.pos, sub.rot, sub.shape);
+        }
+        auto compRes = comp.Create();
+        shape = compRes.HasError() ? nullptr : compRes.Get();
     }
 
     // Freejoint or no joints => root is dynamic unless mass==0
-    const bool hasFreeJoint = bodyElem->FirstChildElement("freejoint") != nullptr;
+    (void)bodyElem->FirstChildElement("freejoint"); // unused
     if (!shape) {
         // default tiny sphere to keep hierarchy valid
         JPH::SphereShapeSettings s(0.1f);
@@ -219,136 +474,138 @@ void BuildMJCFRecursive(const tinyxml2::XMLElement* bodyElem,
         JPH::BodyCreationSettings settings(shape,
                                            worldPos,
                                            worldRot,
-                                           mass > 0.0f ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
-                                           mass > 0.0f ? dynamicLayer : Layers::STATIC);
-        if (mass > 0.0f) {
+                                           finalMass > 0.0f ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
+                                           finalMass > 0.0f ? dynamicLayer : Layers::STATIC);
+        if (finalMass > 0.0f) {
             settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-            settings.mMassPropertiesOverride.mMass = mass;
+            settings.mMassPropertiesOverride.mMass = finalMass;
+            
+            // Disable collision between bodies of the same robot to prevent self-collision explosions
+            // All satellite bodies of the same robot should not collide with each other
+            settings.mCollisionGroup.SetGroupID(1);  // Robot body group
+            settings.mCollisionGroup.SetSubGroupID(0);  // Same sub-group = no self-collision
         }
         JPH::Body* body = bodyInterface.CreateBody(settings);
         if (body) {
-            bodyInterface.AddBody(body->GetID(), mass > 0.0f ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+            bodyInterface.AddBody(body->GetID(), finalMass > 0.0f ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
             if (!name.empty()) bodyMap[name] = body->GetID();
             outData.bodies.push_back(body->GetID());
+            std::cout << "RobotLoader: Created body '" << name << "' at (" << worldPos.GetX() << ", " << worldPos.GetY() << ", " << worldPos.GetZ() << ")" << std::endl;
         }
     }
 
     // Constraints for joints declared in children referencing this as parent
     const tinyxml2::XMLElement* child = bodyElem->FirstChildElement("body");
     for (; child; child = child->NextSiblingElement("body")) {
-        // Pre-compute child's world transform for joint anchors/axes
-        JPH::Vec3 childLocalPos = ParseVec3(child->Attribute("pos"));
-        JPH::Quat childLocalRot = ParseEuler(child->Attribute("euler"));
-        JPH::RVec3 childWorldPos = worldPos + worldRot * JPH::RVec3(childLocalPos);
-        JPH::Quat childWorldRot = worldRot * childLocalRot;
+        BuildMJCFRecursive(child, worldPos, worldRot, bodyInterface, physicsSystem, dynamicLayer, meshCache, defaults, bodyMap, outData);
 
-        BuildMJCFRecursive(child, worldPos, worldRot, bodyInterface, physicsSystem, dynamicLayer, meshCache, bodyMap, outData);
-
-        // Find joint inside child (hinge/slide)
-        const tinyxml2::XMLElement* joint = child->FirstChildElement("joint");
-        if (joint) {
+        // Find joints inside child (hinge/slide)
+        const char* childName = child->Attribute("name");
+        std::string childNameStr = childName ? childName : "";
+        auto childIt = bodyMap.find(childNameStr);
+        if (childIt == bodyMap.end()) continue;
+        
+        // Get the actual world position and rotation of the child body after it's been created
+        JPH::RVec3 childWorldPos = bodyInterface.GetPosition(childIt->second);
+        JPH::Quat childWorldRot = bodyInterface.GetRotation(childIt->second);
+        
+        // Get the parent body's world position and rotation
+        auto parentIt = bodyMap.find(name);
+        JPH::RVec3 parentWorldPos = parentIt != bodyMap.end() ? bodyInterface.GetPosition(parentIt->second) : worldPos;
+        JPH::Quat parentWorldRot = parentIt != bodyMap.end() ? bodyInterface.GetRotation(parentIt->second) : worldRot;
+        
+        for (const tinyxml2::XMLElement* joint = child->FirstChildElement("joint"); joint; joint = joint->NextSiblingElement("joint")) {
+            // Apply defaults to joint
+            std::map<std::string, std::string> jointAttrs;
+            defaults.ApplyJointDefaults(joint, jointAttrs);
+            
             const char* jtype = joint->Attribute("type");
             std::string jt = jtype ? jtype : "hinge";
+            
+            // Get joint position (default to child body position if not specified)
+            JPH::Vec3 jointPos = ParseVec3(joint->Attribute("pos"));
+            JPH::RVec3 anchor = childWorldPos + childWorldRot * JPH::RVec3(jointPos);
+            
             JPH::Vec3 axis = ParseVec3(joint->Attribute("axis"), JPH::Vec3(0, 0, 1));
             if (axis.IsNearZero()) axis = JPH::Vec3::sAxisZ();
             axis = (childWorldRot * axis).Normalized();
 
-            JPH::RVec3 anchor = childWorldPos; // joint at child origin in world
-            auto parentIt = bodyMap.find(name);
-            auto childIt = bodyMap.find(child->Attribute("name") ? child->Attribute("name") : "");
-            if (parentIt != bodyMap.end() && childIt != bodyMap.end()) {
-                if (jt == "hinge") {
-                    JPH::HingeConstraintSettings settings;
-                    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
-                    settings.mPoint1 = anchor;
-                    settings.mPoint2 = anchor;
-                    settings.mHingeAxis1 = axis;
-                    settings.mHingeAxis2 = axis;
-                    settings.mNormalAxis1 = axis.GetNormalizedPerpendicular();
-                    settings.mNormalAxis2 = settings.mNormalAxis1;
-                    if (joint->Attribute("range")) {
-                        float lo=0, hi=0; std::stringstream ss(joint->Attribute("range")); ss >> lo >> hi;
-                        if (!ss.fail()) { settings.mLimitsMin = JPH::DegreesToRadians(lo); settings.mLimitsMax = JPH::DegreesToRadians(hi); }
+            if (parentIt == bodyMap.end()) {
+                std::cout << "RobotLoader: Could not find parent body '" << name << "' for joint in child '" << childNameStr << "'" << std::endl;
+                continue;
+            }
+            
+            std::cout << "RobotLoader: Creating " << jt << " joint between parent '" << name << "' and child '" << childNameStr 
+                      << "' at anchor (" << anchor.GetX() << ", " << anchor.GetY() << ", " << anchor.GetZ() << ")" << std::endl;
+            
+            if (jt == "hinge") {
+                JPH::HingeConstraintSettings settings;
+                settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+                settings.mPoint1 = anchor;
+                settings.mPoint2 = anchor;
+                settings.mHingeAxis1 = axis;
+                settings.mHingeAxis2 = axis;
+                settings.mNormalAxis1 = axis.GetNormalizedPerpendicular();
+                settings.mNormalAxis2 = settings.mNormalAxis1;
+                
+                // Check for range in either original joint or defaults
+                const char* rangeAttr = joint->Attribute("range");
+                auto rangeIt = jointAttrs.find("range");
+                std::string rangeStr = rangeAttr ? rangeAttr : (rangeIt != jointAttrs.end() ? rangeIt->second : "");
+                
+                if (!rangeStr.empty()) {
+                    float lo=0, hi=0; 
+                    std::stringstream ss(rangeStr); 
+                    ss >> lo >> hi;
+                    if (!ss.fail()) { 
+                        settings.mLimitsMin = JPH::DegreesToRadians(lo); 
+                        settings.mLimitsMax = JPH::DegreesToRadians(hi); 
                     }
-                    JPH::TwoBodyConstraint* c = bodyInterface.CreateConstraint(&settings, parentIt->second, childIt->second);
-                    if (c) { physicsSystem.AddConstraint(c); outData.constraints.push_back(c); }
-                } else if (jt == "slide") {
-                    JPH::SliderConstraintSettings settings;
-                    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
-                    settings.mPoint1 = anchor;
-                    settings.mPoint2 = anchor;
-                    settings.mSliderAxis1 = axis;
-                    settings.mSliderAxis2 = axis;
-                    if (joint->Attribute("range")) {
-                        float lo=0, hi=0; std::stringstream ss(joint->Attribute("range")); ss >> lo >> hi;
-                        if (!ss.fail()) { settings.mLimitsMin = lo; settings.mLimitsMax = hi; }
+                }
+                
+                JPH::TwoBodyConstraint* c = bodyInterface.CreateConstraint(&settings, parentIt->second, childIt->second);
+                if (c) { 
+                    physicsSystem.AddConstraint(c); 
+                    outData.constraints.push_back(c); 
+                    std::cout << "RobotLoader: Successfully created hinge constraint" << std::endl;
+                } else {
+                    std::cout << "RobotLoader: Failed to create hinge constraint" << std::endl;
+                }
+            } else if (jt == "slide") {
+                JPH::SliderConstraintSettings settings;
+                settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+                settings.mPoint1 = anchor;
+                settings.mPoint2 = anchor;
+                settings.mSliderAxis1 = axis;
+                settings.mSliderAxis2 = axis;
+                
+                // Check for range in either original joint or defaults
+                const char* rangeAttr = joint->Attribute("range");
+                auto rangeIt = jointAttrs.find("range");
+                std::string rangeStr = rangeAttr ? rangeAttr : (rangeIt != jointAttrs.end() ? rangeIt->second : "");
+                
+                if (!rangeStr.empty()) {
+                    float lo=0, hi=0; 
+                    std::stringstream ss(rangeStr); 
+                    ss >> lo >> hi;
+                    if (!ss.fail()) { 
+                        settings.mLimitsMin = lo; 
+                        settings.mLimitsMax = hi; 
                     }
-                    JPH::TwoBodyConstraint* c = bodyInterface.CreateConstraint(&settings, parentIt->second, childIt->second);
-                    if (c) { physicsSystem.AddConstraint(c); outData.constraints.push_back(c); }
+                }
+                
+                JPH::TwoBodyConstraint* c = bodyInterface.CreateConstraint(&settings, parentIt->second, childIt->second);
+                if (c) { 
+                    physicsSystem.AddConstraint(c); 
+                    outData.constraints.push_back(c); 
+                    std::cout << "RobotLoader: Successfully created slide constraint" << std::endl;
+                } else {
+                    std::cout << "RobotLoader: Failed to create slide constraint" << std::endl;
                 }
             }
         }
-    }
 }
-
-// Lightweight default resolver for geom/joint attributes (single inheritance)
-struct MJCFDefaults
-{
-    // class name -> map of attr key->value (string raw)
-    std::unordered_map<std::string, std::map<std::string, std::string>> geomDefaults;
-    std::unordered_map<std::string, std::map<std::string, std::string>> jointDefaults;
-
-    void Ingest(const tinyxml2::XMLElement* defaults)
-    {
-        for (const tinyxml2::XMLElement* d = defaults; d; d = d->NextSiblingElement("default")) {
-            const char* cls = d->Attribute("class");
-            std::string name = cls ? cls : "";
-            // geom child
-            if (const tinyxml2::XMLElement* g = d->FirstChildElement("geom")) {
-                auto& bucket = geomDefaults[name];
-                for (const tinyxml2::XMLAttribute* a = g->FirstAttribute(); a; a = a->Next()) {
-                    bucket[a->Name()] = a->Value();
-                }
-            }
-            // joint child
-            if (const tinyxml2::XMLElement* j = d->FirstChildElement("joint")) {
-                auto& bucket = jointDefaults[name];
-                for (const tinyxml2::XMLAttribute* a = j->FirstAttribute(); a; a = a->Next()) {
-                    bucket[a->Name()] = a->Value();
-                }
-            }
-        }
-    }
-
-    // Merge class defaults onto element attributes; element wins
-    void ApplyGeomDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
-    {
-        const char* cls = elem->Attribute("class");
-        if (cls) {
-            auto it = geomDefaults.find(cls);
-            if (it != geomDefaults.end()) {
-                out.insert(it->second.begin(), it->second.end());
-            }
-        }
-        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
-            out[a->Name()] = a->Value();
-        }
-    }
-
-    void ApplyJointDefaults(const tinyxml2::XMLElement* elem, std::map<std::string, std::string>& out) const
-    {
-        const char* cls = elem->Attribute("class");
-        if (cls) {
-            auto it = jointDefaults.find(cls);
-            if (it != jointDefaults.end()) {
-                out.insert(it->second.begin(), it->second.end());
-            }
-        }
-        for (const tinyxml2::XMLAttribute* a = elem->FirstAttribute(); a; a = a->Next()) {
-            out[a->Name()] = a->Value();
-        }
-    }
-};
+}
 
 struct MJCFContext
 {
@@ -379,7 +636,7 @@ static void ProcessWorlds(const tinyxml2::XMLElement* mj,
 {
     auto process_world = [&](const tinyxml2::XMLElement* wb) {
         for (const tinyxml2::XMLElement* body = wb->FirstChildElement("body"); body; body = body->NextSiblingElement("body")) {
-            BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, physics, dynamicLayer, meshCache, body_map, robot_data);
+            BuildMJCFRecursive(body, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), body_interface, physics, dynamicLayer, meshCache, ctx.defaults, body_map, robot_data);
         }
     };
 
@@ -425,7 +682,7 @@ RobotData RobotLoader::LoadRobot(const std::string& filepath, JPH::PhysicsSystem
         std::filesystem::path xml_path = std::filesystem::absolute(filepath);
         tinyxml2::XMLDocument doc;
         if (doc.LoadFile(xml_path.string().c_str()) != tinyxml2::XML_SUCCESS) {
-            std::cerr << "RobotLoader: Failed to load MJCF " << filepath << std::endl;
+            std::cerr << "RobotLoader: Failed to load MJCF " << filepath << " error: " << doc.ErrorStr() << std::endl;
             return robot_data;
         }
         const tinyxml2::XMLElement* mj = doc.FirstChildElement("mujoco");

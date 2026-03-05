@@ -281,3 +281,28 @@ cc_binary(
     srcs = ["micro_board_simple.cpp"],
     copts = ["-std=c++17", "-O3"],
 )
+
+cc_binary(
+    name = "mjcf_viewer",
+    srcs = ["//src:mjcf_viewer.cpp"],
+    data = ["//robots:combat_bot.json"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native"
+    ],
+)
