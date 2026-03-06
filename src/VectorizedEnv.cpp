@@ -104,7 +104,7 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
-        
+
         int obsOffset = i * mObservationDim * 2;
         float* obs1 = mAllObservations.data() + obsOffset;
         float* obs2 = mAllObservations.data() + obsOffset + mObservationDim;
@@ -115,7 +115,7 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
         mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
         mAllDones[i] = done;
     }
-    
+
     for (int i = 0; i < mNumEnvs; ++i) {
         if (mAllDones[i]) continue;
         mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
@@ -155,14 +155,49 @@ VectorizedEnv::~VectorizedEnv()
 
 void VectorizedEnv::Shutdown()
 {
-    if (gCombatContactListener)
-    {
-        mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
-        gCombatContactListener = nullptr;
-    }
+    // Clear contact listener reference first
+    mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
+    
+    // Shutdown physics core
     mPhysicsCore.Shutdown();
+    
+    // Clear all data
     mEnvs.clear();
     mAllObservations.clear();
     mAllRewards.clear();
     mAllDones.clear();
+    mAllVectorRewards.clear();
+}
+
+bool VectorizedEnv::GetRenderState(float* redPos, float* bluePos, float* redSatPos, float* blueSatPos, float* redHealth, float* blueHealth)
+{
+    if (mEnvs.empty()) return false;
+    
+    const auto& robot1 = mEnvs[0].GetRobot1();
+    const auto& robot2 = mEnvs[0].GetRobot2();
+    
+    JPH::BodyInterface& bodyInterface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
+    
+    if (robot1.mainBodyId.IsInvalid() || robot2.mainBodyId.IsInvalid()) return false;
+    
+    JPH::RVec3 p1 = bodyInterface.GetPosition(robot1.mainBodyId);
+    JPH::RVec3 p2 = bodyInterface.GetPosition(robot2.mainBodyId);
+    
+    redPos[0] = p1.GetX(); redPos[1] = p1.GetY(); redPos[2] = p1.GetZ();
+    bluePos[0] = p2.GetX(); bluePos[1] = p2.GetY(); bluePos[2] = p2.GetZ();
+    
+    if (!robot1.satellites.empty() && !robot1.satellites[0].coreBodyId.IsInvalid()) {
+        JPH::RVec3 sp1 = bodyInterface.GetPosition(robot1.satellites[0].coreBodyId);
+        redSatPos[0] = sp1.GetX(); redSatPos[1] = sp1.GetY(); redSatPos[2] = sp1.GetZ();
+    }
+    
+    if (!robot2.satellites.empty() && !robot2.satellites[0].coreBodyId.IsInvalid()) {
+        JPH::RVec3 sp2 = bodyInterface.GetPosition(robot2.satellites[0].coreBodyId);
+        blueSatPos[0] = sp2.GetX(); blueSatPos[1] = sp2.GetY(); blueSatPos[2] = sp2.GetZ();
+    }
+    
+    *redHealth = robot1.hp;
+    *blueHealth = robot2.hp;
+    
+    return true;
 }

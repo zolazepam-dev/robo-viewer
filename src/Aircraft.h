@@ -47,7 +47,7 @@ public:
 private:
     JPH::BodyID mMainBodyId;
     std::vector<Airfoil> mAirfoils;
-    float mThrustMax = 300000.0f;
+    float mThrustMax = 150000.0f;
     float mHp = 100.0f;
     
     // Constant for air density at sea level

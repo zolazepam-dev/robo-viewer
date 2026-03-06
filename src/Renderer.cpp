@@ -289,7 +289,7 @@ Renderer::Renderer(int width, int height)
     glBindVertexArray(0);
 
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 500.0f);
+    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10000.0f);
 
     mLights[0] = {glm::vec3(15.0f, 30.0f, 15.0f), glm::vec3(1.0f, 0.95f, 0.9f), 80.0f};
     mLights[1] = {glm::vec3(-15.0f, 25.0f, -10.0f), glm::vec3(0.6f, 0.7f, 1.0f), 50.0f};
@@ -319,7 +319,7 @@ Renderer::Renderer(int width, int height)
 
 void Renderer::Resize(int width, int height) {
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 500.0f);
+    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10000.0f);
 }
 
 Renderer::~Renderer()
@@ -339,7 +339,12 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
     showCollisionShapes = false;
     showAABBs = false;
     
-    glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f); // Slightly lighter background
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (physicsCore == nullptr || mProgram == 0) return;
@@ -357,15 +362,17 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
     glUniform1i(mNumLightsLoc, 4);
     
     for (int i = 0; i < 4; ++i) {
-        glUniform3fv(mLightPosLoc[i], 1, glm::value_ptr(mLights[i].position));
+        glm::vec3 lightPos = cameraPos + mLights[i].position; // Relative to camera
+        glUniform3fv(mLightPosLoc[i], 1, glm::value_ptr(lightPos));
         glUniform3fv(mLightColorLoc[i], 1, glm::value_ptr(mLights[i].color));
-        glUniform1f(mLightIntensityLoc[i], mLights[i].intensity);
+        glUniform1f(mLightIntensityLoc[i], mLights[i].intensity * 100.0f); // Increase intensity for large scale
     }
 
     const JPH::ObjectLayer staticLayer = Layers::STATIC;
     const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
+    const JPH::ObjectLayer movingBaseLayer = Layers::MOVING_BASE;
     const JPH::ObjectLayer ghostLayer = Layers::GHOST_BASE + envIndex;
-    const std::vector<JPH::ObjectLayer> relevantLayers = { staticLayer, envBaseLayer, ghostLayer };
+    const std::vector<JPH::ObjectLayer> relevantLayers = { staticLayer, envBaseLayer, movingBaseLayer, ghostLayer };
 
     JPH::BodyIDVector bodies;
     physicsCore->GetBodiesByLayers(bodies, relevantLayers);
@@ -639,6 +646,14 @@ GLuint Renderer::CompileShader(GLenum type, const char* source)
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
+
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        std::cerr << "Shader Compilation Error (" << (type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") << "):\n" << infoLog << std::endl;
+    }
     return shader;
 }
 
@@ -648,6 +663,14 @@ GLuint Renderer::LinkProgram(GLuint vertexShader, GLuint fragmentShader)
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
     glLinkProgram(program);
+
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, nullptr, infoLog);
+        std::cerr << "Shader Linking Error:\n" << infoLog << std::endl;
+    }
     return program;
 }
 
