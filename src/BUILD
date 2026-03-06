@@ -49,6 +49,8 @@ cc_library(
         "LatentMemory.cpp",
         "OpponentPool.cpp",
         "InternalRobot.cpp",
+        "Aircraft.cpp",
+        "AircraftEnv.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -69,6 +71,8 @@ cc_library(
         "LockFreeQueue.h",
         "InternalRobot.h",
         "ArmaEigenUtils.h",
+        "Aircraft.h",
+        "AircraftEnv.h",
     ],
     deps = [
         "@glfw",

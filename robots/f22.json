@@ -1,0 +1,110 @@
+{
+  "type": "aircraft",
+  "core": {
+    "shape_type": "box",
+    "half_extents": [1.0, 1.0, 8.0],
+    "mass": 10000.0,
+    "friction": 0.1,
+    "restitution": 0.1,
+    "linear_damping": 0.01,
+    "angular_damping": 0.05
+  },
+  "satellites": [
+    {
+      "id": 0,
+      "shape_type": "box",
+      "half_extents": [3.5, 0.1, 4.0],
+      "relative_position": [-4.5, 0.0, 0.0],
+      "mass": 2000.0,
+      "lift_coefficient": 4.0,
+      "drag_coefficient": 0.05,
+      "area": 28.0,
+      "control_type": 2
+    },
+    {
+      "id": 1,
+      "shape_type": "box",
+      "half_extents": [3.5, 0.1, 4.0],
+      "relative_position": [4.5, 0.0, 0.0],
+      "mass": 2000.0,
+      "lift_coefficient": 4.0,
+      "drag_coefficient": 0.05,
+      "area": 28.0,
+      "control_type": 2
+    },
+    {
+      "id": 2,
+      "shape_type": "box",
+      "half_extents": [2.0, 0.1, 2.0],
+      "relative_position": [-2.5, 0.0, -7.0],
+      "mass": 1000.0,
+      "lift_coefficient": 3.0,
+      "drag_coefficient": 0.05,
+      "area": 8.0,
+      "control_type": 1
+    },
+    {
+      "id": 3,
+      "shape_type": "box",
+      "half_extents": [2.0, 0.1, 2.0],
+      "relative_position": [2.5, 0.0, -7.0],
+      "mass": 1000.0,
+      "lift_coefficient": 3.0,
+      "drag_coefficient": 0.05,
+      "area": 8.0,
+      "control_type": 1
+    },
+    {
+      "id": 4,
+      "shape_type": "box",
+      "half_extents": [0.1, 2.0, 2.0],
+      "relative_position": [-1.5, 2.0, -7.0],
+      "mass": 500.0,
+      "lift_coefficient": 2.0,
+      "drag_coefficient": 0.05,
+      "area": 8.0,
+      "control_type": 3
+    },
+    {
+      "id": 5,
+      "shape_type": "box",
+      "half_extents": [0.1, 2.0, 2.0],
+      "relative_position": [1.5, 2.0, -7.0],
+      "mass": 500.0,
+      "lift_coefficient": 2.0,
+      "drag_coefficient": 0.05,
+      "area": 8.0,
+      "control_type": 3
+    }
+  ],
+  "aircraft": {
+    "thrust_max": 300000.0
+  },
+  "spike": {
+    "half_height": 0.1,
+    "radius": 0.01,
+    "mass": 0.1,
+    "friction": 0.0,
+    "restitution": 0.0,
+    "convex_radius": 0.005
+  },
+  "joints": {
+    "hinge_damping": 0.99,
+    "hinge_armature": 10.0,
+    "motor_torque": 10000.0,
+    "motor_min_torque": -10000.0,
+    "motor_max_torque": 10000.0,
+    "slide_range": [0.0, 0.1]
+  },
+  "sensors": {
+    "lidar_rays": 10,
+    "lidar_max_distance": 50.0
+  },
+  "actions": {
+    "per_satellite": 4,
+    "reaction_wheel_dim": 4,
+    "rotation_scale": 1.0,
+    "slide_scale": 1.0,
+    "reaction_torque_scale": 10000.0
+  }
+}

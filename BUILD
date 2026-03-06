@@ -1,8 +1,71 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
 cc_binary(
+    name = "glfw_test",
+    srcs = ["//src:glfw_test.cpp"],
+    deps = [
+        "@glfw",
+    ],
+    linkopts = ["-lGL"],
+    copts = ["-std=c++17"],
+)
+
+cc_binary(
+    name = "integration_test",
+    srcs = ["//src:integration_test.cpp"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17"],
+)
+
+cc_binary(
+    name = "vecenv_test",
+    srcs = ["//src:vecenv_test.cpp"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17"],
+)
+
+cc_binary(
     name = "viewer",
     srcs = ["//src:main_train.cpp"],
+    data = ["//robots:combat_bot.json"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
+)
+
+cc_binary(
+    name = "hybrid_viewer",
+    srcs = ["//src:hybrid_viewer.cpp"],
     data = ["//robots:combat_bot.json"],
     deps = [
         "//src:core",
@@ -280,6 +343,23 @@ cc_binary(
     name = "micro_board_simple",
     srcs = ["micro_board_simple.cpp"],
     copts = ["-std=c++17", "-O3"],
+)
+
+cc_binary(
+    name = "aircraft_viewer",
+    srcs = ["//src:aircraft_viewer.cpp"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
 )
 
 cc_binary(
