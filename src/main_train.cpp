@@ -307,10 +307,20 @@ int main(int argc, char* argv[]) {
     OverlayUIRefactored ui;
     std::cerr << "[main] UI Init start..." << std::endl;
     ui.Init(window);
+    ui.LoadSettings(); // Force load from disk now
+
+    // Command line overrides config, otherwise use config value
+    int targetNumEnvs = ui.GetConfig().numEnvs;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--envs" && i + 1 < argc) {
+            targetNumEnvs = std::stoi(argv[++i]);
+        }
+    }
 
     // Initializing vectorized environments
-    std::cerr << "[main] Creating VectorizedEnv..." << std::endl;
-    VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs, ui.GetStepsPerEpisode());
+    std::cerr << "[main] Creating VectorizedEnv with " << targetNumEnvs << " envs..." << std::endl;
+    VectorizedEnv* vecEnv = new VectorizedEnv(targetNumEnvs, ui.GetStepsPerEpisode());
     std::string robotConfigPath = ui.GetConfig().robotConfigPath;
     std::cerr << "[main] vecEnv->Init start with " << robotConfigPath << "..." << std::endl;
     if (vecEnv) vecEnv->Init(robotConfigPath);
