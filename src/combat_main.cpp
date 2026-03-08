@@ -1,3 +1,12 @@
+// Window resize callback function
+void window_resize_callback(GLFWwindow* window, int width, int height) {
+    // Update framebuffer size
+    glViewport(0, 0, width, height);
+    // Update renderer with new dimensions
+    // Note: We need to make sure renderer is accessible here
+    // Since we don't have direct access to renderer in this scope
+    // We'll need to handle this differently
+}
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -36,6 +45,11 @@ int main() {
     
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Self-Play Training", nullptr, nullptr);
     if (!window) { glfwTerminate(); return 1; }
+    // Setup window resize callback to prevent crashes when minimizing
+    glfwSetWindowSizeCallback(window, [](GLFWwindow* win, int width, int height) {
+        glViewport(0, 0, width, height);
+    });
+
     
     glfwMakeContextCurrent(window);
     glewExperimental = GL_TRUE;

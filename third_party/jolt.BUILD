@@ -30,6 +30,8 @@ cc_library(
     includes = ["."],
     copts = [
         "-std=c++17",
+        "-DJPH_DEBUG_RENDERER",
+        "-Wno-suggest-override",
     ],
     visibility = ["//visibility:public"],
 )

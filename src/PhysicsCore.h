@@ -16,6 +16,7 @@
 // STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Collision/GroupFilterTable.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
@@ -202,6 +203,9 @@ public:
     JPH::PhysicsSystem& GetPhysicsSystem() { return *mPhysicsSystem; }
     const JPH::PhysicsSystem& GetPhysicsSystem() const { return *mPhysicsSystem; }
     
+    /** @brief Get group filter for collision groups */
+    JPH::GroupFilterTable* GetGroupFilter() const { return mGroupFilter.GetPtr(); }
+    
     /** @brief Get pointer to temp allocator */
     JPH::TempAllocator* GetTempAllocator() { return mTempAllocator; }
     
@@ -241,8 +245,12 @@ private:
     BPLayerInterfaceImpl* mBroadPhaseLayerInterface = nullptr;       ///< Broad-phase layer interface
     ObjectVsBroadPhaseLayerFilterImpl* mObjectVsBroadPhaseLayerFilter = nullptr; ///< Object vs broad-phase filter
     ObjectLayerPairFilterImpl* mObjectLayerPairFilter = nullptr;     ///< Object vs object filter
+    JPH::Ref<JPH::GroupFilterTable> mGroupFilter;                    ///< Group filter for self-collision
     JPH::PhysicsSystem* mPhysicsSystem = nullptr;                    ///< Main physics system
 
     bool mInitialized = false;  ///< Initialization state
     uint32_t mNumEnvs = 1;      ///< Number of parallel environments
+
+public:
+    bool IsInitialized() const { return mInitialized; }
 };

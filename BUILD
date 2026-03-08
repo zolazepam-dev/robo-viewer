@@ -115,6 +115,7 @@ cc_binary(
         "//robots:test_bot.json",
         "//robots:f22.json",
         "//robots:orbital_shard.json",
+        "//robots:bouncy_orbiter.json",
     ],
     deps = [
         "//src:core",
@@ -127,7 +128,7 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
     ],
-    linkopts = ["-lGL", "-lpthread", "-flto"],
+    linkopts = ["-lGL", "-lpthread", "-flto", "-lgomp"],
     copts = [
         "-std=c++17",
         "-O3",
@@ -137,7 +138,9 @@ cc_binary(
         "-march=native",
         "-ffast-math",
         "-flto",
-        "-fno-strict-aliasing"
+        "-fno-strict-aliasing",
+        "-I/usr/include/eigen3",
+        "-fopenmp"
     ],
 )
 

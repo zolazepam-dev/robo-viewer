@@ -15,9 +15,9 @@ void AircraftEnv::Reset() {
     mStepCount = 0;
 }
 
-void AircraftEnv::QueueActions(const float* actions1, const float* actions2) {
-    mAircraft1.ApplyAerodynamics(mPhysicsSystem, actions1);
-    mAircraft2.ApplyAerodynamics(mPhysicsSystem, actions2);
+void AircraftEnv::QueueActions(const float* actions1, const float* actions2, float deltaTime) {
+    mAircraft1.ApplyAerodynamics(mPhysicsSystem, actions1, deltaTime);
+    mAircraft2.ApplyAerodynamics(mPhysicsSystem, actions2, deltaTime);
 }
 
 void AircraftEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done) {

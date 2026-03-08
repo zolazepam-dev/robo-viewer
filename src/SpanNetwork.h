@@ -35,6 +35,9 @@ public:
     AlignedVector32<float>& GetControlPoints() { return mControlPoints; }
     const AlignedVector32<float>& GetControlPoints() const { return mControlPoints; }
     
+    AlignedVector32<float>& GetControlPointGradients() { return mControlPointGradients; }
+    const AlignedVector32<float>& GetControlPointGradients() const { return mControlPointGradients; }
+    
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
     int GetNumKnots() const { return mNumKnots; }
@@ -49,8 +52,14 @@ private:
     int mNumKnots = 8;
     int mSplineDegree = 3;
     
+    // Basis function lookup table for optimization
+    static constexpr int BASIS_LOOKUP_SIZE = 1024;
+    AlignedVector32<float> mBasisLookupTable;  // [BASIS_LOOKUP_SIZE][degree+1]
+    bool mUseLookupTable = false;
+    
     AlignedVector32<float> mKnots;
     AlignedVector32<float> mControlPoints;
+    AlignedVector32<float> mControlPointGradients;  // For backpropagation
     
     AlignedVector32<float> mBasisFunctionsBuffer;
     std::vector<int> mSpanIndicesBuffer;
@@ -74,6 +83,12 @@ public:
     std::vector<float> GetAllWeights() const;
     void SetAllWeights(const std::vector<float>& weights);
     size_t GetNumWeights() const;
+    
+    // Gradient computation for Muon optimizer
+    std::vector<float> GetAllGradients() const;
+    void SetAllGradients(const std::vector<float>& grads);
+    void ZeroGradients();
+    void ComputeGradients(const float* input, const float* output, const float* target, int batchSize);
     
     TensorProductBSpline& GetLayer(size_t idx) { return mLayers[idx]; }
     const TensorProductBSpline& GetLayer(size_t idx) const { return mLayers[idx]; }

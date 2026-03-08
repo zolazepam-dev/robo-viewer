@@ -11,19 +11,26 @@ class VectorizedEnv
 public:
     VectorizedEnv(int numEnvs, int stepsPerEpisode = 7200);
     ~VectorizedEnv();
-    VectorizedEnv(const VectorizedEnv& other) = default;
-    VectorizedEnv& operator=(const VectorizedEnv& other) = default;
+    VectorizedEnv(const VectorizedEnv& other) = delete;
+    VectorizedEnv& operator=(const VectorizedEnv& other) = delete;
 
-    void Init(bool initRobots = true);
+    void Init(const std::string& robotConfigPath, bool initRobots = true);
     void Shutdown();
     void Step(const AlignedVector32<float>& actions);
+    void HarvestStates();
+    void HarvestStatesZeroCopy();  // Zero-copy version - returns pointers
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();
+    void QueueActionsParallel(const float* robot1Actions, const float* robot2Actions, int numEnvs);  // Lock-free parallel queuing
 
     const AlignedVector32<float>& GetObservations() const { return mAllObservations; }
     const AlignedVector32<float>& GetRewards() const { return mAllRewards; }
     const std::vector<VectorReward>& GetVectorRewards() const { return mAllVectorRewards; }
     const std::vector<bool>& GetDones() const { return mAllDones; }
+    
+    // Zero-copy access - direct pointers to env memory
+    const float* GetObservationPtr(int envIdx, int robotIdx) const;
+    float* GetRewardPtr(int envIdx, int robotIdx);
 
     CombatEnv& GetEnv(int index) { return mEnvs[index]; }
     int GetNumEnvs() const { return mNumEnvs; }
@@ -32,6 +39,8 @@ public:
 
     JPH::PhysicsSystem* GetGlobalPhysics() { return &mPhysicsCore.GetPhysicsSystem(); }
     PhysicsCore* GetPhysicsCore() { return &mPhysicsCore; }
+    
+    bool GetRenderState(float* redPos, float* bluePos, float* redSatPos, float* blueSatPos, float* redHealth, float* blueHealth);
 
 private:
     PhysicsCore mPhysicsCore;

@@ -18,10 +18,16 @@ bazel_dep(name = "tinyxml2", version = "10.0.0")
 # --- External Physics Engine (Jolt) ---
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+# --- LSP Integration (compile_commands.json generator) ---
+http_archive(
+    name = "hedron_compile_commands",
+    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/0e990032f3c5a866e72615cf67e5ce22186dcb97.tar.gz",
+    strip_prefix = "bazel-compile-commands-extractor-0e990032f3c5a866e72615cf67e5ce22186dcb97",
+)
+
 http_archive(
     name = "jolt",
     build_file = "@//third_party:jolt.BUILD",
-    sha256 = "5231953d1b1d5b9cb617facf86341a11337e1cd04456949af6911b917a1646cb",
     strip_prefix = "JoltPhysics-5.0.0",
     url = "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.0.0.tar.gz",
     patches = ["@//patches:jolt_job_system_threads.patch"],
@@ -32,7 +38,6 @@ http_archive(
 http_archive(
     name = "morphologica",
     build_file = "@//third_party:morphologica.BUILD",
-    sha256 = "8dbd93433cca4355e4eb75f99778d0806de3d2693217ed811a7a516b23e3510d",
     strip_prefix = "morphologica-4.1",
     url = "https://github.com/ABRG-Models/morphologica/archive/refs/tags/v4.1.tar.gz",
 )
@@ -45,10 +50,9 @@ http_archive(
     build_file = "@//third_party:assimp.BUILD",
 )
 
-# VHACD for convex decomposition of dynamic meshes
-http_archive(
-    name = "vhacd",
-    url = "https://github.com/kmammou/v-hacd/archive/refs/heads/master.zip",
-    strip_prefix = "v-hacd-master",
-    build_file = "@//third_party:vhacd.BUILD",
-)
+# --- Sokol - Single-header graphics (headers downloaded) ---
+# Headers in third_party/sokol/ - needs upstream fix for compilation
+
+# --- bgfx - Cross-platform rendering (NOT ENABLED) ---
+# bgfx requires additional dependencies (bx, bimg) and ~50MB of source
+# To enable: download bgfx to third_party/bgfx/ and update bgfx.BUILD

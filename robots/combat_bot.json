@@ -31,8 +31,8 @@
     "convex_radius": 0.01
   },
   "joints": {
-    "hinge_damping": 0.95,
-    "hinge_armature": 1.0,
+    "hinge_damping": 0.99,
+    "hinge_armature": 5.0,
     "motor_torque": 1500.0,
     "motor_min_torque": -500.0,
     "motor_max_torque": 500.0,

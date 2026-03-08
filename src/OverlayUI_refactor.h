@@ -42,6 +42,7 @@ struct TrainingConfigUI {
     int numEnvs = 64;
     int checkpointInterval = 50000;
     std::string checkpointDir = "checkpoints";
+    std::string robotConfigPath = "robots/bouncy_orbiter.json";
     std::string checkpointLoadName = "";
     std::string policySaveName = "";
     bool saveRequested = false;
@@ -121,6 +122,8 @@ public:
     bool ShouldReset() const { return mResetRequested; }
     bool ShouldRestartSim() const { return mRestartRequested; }
     void ClearRestartRequest() { mRestartRequested = false; }
+    void ClearResetRequest() { mResetRequested = false; }
+    void ClearStepOne() { mStepOne = false; }
     float GetTimeScale() const { return mTimeScale; }
     int GetRenderEnvIdx() const { return mRenderEnvIdx; }
     int GetStepsPerEpisode() const { return mStepsPerEpisode; }
@@ -141,7 +144,11 @@ public:
     bool GetAndClearLoadConfigRequest();
     bool GetAndClearCreateCheckpointFolderRequest(std::string& outFolderName);
     const std::string& GetSelectedRobotType() const;
-    
+
+    // Settings save/load
+    void SaveSettings(const std::string& path = "viewer_config.json");
+    void LoadSettings(const std::string& path = "viewer_config.json");
+
     void DrawAllTabs();
     
     // Spawn system

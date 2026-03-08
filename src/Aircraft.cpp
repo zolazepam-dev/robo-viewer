@@ -2,134 +2,135 @@
 #include "Aircraft.h"
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
+#include <vector>
 
-void Aircraft::Create(JPH::PhysicsSystem* physicsSystem, JPH::RVec3 position, JPH::ObjectLayer layer) {
-    JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+using namespace JPH;
 
-    // Fuselage (Core)
-    JPH::BoxShapeSettings fuselageShapeSettings(JPH::Vec3(1.0f, 1.0f, 8.0f));
-    JPH::RefConst<JPH::Shape> fuselageShape = fuselageShapeSettings.Create().Get();
-    JPH::BodyCreationSettings fuselageSettings(fuselageShape, position, JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, layer);
-    
-    JPH::MassProperties fuselageMass;
-    fuselageMass.mMass = 10000.0f;
-    fuselageMass.mInertia = fuselageShape->GetMassProperties().mInertia * (10000.0f / fuselageShape->GetMassProperties().mMass);
-    fuselageSettings.mMassPropertiesOverride = fuselageMass;
-    fuselageSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-    
-    fuselageSettings.mLinearDamping = 0.01f;
-    fuselageSettings.mAngularDamping = 0.05f;
+void Aircraft::Create(PhysicsSystem* physicsSystem, RVec3 position, ObjectLayer layer) {
+    std::cout << "[Aircraft] Creating Basic Jet (Literal Snippet)" << std::endl;
+    BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+    mSections.clear();
 
-    mMainBodyId = bodyInterface.CreateAndAddBody(fuselageSettings, JPH::EActivation::Activate);
+    // --- YOUR SNIPPET LOGIC START ---
+    // --- Define Core Dimensions ---
+    float fuselageLength = 4.0f;
+    float fuselageRadius = 0.6f;
+    float wingspan = 3.5f;
+    float wingChord = 1.2f;
+    float wingThickness = 0.1f;
+    float wingSweep = 0.8f; // How far back the wings are placed
 
-    // Wings and Stabilizers
-    struct PartDef {
-        JPH::Vec3 relativePos;
-        JPH::Vec3 halfExtents;
-        float mass;
-        float area;
-        float liftCoef;
-        int controlType;
+    // Create a compound shape settings object. 
+    // The shape will automatically recenter itself around the center of mass. [citation:2]
+    StaticCompoundShapeSettings compoundSettings;
+
+    // 1. Fuselage (a cylinder, placed at the center)
+    // CylinderShape parameters: (half height of the cylinder, radius) [citation:2]
+    // We want the cylinder to extend from -fuselageLength/2 to +fuselageLength/2.
+    compoundSettings.AddShape(
+        Vec3::sZero(), // Position at the center of mass
+        Quat::sIdentity(), // No rotation
+        new CylinderShapeSettings(fuselageLength / 2.0f, fuselageRadius)
+    );
+
+    // 2. Main Wings (two boxes, one on each side)
+    float wingYOffset = 0.0f; // Height of wings relative to fuselage center
+    float wingZOffset = -fuselageLength * wingSweep; // Position back from center
+
+    // Left Wing
+    auto leftWingSettings = new BoxShapeSettings(Vec3(wingChord / 2.0f, wingThickness / 2.0f, wingspan / 4.0f));
+    leftWingSettings->mConvexRadius = 0.0f; // Essential Jolt fix for 0.1f thickness
+    compoundSettings.AddShape(
+        Vec3(-wingspan / 2.0f, wingYOffset, wingZOffset), // Position to the left
+        Quat::sIdentity(), // Wings are flat (no dihedral for simplicity)
+        leftWingSettings // Box half-extents
+    );
+
+    // Right Wing (same but on the opposite side)
+    auto rightWingSettings = new BoxShapeSettings(Vec3(wingChord / 2.0f, wingThickness / 2.0f, wingspan / 4.0f));
+    rightWingSettings->mConvexRadius = 0.0f; // Essential Jolt fix for 0.1f thickness
+    compoundSettings.AddShape(
+        Vec3(wingspan / 2.0f, wingYOffset, wingZOffset),
+        Quat::sIdentity(),
+        rightWingSettings
+    );
+
+    // 3. Tail Fin (a small vertical box at the back)
+    auto tailSettings = new BoxShapeSettings(Vec3(0.2f, 0.4f, 0.1f));
+    tailSettings->mConvexRadius = 0.0f; // Essential Jolt fix
+    compoundSettings.AddShape(
+        Vec3(0.0f, 0.5f, -fuselageLength / 2.0f + 0.2f), // On top, at the very back
+        Quat::sIdentity(),
+        tailSettings
+    );
+
+    // Create the actual shape from the settings. Error checking omitted for brevity.
+    Shape::ShapeResult result = compoundSettings.Create();
+    Shape* jetShape = result.Get().GetPtr();
+    // --- YOUR SNIPPET LOGIC END ---
+
+    BodyCreationSettings jetSettings(jetShape, position, Quat::sIdentity(), EMotionType::Dynamic, layer);
+    jetSettings.mMassPropertiesOverride.mMass = 5000.0f;
+    jetSettings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
+    jetSettings.mLinearDamping = 0.05f;
+    jetSettings.mAngularDamping = 0.1f;
+
+    mMainBodyId = bodyInterface.CreateAndAddBody(jetSettings, EActivation::Activate);
+
+    // Mapping Aero to the User geometry
+    mSections = {
+        { "LWing", Vec3(-wingspan/2.0f, 0, wingZOffset), Quat::sIdentity(), 10.0f, 2.0f, 0.02f, 2 },
+        { "RWing", Vec3(wingspan/2.0f, 0, wingZOffset), Quat::sIdentity(), 10.0f, 2.0f, 0.02f, 2 },
+        { "Tail",  Vec3(0, 0.5f, -fuselageLength/2.0f), Quat::sIdentity(), 5.0f, 1.5f, 0.02f, 1 }
     };
-
-    std::vector<PartDef> parts = {
-        // Left Wing
-        { JPH::Vec3(-4.5f, 0.0f, 0.0f), JPH::Vec3(3.5f, 0.1f, 4.0f), 2000.0f, 28.0f, 1.0f, 2 },
-        // Right Wing
-        { JPH::Vec3(4.5f, 0.0f, 0.0f), JPH::Vec3(3.5f, 0.1f, 4.0f), 2000.0f, 28.0f, 1.0f, 2 },
-        // Left Tail (Pitch)
-        { JPH::Vec3(-2.5f, 0.0f, -7.0f), JPH::Vec3(2.0f, 0.1f, 2.0f), 1000.0f, 8.0f, 0.5f, 1 },
-        // Right Tail (Pitch)
-        { JPH::Vec3(2.5f, 0.0f, -7.0f), JPH::Vec3(2.0f, 0.1f, 2.0f), 1000.0f, 8.0f, 0.5f, 1 },
-        // Left Vertical Stabilizer (Yaw)
-        { JPH::Vec3(-1.5f, 2.0f, -7.0f), JPH::Vec3(0.1f, 2.0f, 2.0f), 500.0f, 8.0f, 0.5f, 3 },
-        // Right Vertical Stabilizer (Yaw)
-        { JPH::Vec3(1.5f, 2.0f, -7.0f), JPH::Vec3(0.1f, 2.0f, 2.0f), 500.0f, 8.0f, 0.5f, 3 }
-    };
-
-    for (const auto& def : parts) {
-        JPH::BoxShapeSettings shapeSettings(def.halfExtents);
-        JPH::RefConst<JPH::Shape> shape = shapeSettings.Create().Get();
-        JPH::RVec3 partPos = position + JPH::RVec3(def.relativePos);
-        JPH::BodyCreationSettings settings(shape, partPos, JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, layer);
-        
-        JPH::MassProperties partMass;
-        partMass.mMass = def.mass;
-        partMass.mInertia = shape->GetMassProperties().mInertia * (def.mass / shape->GetMassProperties().mMass);
-        settings.mMassPropertiesOverride = partMass;
-        settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-        
-        JPH::BodyID partId = bodyInterface.CreateAndAddBody(settings, JPH::EActivation::Activate);
-        
-        // Fix to fuselage
-        JPH::FixedConstraintSettings constraintSettings;
-        constraintSettings.mPoint1 = partPos;
-        constraintSettings.mPoint2 = partPos;
-        physicsSystem->AddConstraint(bodyInterface.CreateConstraint(&constraintSettings, mMainBodyId, partId));
-
-        Airfoil airfoil;
-        airfoil.bodyId = partId;
-        airfoil.relativePos = def.relativePos;
-        airfoil.halfExtents = def.halfExtents;
-        airfoil.area = def.area;
-        airfoil.liftCoef = def.liftCoef;
-        airfoil.dragCoef = 0.05f;
-        airfoil.controlType = def.controlType;
-        mAirfoils.push_back(airfoil);
-    }
 }
 
-void Aircraft::ApplyAerodynamics(JPH::PhysicsSystem* physicsSystem, const float* actions) {
+void Aircraft::ApplyAerodynamics(PhysicsSystem* physicsSystem, const float* actions, float deltaTime) {
     if (mMainBodyId.IsInvalid()) return;
-    JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+    BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
 
-    JPH::Quat rot = bodyInterface.GetRotation(mMainBodyId);
-    
-    // Thrust: forward is +Z
-    JPH::Vec3 forward = rot * JPH::Vec3(0, 0, 1);
-    float thrust = std::max(0.0f, actions[0]) * mThrustMax;
-    bodyInterface.AddForce(mMainBodyId, forward * thrust);
+    RMat44 worldTransform = bodyInterface.GetWorldTransform(mMainBodyId);
+    Quat rot = worldTransform.GetRotation().GetQuaternion();
+    Vec3 vel = bodyInterface.GetLinearVelocity(mMainBodyId);
+    float speed = vel.Length();
 
-    for (const auto& airfoil : mAirfoils) {
-        if (airfoil.bodyId.IsInvalid()) continue;
+    // Thrust
+    float thrust = std::clamp(actions[0], 0.0f, 1.0f) * mThrustMax;
+    bodyInterface.AddForce(mMainBodyId, rot * Vec3(0, 0, thrust));
 
-        JPH::Vec3 vel = bodyInterface.GetLinearVelocity(airfoil.bodyId);
-        float speedSq = vel.LengthSq();
-        if (speedSq < 0.1f) continue;
+    if (speed < 1.0f) return;
+    Vec3 velDir = vel / speed;
+    float q = 0.5f * mRho * speed * speed;
 
-        JPH::Quat partRot = bodyInterface.GetRotation(airfoil.bodyId);
-        JPH::Vec3 partUp = partRot * JPH::Vec3(0, 1, 0);
-        JPH::Vec3 velDir = vel.Normalized();
+    for (const auto& s : mSections) {
+        Quat sectionWorldRot = rot * s.relativeRot;
+        Vec3 sectionWorldUp = sectionWorldRot * Vec3(0, 1, 0);
+        RVec3 sectionWorldPos = worldTransform * s.relativePos;
 
-        // Angle of attack
-        float aoa = std::asin(std::clamp(velDir.Dot(partUp), -1.0f, 1.0f));
+        float aoa = -std::asin(std::clamp(velDir.Dot(sectionWorldUp), -0.99f, 0.99f));
 
-        // Control surface deflection
         float deflection = 0.0f;
-        if (airfoil.controlType == 1) deflection = actions[1]; // Pitch
-        else if (airfoil.controlType == 2) deflection = actions[2] * (airfoil.relativePos.GetX() > 0 ? 1.0f : -1.0f); // Roll
-        else if (airfoil.controlType == 3) deflection = actions[3]; // Yaw
+        if (s.controlType == 1) deflection = actions[1]; 
+        else if (s.controlType == 2) deflection = actions[2] * (s.relativePos.GetX() > 0 ? -1.0f : 1.0f); 
+        else if (s.controlType == 3) deflection = actions[3]; 
 
-        aoa += deflection * 0.3f; // Max ~17 degrees deflection
+        aoa += deflection * DegreesToRadians(20.0f); 
 
-        // Simple lift model: CL = CL_alpha * sin(2 * alpha)
-        float liftMag = 0.5f * mRho * speedSq * airfoil.area * airfoil.liftCoef * std::sin(2.0f * aoa);
-        float dragMag = 0.5f * mRho * speedSq * airfoil.area * (airfoil.dragCoef + 0.01f + std::abs(std::sin(aoa)) * 0.5f);
+        float Cl = s.liftCoef * std::sin(2.0f * aoa);
+        float Cd = s.dragCoef + (Cl * Cl * 0.15f); 
 
-        JPH::Vec3 liftDir = partUp;
-        JPH::Vec3 dragDir = -velDir;
-
-        JPH::Vec3 totalForce = liftDir * liftMag + dragDir * dragMag;
+        Vec3 cross1 = velDir.Cross(sectionWorldUp);
+        if (cross1.LengthSq() < 1e-6f) continue;
         
-        // Clamp force to prevent explosions
-        const float maxForce = 1000000.0f; 
-        if (totalForce.LengthSq() > maxForce * maxForce) {
-            totalForce = totalForce.Normalized() * maxForce;
-        }
+        Vec3 liftDir = cross1.Cross(velDir).Normalized();
+        if (liftDir.Dot(sectionWorldUp) < 0) liftDir = -liftDir;
 
-        bodyInterface.AddForce(airfoil.bodyId, totalForce);
+        Vec3 force = (liftDir * Cl + (-velDir * Cd)) * (q * s.area);
+        bodyInterface.AddForce(mMainBodyId, force, sectionWorldPos);
     }
 }

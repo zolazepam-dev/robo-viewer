@@ -1,37 +1,65 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APITester } from "./APITester";
+import { Visualizer3D } from "./Visualizer3D";
 import "./index.css";
 
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
-
 export function App() {
+  const [telemetry, setTelemetry] = useState<any>(null);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("http://localhost:8080/telemetry");
+        const data = await res.json();
+        setTelemetry(data);
+      } catch (e) {
+        // Silently fail if server is down
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="container mx-auto p-8 text-center relative z-10">
-      <div className="flex justify-center items-center gap-8 mb-8">
-        <img
-          src={logo}
-          alt="Bun Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#646cffaa] scale-120"
-        />
-        <img
-          src={reactLogo}
-          alt="React Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#61dafbaa] [animation:spin_20s_linear_infinite]"
-        />
-      </div>
-      <Card>
-        <CardHeader className="gap-4">
-          <CardTitle className="text-3xl font-bold">Bun + React</CardTitle>
-          <CardDescription>
-            Edit <code className="rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono">src/App.tsx</code> and save to
-            test HMR
+    <div className="container mx-auto p-8 flex flex-col gap-8">
+      <Card className="bg-zinc-950 border-zinc-800 text-zinc-100">
+        <CardHeader>
+          <CardTitle className="text-3xl font-bold flex justify-between items-center">
+            JOLTrl Go-Native 3D Training
+            <span className="text-sm font-mono text-zinc-500">
+              SPS: {telemetry?.sps?.toFixed(2) || "0.00"} | Step: {telemetry?.step || 0}
+            </span>
+          </CardTitle>
+          <CardDescription className="text-zinc-400">
+            Real-time 3D visualization of the parallel Go physics environment
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <APITester />
+          <Visualizer3D robotStates={telemetry?.robot_states || []} />
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <Card className="bg-zinc-950 border-zinc-800 text-zinc-100">
+          <CardHeader>
+            <CardTitle>Telemetry Stream</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs bg-black p-4 rounded overflow-auto h-[200px]">
+              {JSON.stringify(telemetry, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-zinc-950 border-zinc-800 text-zinc-100">
+          <CardHeader>
+            <CardTitle>API Debugger</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <APITester />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

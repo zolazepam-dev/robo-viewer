@@ -34,17 +34,12 @@ uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProj;
 
-out vec3 FragPos;
 out vec3 Normal;
-out vec3 ViewPos;
 
 void main()
 {
-    vec4 world_pos = uModel * vec4(aPos, 1.0);
-    FragPos = world_pos.xyz;
+    gl_Position = uProj * uView * uModel * vec4(aPos, 1.0);
     Normal = mat3(transpose(inverse(uModel))) * aNormal;
-    ViewPos = vec3(inverse(uView) * vec4(0.0, 0.0, 0.0, 1.0));
-    gl_Position = uProj * uView * world_pos;
 }
 )";
 
@@ -52,101 +47,18 @@ constexpr const char* kFragmentShader = R"(
 #version 330 core
 out vec4 FragColor;
 
-in vec3 FragPos;
 in vec3 Normal;
-in vec3 ViewPos;
 
-struct Light {
-    vec3 position;
-    vec3 color;
-    float intensity;
-};
-
-uniform vec3 uViewPos;
 uniform vec3 uObjectColor;
-uniform float uMetallic;
-uniform float uRoughness;
 uniform float uAlpha;
-uniform Light uLights[4];
-uniform int uNumLights;
-
-const float PI = 3.14159265359;
-
-float DistributionGGX(vec3 N, vec3 H, float roughness) {
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
-    float nom = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-    return nom / denom;
-}
-
-float GeometrySchlickGGX(float NdotV, float roughness) {
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
-    float nom = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-    return nom / denom;
-}
-
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-    return ggx1 * ggx2;
-}
-
-vec3 fresnelSchlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
 
 void main()
 {
-    vec3 N = normalize(Normal);
-    vec3 V = normalize(uViewPos - FragPos);
-    
-    vec3 F0 = vec3(0.04);
-    F0 = mix(F0, uObjectColor, uMetallic);
-    
-    vec3 Lo = vec3(0.0);
-    
-    for(int i = 0; i < uNumLights; ++i) {
-        vec3 L = normalize(uLights[i].position - FragPos);
-        vec3 H = normalize(V + L);
-        float distance = length(uLights[i].position - FragPos);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;
-        
-        float NDF = DistributionGGX(N, H, uRoughness);
-        float G = GeometrySmith(N, V, L, uRoughness);
-        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-        
-        vec3 numerator = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-        vec3 specular = numerator / denominator;
-        
-        vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        kD *= 1.0 - uMetallic;
-        
-        float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * uObjectColor / PI + specular) * radiance * NdotL;
-    }
-    
-    vec3 ambient = vec3(0.15) * uObjectColor;
-    
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-    vec3 reflection = mix(vec3(0.1), vec3(0.8), fresnel) * uMetallic;
-    
-    vec3 color = ambient + Lo + reflection;
-    
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));
-    
-    FragColor = vec4(color, uAlpha);
+    // Dead simple: Light from top-front, two-sided
+    vec3 n = normalize(Normal);
+    vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
+    float diff = abs(dot(n, lightDir)) * 0.6 + 0.4;
+    FragColor = vec4(uObjectColor * diff, uAlpha);
 }
 )";
 
@@ -332,7 +244,7 @@ Renderer::~Renderer()
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
 
-void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront,
+void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront, const glm::vec3& cameraUp,
                     bool showCollisionShapes, bool showAABBs, bool showContactPoints, bool showRobot1, bool showRobot2)
 {
     // TEMPORARILY DISABLE DEBUG DRAWING - causes crashes
@@ -341,10 +253,9 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
     
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
+    glDisable(GL_CULL_FACE); // Turn off culling
 
-    glClearColor(0.1f, 0.1f, 0.15f, 1.0f); // Slightly lighter background
+    glClearColor(0.15f, 0.15f, 0.2f, 1.0f); 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (physicsCore == nullptr || mProgram == 0) return;
@@ -352,7 +263,7 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
     JPH::PhysicsSystem* physicsSystem = &physicsCore->GetPhysicsSystem();
     JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
 
-    mView = glm::lookAt(cameraPos, cameraPos + cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
+    mView = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     mViewPosition = cameraPos;
 
     glUseProgram(mProgram);
@@ -386,7 +297,7 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
 
         const JPH::RMat44 worldTransform = body_interface.GetWorldTransform(body_id);
         
-        auto drawShape = [&](const JPH::Shape* s, const JPH::RMat44& transform, auto& self) -> void {
+        auto drawShape = [this, &body_interface, &body_id, &layer, &staticLayer, &ghostLayer, forcedAlpha](const JPH::Shape* s, const JPH::RMat44& transform, auto& self) -> void {
             if (s->GetSubType() == JPH::EShapeSubType::StaticCompound || s->GetSubType() == JPH::EShapeSubType::MutableCompound) {
                 const auto* compound = static_cast<const JPH::StaticCompoundShape*>(s);
                 for (uint32_t i = 0; i < compound->GetNumSubShapes(); ++i) {
@@ -544,15 +455,90 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
                     scale = glm::vec3(half.GetX() * 2.0f, half.GetY() * 2.0f, half.GetZ() * 2.0f);
                     break;
                 }
-                case JPH::EShapeSubType::Cylinder: {
-                    const auto* cylinder = static_cast<const JPH::CylinderShape*>(s);
-                    scale = glm::vec3(cylinder->GetRadius(), cylinder->GetHalfHeight() * 2.0f, cylinder->GetRadius());
-                    break;
-                }
                 default: {
-                    const JPH::Vec3 extent = s->GetLocalBounds().GetExtent();
-                    scale = glm::vec3(extent.GetX() * 2.0f, extent.GetY() * 2.0f, extent.GetZ() * 2.0f);
-                    break;
+                    // Fallback for Cylinders, Convex Hulls, etc.
+                    JPH::Shape::GetTrianglesContext ctx;
+
+                    s->GetTrianglesStart(ctx, JPH::AABox::sBiggest(), JPH::Vec3::sZero(), JPH::Quat::sIdentity(), JPH::Vec3::sReplicate(1.0f));
+                    JPH::Float3* vertices = new JPH::Float3[4096]; // Buffer
+                    int count = s->GetTrianglesNext(ctx, 4096, vertices, nullptr);
+                    
+                    if (count > 0) {
+                        glm::mat4 model = ToGlmMat4(transform);
+                        glUniformMatrix4fv(mModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                        
+                        // Setup material props (same as boxes)
+                        const int body_index = static_cast<int>(body_id.GetIndex());
+                        glm::vec3 objectColor;
+                        float metallic = 0.9f;
+                        float roughness = 0.1f;
+                        float alpha = 1.0f;  // Default alpha for fallback rendering
+                        
+                        if (layer == staticLayer) {
+                            objectColor = glm::vec3(0.4f, 0.4f, 0.4f);
+                            metallic = 0.1f;
+                            roughness = 0.9f;
+                        } else if (layer == ghostLayer) {
+                            objectColor = glm::vec3(1.0f, 0.2f, 0.2f);
+                            alpha = 0.6f;
+                            metallic = 0.5f;
+                            roughness = 0.5f;
+                        } else if (body_index % 3 == 0) {
+                            objectColor = glm::vec3(0.0f, 0.8f, 0.8f);
+                        } else if (body_index % 3 == 1) {
+                            objectColor = glm::vec3(0.8f, 0.0f, 0.8f);
+                        } else {
+                            objectColor = glm::vec3(1.0f, 0.9f, 0.1f);
+                        }
+                        
+                        glUniform3fv(mObjectColorLoc, 1, glm::value_ptr(objectColor));
+                        glUniform1f(mMetallicLoc, metallic);
+                        glUniform1f(mRoughnessLoc, roughness);
+                        glUniform1f(mAlphaLoc, alpha);
+
+                        // Immediate mode style drawing using a dynamic VAO would be better, 
+                        // but for now let's just use a temporary buffer and draw.
+                        // Ideally we should cache this VAO in the shape UserData.
+                        
+                        std::vector<float> triVerts;
+                        triVerts.reserve(count * 3 * 6); // Pos + Normal
+                        
+                        for (int i = 0; i < count; ++i) {
+                            JPH::Vec3 v1(vertices[i*3+0].x, vertices[i*3+0].y, vertices[i*3+0].z);
+                            JPH::Vec3 v2(vertices[i*3+1].x, vertices[i*3+1].y, vertices[i*3+1].z);
+                            JPH::Vec3 v3(vertices[i*3+2].x, vertices[i*3+2].y, vertices[i*3+2].z);
+                            JPH::Vec3 normal = (v2 - v1).Cross(v3 - v1).Normalized();
+                            
+                            auto push = [&](const JPH::Vec3& v) {
+                                triVerts.push_back(v.GetX()); triVerts.push_back(v.GetY()); triVerts.push_back(v.GetZ());
+                                triVerts.push_back(normal.GetX()); triVerts.push_back(normal.GetY()); triVerts.push_back(normal.GetZ());
+                            };
+                            push(v1); push(v2); push(v3);
+                        }
+
+                        // Use the Cube VAO as a scratch buffer if we update it? No, unsafe.
+                        // Let's create a temporary VAO/VBO for this draw call (Slow but works for this viewer)
+                        GLuint vao, vbo;
+                        glGenVertexArrays(1, &vao);
+                        glGenBuffers(1, &vbo);
+                        
+                        glBindVertexArray(vao);
+                        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                        glBufferData(GL_ARRAY_BUFFER, triVerts.size() * sizeof(float), triVerts.data(), GL_STREAM_DRAW);
+                        
+                        glEnableVertexAttribArray(0);
+                        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+                        glEnableVertexAttribArray(1);
+                        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+                        
+                        glDrawArrays(GL_TRIANGLES, 0, count * 3);
+                        
+                        glDeleteBuffers(1, &vbo);
+                        glDeleteVertexArrays(1, &vao);
+                    }
+                    
+                    delete[] vertices;
+                    return; // Done
                 }
                 }
 

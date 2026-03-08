@@ -12,6 +12,7 @@
 #include <Jolt/Jolt.h>
 #include <vector>
 #include <array>
+#include <memory>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 
@@ -19,6 +20,7 @@
 #include "NeuralMath.h"
 #include "NeuralNetwork.h"
 #include "CombatRobot.h"
+#include "RobotController.h"
 #include "AlignedAllocator.h"
 
 /** Size of the combat arena in meters */
@@ -147,9 +149,10 @@ public:
       * @param envIndex Environment index
       * @param globalPhysics Pointer to physics system
       * @param globalLoader Pointer to robot loader
+      * @param robotConfigPath Path to robot JSON configuration
       * @param stepsPerEpisode Maximum number of steps per episode
       */
-     void Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, int stepsPerEpisode = MAX_EPISODE_STEPS);
+     void Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, const std::string& robotConfigPath, int stepsPerEpisode = MAX_EPISODE_STEPS);
     
     /** @brief Reset the environment to initial state */
     void Reset();
@@ -162,23 +165,40 @@ public:
     void QueueActions(const float* actions1, const float* actions2);
     
     /**
-     * @brief Harvest state and rewards from the environment
-     * @param obs1 Observation vector for robot 1
-     * @param obs2 Observation vector for robot 2
-     * @param reward1 Reward for robot 1
-     * @param reward2 Reward for robot 2
-     * @param done Whether the episode is done
-     */
+      * @brief Harvest state and rewards from the environment
+      * @param obs1 Observation vector for robot 1
+      * @param obs2 Observation vector for robot 2
+      * @param reward1 Reward for robot 1
+      * @param reward2 Reward for robot 2
+      * @param done Whether the episode is done
+      */
     void HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done);
+    
+    /**
+      * @brief Zero-copy state harvesting - write directly to provided pointers
+      * @param obs1 Output pointer for robot 1 observation (must have space for observationDim floats)
+      * @param obs2 Output pointer for robot 2 observation
+      * @param reward1 Output pointer for robot 1 reward
+      * @param reward2 Output pointer for robot 2 reward
+      * @param done Output pointer for done flag
+      * @param vectorReward Output pointer for vector reward struct
+      */
+    void HarvestStateZeroCopy(float* obs1, float* obs2, float* reward1, float* reward2, 
+                              bool* done, VectorReward* vectorReward);
+    
+    /** @brief Get direct pointer to robot 1 observation (zero-copy) */
+    const float* GetObservationPtr(int robotIdx) const;
+    /** @brief Get direct pointer to robot reward (zero-copy) */
+    const float* GetRewardPtr(int robotIdx) const;
 
     /** @brief Get robot 1 data */
-    const CombatRobotData& GetRobot1() const { return mRobot1; }
+    const Robot& GetRobot1() const { return mRobot1; }
     /** @brief Get robot 2 data */
-    const CombatRobotData& GetRobot2() const { return mRobot2; }
+    const Robot& GetRobot2() const { return mRobot2; }
     /** @brief Get reference to robot 1 data */
-    CombatRobotData& GetRobot1Ref() { return mRobot1; }
+    Robot& GetRobot1Ref() { return mRobot1; }
     /** @brief Get reference to robot 2 data */
-    CombatRobotData& GetRobot2Ref() { return mRobot2; }
+    Robot& GetRobot2Ref() { return mRobot2; }
     /** @brief Get robot 1 reward structure */
     const VectorReward& GetRobot1Reward() const { return mReward1; }
     /** @brief Get robot 2 reward structure */
@@ -222,15 +242,22 @@ private:
      * @param opponent Opponent robot
      * @param forces Force sensor readings
      */
-    void BuildObservationVector(float* obs, const CombatRobotData& robot,
-                                 const CombatRobotData& opponent, const ForceSensorReading& forces);
-
+    void BuildObservationVector(float* obs, const Robot& robot,
+                                 const Robot& opponent, const ForceSensorReading& forces);
     JPH::PhysicsSystem* mPhysicsSystem = nullptr; ///< Pointer to physics system
     CombatRobotLoader* mRobotLoader = nullptr; ///< Pointer to robot loader
+    std::string mRobotConfigPath; ///< Path to robot configuration
     int mStepsPerEpisode = MAX_EPISODE_STEPS; ///< Maximum number of steps per episode
 
-    CombatRobotData mRobot1; ///< Robot 1 data
-    CombatRobotData mRobot2; ///< Robot 2 data
+    Robot mRobot1; ///< Robot 1 entity
+    Robot mRobot2; ///< Robot 2 entity
+    
+    std::unique_ptr<RobotController> mController1; ///< Brain for robot 1
+    std::unique_ptr<RobotController> mController2; ///< Brain for robot 2
+
+    std::vector<float> mObs1; ///< Observation buffer for robot 1
+    std::vector<float> mObs2; ///< Observation buffer for robot 2
+
     uint32_t mEnvIndex = 0; ///< Environment index
     int mStepCount = 0; ///< Current step count
     bool mDone = false; ///< Done flag

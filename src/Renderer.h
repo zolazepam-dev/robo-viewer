@@ -31,6 +31,7 @@ public:
 
      void Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex = 0,
                const glm::vec3& cameraFront = glm::vec3(0.0f, 0.0f, -1.0f),
+               const glm::vec3& cameraUp = glm::vec3(0.0f, 1.0f, 0.0f),
                bool showCollisionShapes = false, bool showAABBs = false, bool showContactPoints = false,
                bool showRobot1 = true, bool showRobot2 = true);
     void Resize(int width, int height);

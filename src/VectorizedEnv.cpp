@@ -20,10 +20,12 @@ VectorizedEnv::VectorizedEnv(int numEnvs, int stepsPerEpisode)
 {
 }
 
-void VectorizedEnv::Init(bool initRobots)
+void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
 {
+    std::cerr << "[VectorizedEnv] Init start..." << std::endl;
     std::cout << "[VectorizedEnv::Init] Start" << std::endl;
     
+    std::cerr << "[VectorizedEnv] Calling PhysicsCore::Init(" << mNumEnvs << ")..." << std::endl;
     if (!mPhysicsCore.Init(mNumEnvs))
     {
         std::cerr << "[JOLTrl] FATAL: Global PhysicsCore failed to initialize!" << std::endl;
@@ -71,7 +73,7 @@ void VectorizedEnv::Init(bool initRobots)
         for (int i = 0; i < mNumEnvs; ++i)
         {
             std::cout << "[VectorizedEnv::Init] Initializing environment " << i << std::endl;
-            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader, mStepsPerEpisode);
+            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader, robotConfigPath, mStepsPerEpisode);
             std::cout << "[VectorizedEnv::Init] Environment " << i << " initialized" << std::endl;
         }
 
@@ -101,6 +103,11 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
 
     mPhysicsCore.Step(1.0f / 60.0f);
 
+    HarvestStates();
+}
+
+void VectorizedEnv::HarvestStates()
+{
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
@@ -155,18 +162,16 @@ VectorizedEnv::~VectorizedEnv()
 
 void VectorizedEnv::Shutdown()
 {
-    // Clear contact listener reference first
-    mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
+    std::cout << "[VectorizedEnv] Shutdown start..." << std::endl;
+    if (mPhysicsCore.IsInitialized()) {
+        try {
+            mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
+        } catch (...) {}
+    }
     
-    // Shutdown physics core
-    mPhysicsCore.Shutdown();
-    
-    // Clear all data
     mEnvs.clear();
-    mAllObservations.clear();
-    mAllRewards.clear();
-    mAllDones.clear();
-    mAllVectorRewards.clear();
+    mPhysicsCore.Shutdown();
+    std::cout << "[VectorizedEnv] Shutdown complete." << std::endl;
 }
 
 bool VectorizedEnv::GetRenderState(float* redPos, float* bluePos, float* redSatPos, float* blueSatPos, float* redHealth, float* blueHealth)
@@ -200,4 +205,40 @@ bool VectorizedEnv::GetRenderState(float* redPos, float* bluePos, float* redSatP
     *blueHealth = robot2.hp;
     
     return true;
+}
+
+// Zero-copy observation access - direct pointer to env memory
+const float* VectorizedEnv::GetObservationPtr(int envIdx, int robotIdx) const {
+    if (envIdx < 0 || envIdx >= mNumEnvs) return nullptr;
+    return mEnvs[envIdx].GetObservationPtr(robotIdx);
+}
+
+float* VectorizedEnv::GetRewardPtr(int envIdx, int robotIdx) {
+    if (envIdx < 0 || envIdx >= mNumEnvs) return nullptr;
+    return const_cast<float*>(mEnvs[envIdx].GetRewardPtr(robotIdx));
+}
+
+// Lock-free parallel action queuing - all envs queue simultaneously
+void VectorizedEnv::QueueActionsParallel(const float* robot1Actions, const float* robot2Actions, int numEnvs) {
+    #pragma omp parallel for num_threads(8)
+    for (int i = 0; i < numEnvs; ++i) {
+        mEnvs[i].QueueActions(
+            robot1Actions + i * mActionDim,
+            robot2Actions + i * mActionDim
+        );
+    }
+}
+
+// Zero-copy state harvesting - envs write directly to pre-allocated buffers
+void VectorizedEnv::HarvestStatesZeroCopy() {
+    #pragma omp parallel for num_threads(8)
+    for (int i = 0; i < mNumEnvs; ++i) {
+        float* obs = reinterpret_cast<float*>(mAllObservations.data()) + i * 2 * mObservationDim;
+        float* rew = reinterpret_cast<float*>(mAllRewards.data()) + i * 2;
+        
+        bool done = false;
+        mEnvs[i].HarvestStateZeroCopy(obs, obs + mObservationDim, rew, rew + 1, 
+                                       &done, &mAllVectorRewards[i]);
+        mAllDones[i] = done;
+    }
 }

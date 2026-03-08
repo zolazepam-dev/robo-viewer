@@ -9,6 +9,8 @@
 #include <random>
 #include <filesystem>
 #include <string>
+#include <cstdio>
+#include <ctime>
 
 #include "VectorizedEnv.h"
 #include "NeuralNetwork.h"
@@ -28,6 +30,19 @@ void EnsureDir(const std::string& path) {
     if (!fs::exists(path)) {
         fs::create_directories(path);
     }
+}
+
+std::string GenerateCheckpointDir(const TrainingConfig& config, int stateDim, int actionDim) {
+    std::string baseDir = "checkpoints";
+    char timestamp[64];
+    time_t now = time(nullptr);
+    strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", localtime(&now));
+    
+    std::string dir = baseDir + "/obs" + std::to_string(stateDim) + 
+                      "_act" + std::to_string(actionDim) + 
+                      "_envs" + std::to_string(config.numParallelEnvs) + 
+                      "_" + timestamp;
+    return dir;
 }
 
 int main(int argc, char* argv[]) {
@@ -89,6 +104,12 @@ int main(int argc, char* argv[]) {
     int actionDim = vecEnv.GetActionDim();
     int totalActionDim = actionDim * 2 * config.numParallelEnvs;
     
+    // Generate timestamped checkpoint dir based on obs/action dims
+    config.checkpointDir = GenerateCheckpointDir(config, stateDim, actionDim);
+    EnsureDir(config.checkpointDir);
+    EnsureDir(config.checkpointDir + "/replay");
+    std::cout << "[JOLTrl] Checkpoints will be saved to: " << config.checkpointDir << std::endl;
+    
     TD3Config td3cfg;
     td3cfg.hiddenDim = 256;
     td3cfg.batchSize = 256;
@@ -116,6 +137,8 @@ int main(int argc, char* argv[]) {
     std::cout << "[JOLTrl] Headless Training Matrix Online. Starting training loop..." << std::endl;
     std::cout << "[JOLTrl] actionDim=" << actionDim << " totalActionDim=" << totalActionDim << " stateDim=" << stateDim << std::endl;
 
+    const std::string stateFile = "/tmp/jolt_training_state.json";
+    
     while (totalSteps < config.maxSteps) {
         auto loopStart = std::chrono::high_resolution_clock::now();
         
@@ -227,6 +250,21 @@ int main(int argc, char* argv[]) {
                           << " | SPS: " << (int)sps 
                           << " | Episodes: " << episodes 
                           << " | Avg Reward: " << currentAvg << std::endl;
+            }
+            
+            // Write state for viewer (every 10 steps to avoid I/O bottleneck)
+            if (totalSteps % 10 == 0) {
+                float redPos[3], bluePos[3], redSat[3], blueSat[3];
+                float redH = 100, blueH = 100;
+                if (vecEnv.GetRenderState(redPos, bluePos, redSat, blueSat, &redH, &blueH)) {
+                    FILE* f = fopen(stateFile.c_str(), "w");
+                    if (f) {
+                        fprintf(f, "{\"step\":%d,\"red\":[%.2f,%.2f,%.2f],\"blue\":[%.2f,%.2f,%.2f],\"red_satellite\":[%.2f,%.2f,%.2f],\"blue_satellite\":[%.2f,%.2f,%.2f],\"red_health\":%.1f,\"blue_health\":%.1f}",
+                            totalSteps, redPos[0],redPos[1],redPos[2], bluePos[0],bluePos[1],bluePos[2],
+                            redSat[0],redSat[1],redSat[2], blueSat[0],blueSat[1],blueSat[2], redH, blueH);
+                        fclose(f);
+                    }
+                }
             }
         }
         

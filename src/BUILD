@@ -21,6 +21,7 @@ cc_binary(
         "-O3",
         "-mavx2",
         "-mfma",
+        "-DJPH_DEBUG_RENDERER",
         "-march=native",
     ],
     linkopts = [
@@ -51,6 +52,15 @@ cc_library(
         "InternalRobot.cpp",
         "Aircraft.cpp",
         "AircraftEnv.cpp",
+        "RobotConfig.cpp",
+        "RobotFactory.cpp",
+        "RobotController.cpp",
+        "OctopodLoader.cpp",
+        "OctopodEnv.cpp",
+        "VectorizedOctopodEnv.cpp",
+        "ShardEnv.cpp",
+        "MuonOptimizer.cpp",
+        "ParallelPhysics.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -71,8 +81,21 @@ cc_library(
         "LockFreeQueue.h",
         "InternalRobot.h",
         "ArmaEigenUtils.h",
+        "PerformanceProfiler.h",
+        "OptimizedMath.h",
+        "MuonOptimizer.h",
+        "SIMDObservations.h",
+        "ParallelPhysics.h",
         "Aircraft.h",
         "AircraftEnv.h",
+        "Robot.h",
+        "RobotConfig.h",
+        "RobotFactory.h",
+        "RobotController.h",
+        "OctopodLoader.h",
+        "OctopodEnv.h",
+        "VectorizedOctopodEnv.h",
+        "ShardEnv.h",
     ],
     deps = [
         "@glfw",
@@ -93,7 +116,10 @@ cc_library(
         "-O3",
         "-mavx2",
         "-mfma",
-        "-march=native"
+        "-DJPH_DEBUG_RENDERER",
+        "-march=native",
+        "-fopenmp",
+        "-I/usr/include/eigen3"
     ],
 )
 
@@ -104,6 +130,30 @@ cc_library(
         "-I/usr/include/eigen3",
     ],
     linkopts = ["-larmadillo"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "aircraft_viewer",
+    srcs = [
+        "aircraft_viewer.cpp",
+        "Aircraft.h",
+        "AircraftEnv.h",
+    ],
+    includes = ["."],
+    deps = [
+        ":core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = ["-std=c++17", "-mavx2", "-mfma",
+        "-DJPH_DEBUG_RENDERER", "-O3"],
     visibility = ["//visibility:public"],
 )
 
@@ -120,6 +170,7 @@ cc_binary(
         "-O3",
         "-mavx2",
         "-mfma",
+        "-DJPH_DEBUG_RENDERER",
         "-march=native"
     ],
 )
@@ -139,6 +190,7 @@ cc_binary(
         "-O3",
         "-mavx2",
         "-mfma",
+        "-DJPH_DEBUG_RENDERER",
         "-march=native",
     ],
 )

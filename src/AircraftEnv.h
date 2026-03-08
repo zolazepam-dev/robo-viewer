@@ -12,7 +12,7 @@ public:
 
     void Init(uint32_t envIndex, JPH::PhysicsSystem* physicsSystem);
     void Reset();
-    void QueueActions(const float* actions1, const float* actions2);
+    void QueueActions(const float* actions1, const float* actions2, float deltaTime);
     void HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done);
 
     const Aircraft& GetAircraft1() const { return mAircraft1; }

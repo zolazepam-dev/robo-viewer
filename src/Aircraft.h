@@ -7,22 +7,22 @@
 #include <string>
 
 /**
- * @struct Airfoil
- * @brief Represents an aerodynamic surface (wing, stabilizer, etc.)
+ * @struct Airfoil Section
+ * @brief Definition of an aerodynamic surface for force calculation
  */
-struct Airfoil {
-    JPH::BodyID bodyId;
+struct AirfoilSection {
+    std::string name;
     JPH::Vec3 relativePos;
-    JPH::Vec3 halfExtents;
+    JPH::Quat relativeRot;
     float area;
     float liftCoef;
     float dragCoef;
-    int controlType; // 0: none, 1: pitch, 2: roll, 3: yaw
+    int controlType; // 1: Pitch, 2: Roll, 3: Yaw
 };
 
 /**
  * @class Aircraft
- * @brief Self-contained Jolt aircraft model with aerodynamics
+ * @brief Unified Jolt aircraft model using a single compound body for maximum stability
  */
 class Aircraft {
 public:
@@ -30,26 +30,20 @@ public:
     ~Aircraft() = default;
 
     /**
-     * @brief Create the aircraft in the physics system
+     * @brief Create the aircraft as a single unified body
      */
     void Create(JPH::PhysicsSystem* physicsSystem, JPH::RVec3 position, JPH::ObjectLayer layer);
 
     /**
-     * @brief Apply aerodynamic forces based on current state and actions
-     * @param actions [thrust (0-1), pitch (-1 to 1), roll (-1 to 1), yaw (-1 to 1)]
+     * @brief Apply stable aerodynamic forces to the unified body
      */
-    void ApplyAerodynamics(JPH::PhysicsSystem* physicsSystem, const float* actions);
+    void ApplyAerodynamics(JPH::PhysicsSystem* physicsSystem, const float* actions, float deltaTime);
 
     JPH::BodyID GetMainBodyId() const { return mMainBodyId; }
-    float GetHP() const { return mHp; }
-    void SetHP(float hp) { mHp = hp; }
 
 private:
     JPH::BodyID mMainBodyId;
-    std::vector<Airfoil> mAirfoils;
-    float mThrustMax = 150000.0f;
-    float mHp = 100.0f;
-    
-    // Constant for air density at sea level
+    std::vector<AirfoilSection> mSections;
+    float mThrustMax = 350000.0f;
     const float mRho = 1.225f;
 };

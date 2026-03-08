@@ -12,11 +12,14 @@
 #include "NeuralMath.h"
 #include "NeuralNetwork.h"
 #include "AlignedAllocator.h"
+#include "PerformanceProfiler.h"
+#include "OptimizedMath.h"
+#include "MuonOptimizer.h"
 
 struct TD3Config
 {
-    int hiddenDim = 64;
-    int latentDim = 16;
+    int hiddenDim = 128;  // Balanced: larger than 64 but not as big as 256
+    int latentDim = 24;   // Moderate increase from 16
     float actorLR = 3e-4f;
     float criticLR = 3e-4f;
     float gamma = 0.99f;
@@ -48,6 +51,7 @@ public:
     void TrainWithVectorRewards(class ReplayBuffer& buffer);
     
     void Save(const std::string& path) const;
+    void Save(const std::string& path, const std::string& robotConfigPath, int numSatellites, int observationDim) const;
     void Load(const std::string& path);
     
     int GetStepCount() const { return mStepCount; }
@@ -83,6 +87,10 @@ private:
     void UpdateTargets();
     void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
     float ComputeCriticLoss(class SpanNetwork& critic, const float* criticInput, int batchSize);
+    
+    // Checkpoint conversion for expanded observation space
+    void ConvertAndLoadWeights(class SpanNetwork& network, const std::vector<float>& oldWeights,
+                               int oldStateDim, int oldActionDim);
     
     int mStateDim;
     int mActionDim;
@@ -121,4 +129,18 @@ private:
 
     int mStepCount = 0;
     int mUpdateCount = 0;
+    
+    // Performance profiling
+    float mActionTime = 0.0f;
+    float mStepTime = 0.0f;
+    float mBufferTime = 0.0f;
+    float mTrainTime = 0.0f;
+    float mPhysicsTime = 0.0f;
+    float mNetworkTime = 0.0f;
+    PerformanceMetrics mPerfMetrics;
+    
+    // Muon optimizer for gradient-based training
+    MuonOptimizer mActorOptimizer;
+    MuonOptimizer mCritic1Optimizer;
+    MuonOptimizer mCritic2Optimizer;
 };

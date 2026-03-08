@@ -1,12 +1,3 @@
-/**
- * @file PhysicsCore.cpp
- * @brief Implementation of the PhysicsCore class
- * 
- * Contains the implementation for the high-performance Jolt Physics system manager,
- * including thread pinning, memory management, and simulation stepping.
- */
-
-// STRICT REQUIREMENT: Jolt.h must be included first
 #include <Jolt/Jolt.h>
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
@@ -20,223 +11,127 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 
+PhysicsCore::~PhysicsCore() { Shutdown(); }
 
-/**
- * @brief Destructor for PhysicsCore
- */
-PhysicsCore::~PhysicsCore()
-{
-    Shutdown();
-}
-
-/**
- * @brief Initialize the physics system
- * 
- * This method initializes the Jolt Physics system with optimizations for
- * reinforcement learning, including:
- * - Thread pinning for maximum CPU utilization
- * - Memory pooling for zero-allocation physics loop
- * - Dimensional Ghosting configuration
- * - Optimal physics settings for RL
- * 
- * @param numParallelEnvs Number of parallel environments to support
- * @return True if initialization succeeded
- */
-bool PhysicsCore::Init(uint32_t numParallelEnvs)
-{
+bool PhysicsCore::Init(uint32_t numParallelEnvs) {
     if (mInitialized) return true;
     mNumEnvs = numParallelEnvs;
-
     JPH::RegisterDefaultAllocator();
-
-    // Allocate temporary memory for physics simulation
-    uint32_t tempAllocSize = 256 * 1024 * 1024;
-    mTempAllocator = new JPH::TempAllocatorImpl(tempAllocSize);
-
-    // Thread Pinning Strategy: 
-    // Target: 6 cores / 12 threads.
-    // Core 0 (Threads 0 & 6) is left free for the Pop!_OS scheduler and the neural network.
-    // We strictly spawn exactly 10 worker threads and pin them to Cores 1-5 (Threads 1-5, 7-11).
-    uint32_t joltWorkerThreads = 10;
-
-    // Create thread pool for physics jobs
-    mJobSystem = new JPH::JobSystemThreadPool(
-        JPH::cMaxPhysicsJobs,
-        JPH::cMaxPhysicsBarriers,
-        joltWorkerThreads
-    );
-
-    // CPU cores (threads) to pin Jolt workers to (excluding Core 0's threads 0 & 6)
-    const int kPinnedThreads[] = {1, 2, 3, 4, 5, 7, 8, 9, 10, 11};
-    const int kNumPinnedThreads = sizeof(kPinnedThreads) / sizeof(kPinnedThreads[0]);
     
-    JPH_ASSERT(joltWorkerThreads <= kNumPinnedThreads, "Requested more worker threads than available CPU cores for pinning!");
-
-    // Pin each Jolt worker thread to a specific CPU core
+    uint32_t tempAllocSize = 512 * 1024 * 1024;  // Increased temp memory for more envs
+    std::cout << "[PhysicsCore] Allocating Temp Memory..." << std::endl;
+    mTempAllocator = new JPH::TempAllocatorImpl(tempAllocSize);
+    
+    // Use more worker threads for better CPU utilization
+    // Detect available cores and use most of them (leave 1 for OS and main thread)
+    uint32_t hardwareThreads = std::thread::hardware_concurrency();
+    uint32_t joltWorkerThreads = std::max(1u, hardwareThreads - 2);  // Leave 2 cores for OS/main
+    if (joltWorkerThreads > 16) joltWorkerThreads = 16;  // Cap at 16 for stability
+    
+    std::cout << "[PhysicsCore] Hardware threads: " << hardwareThreads << ", Using: " << joltWorkerThreads << std::endl;
+    std::cout << "[PhysicsCore] Creating Job System..." << std::endl;
+    mJobSystem = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, joltWorkerThreads);
+    
+    // Pin threads to available cores (skip core 0 for OS)
     for (uint32_t i = 0; i < joltWorkerThreads; ++i) {
-        int targetCore = kPinnedThreads[i];
-        
-        // Get native thread handle from std::thread
+        int targetCore = (i + 1) % hardwareThreads;  // Distribute across cores, skip 0
         pthread_t threadHandle = mJobSystem->mThreads[i].native_handle();
-        
-        // Set CPU affinity
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(targetCore, &cpuset);
-        
-        int result = pthread_setaffinity_np(threadHandle, sizeof(cpu_set_t), &cpuset);
-        if (result != 0) {
-            std::cerr << "[JOLTrl] WARNING: Failed to pin Jolt worker thread " << i << " to core " << targetCore << " (err: " << result << ")" << std::endl;
-        } else {
-            std::cout << "[JOLTrl] Pinned Jolt worker thread " << i << " to CPU core " << targetCore << std::endl;
-        }
+        std::cout << "[PhysicsCore] Pinning thread " << i << " to core " << targetCore << std::endl;
+        pthread_setaffinity_np(threadHandle, sizeof(cpu_set_t), &cpuset);
     }
-
-    // Thread-safe Jolt initialization using static local initialization (C++11 guarantees)
-    static std::once_flag joltInitFlag;
-    std::call_once(joltInitFlag, []() {
+    std::cout << "[PhysicsCore] Checking Jolt Factory..." << std::endl;
+    if (JPH::Factory::sInstance == nullptr) {
+        std::cout << "[PhysicsCore] Registering Jolt Allocator..." << std::endl;
+        JPH::RegisterDefaultAllocator();
+        std::cout << "[PhysicsCore] Creating Jolt Factory..." << std::endl;
         JPH::Factory::sInstance = new JPH::Factory();
+        std::cout << "[PhysicsCore] Registering Jolt Types..." << std::endl;
         JPH::RegisterTypes();
-    });
-
-    // Create layer interfaces and filters
+    }
+    std::cout << "[PhysicsCore] Creating BP Layers..." << std::endl;
     mBroadPhaseLayerInterface = new BPLayerInterfaceImpl(mNumEnvs);
     mObjectVsBroadPhaseLayerFilter = new ObjectVsBroadPhaseLayerFilterImpl();
     mObjectLayerPairFilter = new ObjectLayerPairFilterImpl();
-
-    // Scale physics system capacities for Dimensional Ghosting
-    const uint32_t bodiesPerEnv = 60; // 2 robots * 27 bodies + safety margin
-    const uint32_t maxBodies = std::max<uint32_t>(2048, mNumEnvs * bodiesPerEnv + 256);
-    const uint32_t numBodyMutexes = std::max<uint32_t>(1, mNumEnvs / 2); // Mutex per ~2 envs
-    const uint32_t maxBodyPairs = std::min<uint32_t>(131072, maxBodies * 8); // Cap at 128K
-    const uint32_t maxContactConstraints = maxBodyPairs;
-
-    // Initialize physics system
+    const uint32_t maxBodies = 10240;
+    const uint32_t numBodyMutexes = 0;
+    const uint32_t maxBodyPairs = 10240;
+    const uint32_t maxContactConstraints = 10240;
+    std::cout << "[PhysicsCore] Creating PhysicsSystem..." << std::endl;
     mPhysicsSystem = new JPH::PhysicsSystem();
-    mPhysicsSystem->Init(
-        maxBodies,
-        numBodyMutexes,
-        maxBodyPairs,
-        maxContactConstraints,
-        *mBroadPhaseLayerInterface,
-        *mObjectVsBroadPhaseLayerFilter,
-        *mObjectLayerPairFilter
-    );
-
-    // Set gravity to Earth's gravity (9.81 m/s² downward)
-    mPhysicsSystem->SetGravity(JPH::Vec3(0.0f, -9.81f, 0.0f));
-
-    // Configure physics settings for optimal RL performance
-    JPH::PhysicsSettings physicsSettings;
-
-    // RL Optimization: Max speed with minimal stability tradeoff
-    physicsSettings.mNumVelocitySteps = 2;
-    physicsSettings.mNumPositionSteps = 1;
-    physicsSettings.mBaumgarte = 0.2f;
     
-    // Enable collision group filtering so bodies in the same group don't collide
-    physicsSettings.mUseManifoldReduction = true;
-
-    mPhysicsSystem->SetPhysicsSettings(physicsSettings);
-
-    // Create group filter to disable self-collision within the same robot
-    // Group 1 = robot bodies, they should not collide with each other
-
+    // Create group filter table for self-collision management
+    mGroupFilter = new JPH::GroupFilterTable(2); // 2 sub-groups
+    mGroupFilter->DisableCollision(0, 0); // Parts in sub-group 0 don't collide with each other
+    // By default, 0 and 1 WILL collide if they are in the same GroupID
+    
+    mPhysicsSystem->Init(maxBodies, numBodyMutexes, maxBodyPairs, maxContactConstraints, *mBroadPhaseLayerInterface, *mObjectVsBroadPhaseLayerFilter, *mObjectLayerPairFilter);
+    mPhysicsSystem->SetGravity(JPH::Vec3(0.0f, -9.81f, 0.0f));
     mInitialized = true;
-    std::cout << "[JOLTrl] PhysicsCore initialized globally for " << mNumEnvs << " overlapping environments." <<
-        std::endl;
     return true;
 }
 
-/**
- * @brief Shutdown the physics system
- * 
- * Cleans up all resources allocated by the physics system.
- */
-void PhysicsCore::Shutdown()
-{
-    if (!mInitialized) return;
-
-    delete mPhysicsSystem;
-    mPhysicsSystem = nullptr;
-
-    delete mObjectLayerPairFilter;
-    mObjectLayerPairFilter = nullptr;
-
-    delete mObjectVsBroadPhaseLayerFilter;
-    mObjectVsBroadPhaseLayerFilter = nullptr;
-
-    delete mBroadPhaseLayerInterface;
-    mBroadPhaseLayerInterface = nullptr;
-
-    // Only delete the factory if we created it and it's not null
-    if (JPH::Factory::sInstance != nullptr)
-    {
-        JPH::Factory* factory = JPH::Factory::sInstance;
-        JPH::Factory::sInstance = nullptr;
-        delete factory;
+void PhysicsCore::Shutdown() {
+    std::cout << "[PhysicsCore] Shutdown starting..." << std::endl;
+    if (!mInitialized) {
+        std::cout << "[PhysicsCore] Not initialized, skipping." << std::endl;
+        return;
     }
-
-    delete mJobSystem;
-    mJobSystem = nullptr;
-
-    delete mTempAllocator;
-    mTempAllocator = nullptr;
-
+    
+    if (mPhysicsSystem) {
+        std::cout << "[PhysicsCore] Deleting PhysicsSystem..." << std::endl;
+        delete mPhysicsSystem; 
+        mPhysicsSystem = nullptr;
+    }
+    
+    if (mObjectLayerPairFilter) { delete mObjectLayerPairFilter; mObjectLayerPairFilter = nullptr; }
+    if (mObjectVsBroadPhaseLayerFilter) { delete mObjectVsBroadPhaseLayerFilter; mObjectVsBroadPhaseLayerFilter = nullptr; }
+    if (mBroadPhaseLayerInterface) { delete mBroadPhaseLayerInterface; mBroadPhaseLayerInterface = nullptr; }
+    
+    if (mJobSystem) {
+        std::cout << "[PhysicsCore] Deleting JobSystem..." << std::endl;
+        delete mJobSystem; 
+        mJobSystem = nullptr;
+    }
+    
+    if (mTempAllocator) {
+        std::cout << "[PhysicsCore] Deleting TempAllocator..." << std::endl;
+        delete mTempAllocator; 
+        mTempAllocator = nullptr;
+    }
+    
     mInitialized = false;
+    std::cout << "[PhysicsCore] Shutdown complete." << std::endl;
 }
 
-/**
- * @brief Step the physics simulation
- * 
- * Runs a single physics simulation step with optimized settings for
- * high-throughput reinforcement learning.
- * 
- * @param deltaTime Time to simulate in seconds
- */
-void PhysicsCore::GetBodiesByLayers(JPH::BodyIDVector& outBodies, const std::vector<JPH::ObjectLayer>& layers) const
-{
+void PhysicsCore::GetBodiesByLayers(JPH::BodyIDVector& outBodies, const std::vector<JPH::ObjectLayer>& layers) const {
     outBodies.clear();
     if (!mInitialized || !mPhysicsSystem) return;
-
     JPH::BodyIDVector allBodies;
     mPhysicsSystem->GetBodies(allBodies);
-
     const JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-
     for (const JPH::BodyID& bodyId : allBodies) {
         if (bodyId.IsInvalid()) continue;
         JPH::ObjectLayer layer = bodyInterface.GetObjectLayer(bodyId);
-        if (std::find(layers.begin(), layers.end(), layer) != layers.end()) {
-            outBodies.push_back(bodyId);
-        }
+        if (std::find(layers.begin(), layers.end(), layer) != layers.end()) outBodies.push_back(bodyId);
     }
 }
 
-void PhysicsCore::GetBodiesByLayer(JPH::BodyIDVector& outBodies, JPH::ObjectLayer layer) const
-{
+void PhysicsCore::GetBodiesByLayer(JPH::BodyIDVector& outBodies, JPH::ObjectLayer layer) const {
     outBodies.clear();
     if (!mInitialized || !mPhysicsSystem) return;
-
     JPH::BodyIDVector allBodies;
     mPhysicsSystem->GetBodies(allBodies);
-
     const JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-
     for (const JPH::BodyID& bodyId : allBodies) {
         if (bodyId.IsInvalid()) continue;
-        if (bodyInterface.GetObjectLayer(bodyId) == layer) {
-            outBodies.push_back(bodyId);
-        }
+        if (bodyInterface.GetObjectLayer(bodyId) == layer) outBodies.push_back(bodyId);
     }
 }
 
-void PhysicsCore::Step(float deltaTime)
-{
+void PhysicsCore::Step(float deltaTime) {
     if (!mInitialized) return;
-
-    // Keep collision steps strictly to 1 to blast through the SPS ceiling
-    constexpr int cCollisionSteps = 1;
-
-    mPhysicsSystem->Update(deltaTime, cCollisionSteps, mTempAllocator, mJobSystem);
+    mPhysicsSystem->Update(deltaTime, 1, mTempAllocator, mJobSystem);
 }

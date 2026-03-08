@@ -3,6 +3,7 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 #include <fstream>
+#include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
@@ -43,8 +44,11 @@ void OverlayUIRefactored::Init(GLFWwindow* window)
     mContext = ImGui::CreateContext();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-    
+
     DrawCyberpunkStyle();
+    
+    // Auto-load settings from file
+    LoadSettings("viewer_config.json");
 }
 
 void OverlayUIRefactored::NewFrame()
@@ -67,6 +71,9 @@ void OverlayUIRefactored::DrawAllTabs()
 
 void OverlayUIRefactored::Shutdown()
 {
+    // Auto-save settings before shutdown
+    SaveSettings("viewer_config.json");
+    
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext(mContext);
@@ -276,7 +283,23 @@ void OverlayUIRefactored::DrawTrainingTab()
     TOOLTIP("Physics time scale (1.0 = realtime)")
     ImGui::Checkbox("Restart with New Envs", &mRestartRequested);
     TOOLTIP("Restart simulation with new environment count")
+
+    ImGui::Separator();
+    ImGui::TextColored(mColorDim, "CONFIGURATION");
+    ImGui::Separator();
     
+    if (ImGui::Button("SAVE CONFIG", ImVec2(150, 30))) {
+        std::cout << "[OverlayUI] SAVE CONFIG button clicked!" << std::endl;
+        SaveSettings("viewer_config.json");
+        std::cout << "[OverlayUI] SaveSettings() completed" << std::endl;
+    }
+    TOOLTIP("Save current settings to viewer_config.json")
+    ImGui::SameLine();
+    if (ImGui::Button("LOAD CONFIG", ImVec2(150, 30))) {
+        LoadSettings("viewer_config.json");
+    }
+    TOOLTIP("Load settings from viewer_config.json")
+
     ImGui::Separator();
     ImGui::TextColored(mColorAccent, "STATISTICS");
     ImGui::Separator();
@@ -841,6 +864,133 @@ bool OverlayUIRefactored::GetAndClearCreateCheckpointFolderRequest(std::string& 
 const std::string& OverlayUIRefactored::GetSelectedRobotType() const
 {
     return mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name;
+}
+
+// ================================
+// SETTINGS SAVE/LOAD
+// ================================
+
+#include <fstream>
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+void OverlayUIRefactored::SaveSettings(const std::string& path)
+{
+    json j;
+    
+    // Physics settings
+    j["physics"]["gravityY"] = mPhysics.gravityY;
+    j["physics"]["timestep"] = mPhysics.timestep;
+    j["physics"]["velocitySteps"] = mPhysics.velocitySteps;
+    j["physics"]["positionSteps"] = mPhysics.positionSteps;
+    j["physics"]["Baumgarte"] = mPhysics.Baumgarte;
+    j["physics"]["penetrationSlop"] = mPhysics.penetrationSlop;
+    j["physics"]["speculativeContactDistance"] = mPhysics.speculativeContactDistance;
+    j["physics"]["allowSleep"] = mPhysics.allowSleep;
+    j["physics"]["timeScale"] = mTimeScale;
+    j["physics"]["stepsPerEpisode"] = mStepsPerEpisode;
+    
+    // Robot settings
+    j["robot"]["enginePower"] = mRobotTune.enginePower;
+    j["robot"]["reactionWheelPower"] = mRobotTune.reactionWheelPower;
+    j["robot"]["shellRadius"] = mRobotTune.shellRadius;
+    j["robot"]["shellThickness"] = mRobotTune.shellThickness;
+    j["robot"]["shellMass"] = mRobotTune.shellMass;
+    j["robot"]["motorSpeed"] = mRobotTune.motorSpeed;
+    j["robot"]["motorTorque"] = mRobotTune.motorTorque;
+    
+    // Graphics settings
+    j["graphics"]["showCollisionShapes"] = mGraphics.showCollisionShapes;
+    j["graphics"]["showAABBs"] = mGraphics.showAABBs;
+    j["graphics"]["showContactPoints"] = mGraphics.showContactPoints;
+    j["graphics"]["showRobot1"] = mGraphics.showRobot1;
+    j["graphics"]["showRobot2"] = mGraphics.showRobot2;
+    j["graphics"]["showInternalEngines"] = mGraphics.showInternalEngines;
+    j["graphics"]["cameraDistance"] = mGraphics.cameraDistance;
+    j["graphics"]["cameraAzimuth"] = mGraphics.cameraAzimuth;
+    j["graphics"]["cameraElevation"] = mGraphics.cameraElevation;
+    
+    // Training config
+    j["training"]["numEnvs"] = mConfig.numEnvs;
+    j["training"]["checkpointInterval"] = mConfig.checkpointInterval;
+    j["training"]["checkpointDir"] = mConfig.checkpointDir;
+    j["training"]["robotConfigPath"] = mConfig.robotConfigPath;
+
+    std::ofstream file(path);    if (file.is_open()) {
+        file << j.dump(2);
+        file.close();
+        std::cout << "[OverlayUI] Settings saved to: " << path << std::endl;
+    }
+}
+
+void OverlayUIRefactored::LoadSettings(const std::string& path)
+{
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cout << "[OverlayUI] No settings file found at: " << path << std::endl;
+        return;
+    }
+    
+    try {
+        json j;
+        file >> j;
+        
+        // Physics settings
+        if (j.contains("physics")) {
+            const auto& p = j["physics"];
+            if (p.contains("gravityY")) mPhysics.gravityY = p["gravityY"];
+            if (p.contains("timestep")) mPhysics.timestep = p["timestep"];
+            if (p.contains("velocitySteps")) mPhysics.velocitySteps = p["velocitySteps"];
+            if (p.contains("positionSteps")) mPhysics.positionSteps = p["positionSteps"];
+            if (p.contains("Baumgarte")) mPhysics.Baumgarte = p["Baumgarte"];
+            if (p.contains("penetrationSlop")) mPhysics.penetrationSlop = p["penetrationSlop"];
+            if (p.contains("speculativeContactDistance")) mPhysics.speculativeContactDistance = p["speculativeContactDistance"];
+            if (p.contains("allowSleep")) mPhysics.allowSleep = p["allowSleep"];
+            if (p.contains("timeScale")) mTimeScale = p["timeScale"];
+            if (p.contains("stepsPerEpisode")) mStepsPerEpisode = p["stepsPerEpisode"];
+        }
+        
+        // Robot settings
+        if (j.contains("robot")) {
+            const auto& r = j["robot"];
+            if (r.contains("enginePower")) mRobotTune.enginePower = r["enginePower"];
+            if (r.contains("reactionWheelPower")) mRobotTune.reactionWheelPower = r["reactionWheelPower"];
+            if (r.contains("shellRadius")) mRobotTune.shellRadius = r["shellRadius"];
+            if (r.contains("shellThickness")) mRobotTune.shellThickness = r["shellThickness"];
+            if (r.contains("shellMass")) mRobotTune.shellMass = r["shellMass"];
+            if (r.contains("motorSpeed")) mRobotTune.motorSpeed = r["motorSpeed"];
+            if (r.contains("motorTorque")) mRobotTune.motorTorque = r["motorTorque"];
+        }
+        
+        // Graphics settings
+        if (j.contains("graphics")) {
+            const auto& g = j["graphics"];
+            if (g.contains("showCollisionShapes")) mGraphics.showCollisionShapes = g["showCollisionShapes"];
+            if (g.contains("showAABBs")) mGraphics.showAABBs = g["showAABBs"];
+            if (g.contains("showContactPoints")) mGraphics.showContactPoints = g["showContactPoints"];
+            if (g.contains("showRobot1")) mGraphics.showRobot1 = g["showRobot1"];
+            if (g.contains("showRobot2")) mGraphics.showRobot2 = g["showRobot2"];
+            if (g.contains("showInternalEngines")) mGraphics.showInternalEngines = g["showInternalEngines"];
+            if (g.contains("cameraDistance")) mGraphics.cameraDistance = g["cameraDistance"];
+            if (g.contains("cameraAzimuth")) mGraphics.cameraAzimuth = g["cameraAzimuth"];
+            if (g.contains("cameraElevation")) mGraphics.cameraElevation = g["cameraElevation"];
+        }
+        
+        // Training config
+        if (j.contains("training")) {
+            const auto& t = j["training"];
+            if (t.contains("numEnvs")) mConfig.numEnvs = t["numEnvs"];
+            if (t.contains("checkpointInterval")) mConfig.checkpointInterval = t["checkpointInterval"];
+            if (t.contains("checkpointDir")) mConfig.checkpointDir = t["checkpointDir"];
+            if (t.contains("robotConfigPath")) mConfig.robotConfigPath = t["robotConfigPath"];
+        }
+        
+        std::cout << "[OverlayUI] Settings loaded from: " << path << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[OverlayUI] Error loading settings: " << e.what() << std::endl;
+    }
+    
+    file.close();
 }
 
 

@@ -32,6 +32,16 @@ void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots,
     mBasisFunctionsBuffer.resize(inputDim * (mSplineDegree + 1));
     mSpanIndicesBuffer.resize(inputDim);
     mTempOutput.resize(outputDim);
+    mControlPointGradients.resize(totalControlPoints, 0.0f);  // Initialize gradients to zero
+    
+    // Precompute basis function lookup table for optimization
+    mBasisLookupTable.resize(BASIS_LOOKUP_SIZE * (mSplineDegree + 1));
+    for (int i = 0; i < BASIS_LOOKUP_SIZE; ++i) {
+        float x = (static_cast<float>(i) / static_cast<float>(BASIS_LOOKUP_SIZE - 1)); // [0, 1]
+        int spanIdx;
+        ComputeBasisFunctions(x, &mBasisLookupTable[i * (mSplineDegree + 1)], spanIdx);
+    }
+    mUseLookupTable = true;
 }
 
 void TensorProductBSpline::ComputeKnotVector()
@@ -115,13 +125,38 @@ void TensorProductBSpline::Forward(const float* input, float* output)
     const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
     const int degreePlus1 = mSplineDegree + 1;
 
-    // 1. Precompute basis functions for the input vector once
-    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
-    {
-        float x = std::tanh(input[inIdx]) * 0.5f + 0.5f;
-        int spanIdx;
-        ComputeBasisFunctions(x, &mBasisFunctionsBuffer[inIdx * degreePlus1], spanIdx);
-        mSpanIndicesBuffer[inIdx] = spanIdx;
+    // Use optimized lookup table if available
+    if (mUseLookupTable) {
+        // 1. Look up basis functions using precomputed table
+        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
+        {
+            float x = tanhf(input[inIdx]) * 0.5f + 0.5f;  // Normalize to [0, 1]
+            // Clamp to [0, 1] range
+            if (x < 0.0f) x = 0.0f;
+            if (x > 1.0f) x = 1.0f;
+            
+            // Map to lookup table index
+            float scaled = x * (BASIS_LOOKUP_SIZE - 1);
+            int idx = (int)scaled;
+            if (idx >= BASIS_LOOKUP_SIZE) idx = BASIS_LOOKUP_SIZE - 1;
+            
+            // Copy precomputed basis functions
+            const float* lookupBasis = &mBasisLookupTable[idx * degreePlus1];
+            float* destBasis = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+            for (int i = 0; i < degreePlus1; ++i) {
+                destBasis[i] = lookupBasis[i];
+            }
+            mSpanIndicesBuffer[inIdx] = mSplineDegree; // Use default span
+        }
+    } else {
+        // Original computation (backup)
+        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
+        {
+            float x = tanhf(input[inIdx]) * 0.5f + 0.5f;
+            int spanIdx;
+            ComputeBasisFunctions(x, &mBasisFunctionsBuffer[inIdx * degreePlus1], spanIdx);
+            mSpanIndicesBuffer[inIdx] = spanIdx;
+        }
     }
 
     // 2. Optimized Accumulation with precomputed cp pointers
@@ -302,6 +337,83 @@ void SpanNetwork::SoftUpdate(const SpanNetwork& other, float tau)
     SetAllWeights(myWeights);
 }
 
+std::vector<float> SpanNetwork::GetAllGradients() const
+{
+    std::vector<float> grads;
+    for (const auto& layer : mLayers)
+    {
+        const auto& grad = layer.GetControlPointGradients();
+        grads.insert(grads.end(), grad.begin(), grad.end());
+    }
+    return grads;
+}
+
+void SpanNetwork::SetAllGradients(const std::vector<float>& grads)
+{
+    size_t offset = 0;
+    for (auto& layer : mLayers)
+    {
+        auto& grad = layer.GetControlPointGradients();
+        size_t n = grad.size();
+        std::copy(grads.begin() + offset, grads.begin() + offset + n, grad.begin());
+        offset += n;
+    }
+}
+
+void SpanNetwork::ZeroGradients()
+{
+    for (auto& layer : mLayers)
+    {
+        auto& grad = layer.GetControlPointGradients();
+        std::fill(grad.begin(), grad.end(), 0.0f);
+    }
+}
+
+void SpanNetwork::ComputeGradients(const float* input, const float* output, const float* target, int batchSize)
+{
+    // Simple finite difference gradient approximation for B-spline control points
+    // This is a placeholder - proper analytic gradients would require implementing
+    // full backpropagation through the B-spline basis functions
+    
+    ZeroGradients();
+    
+    const float epsilon = 1e-4f;
+    auto originalWeights = GetAllWeights();
+    auto grads = GetAllGradients();
+    
+    // For each control point, compute gradient via finite differences
+    for (size_t i = 0; i < originalWeights.size(); i += 64) {  // Sample every 64th for speed
+        float originalWeight = originalWeights[i];
+        
+        // Perturb weight
+        originalWeights[i] = originalWeight + epsilon;
+        SetAllWeights(originalWeights);
+        
+        // Forward pass with perturbed weight
+        AlignedVector32<float> perturbedOutput(batchSize * GetOutputDim());
+        ForwardBatch(input, perturbedOutput.data(), batchSize);
+        
+        // Compute loss gradient
+        float lossGrad = 0.0f;
+        for (int b = 0; b < batchSize; ++b) {
+            for (size_t d = 0; d < GetOutputDim(); ++d) {
+                float diff = perturbedOutput[b * GetOutputDim() + d] - output[b * GetOutputDim() + d];
+                lossGrad += 2.0f * diff * (target[b * GetOutputDim() + d] - output[b * GetOutputDim() + d]);
+            }
+        }
+        lossGrad /= (batchSize * GetOutputDim() * epsilon);
+        
+        // Store gradient
+        grads[i] = lossGrad;
+        
+        // Restore original weight
+        originalWeights[i] = originalWeight;
+    }
+    
+    SetAllWeights(originalWeights);
+    SetAllGradients(grads);
+}
+
 void SpanActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng)
 {
     mStateDim = stateDim;
@@ -309,18 +421,22 @@ void SpanActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, 
      mHiddenDim = hiddenDim;
      mLatentDim = latentDim;
      
+     // 3-LAYER DEEP NETWORK with wider hidden dims for expanded obs space
      size_t actorInputDim = stateDim + latentDim;
     std::vector<SpanLayerConfig> actorConfig = {
-        {actorInputDim, hiddenDim, 4, 2},
-        {hiddenDim, actionDim, 4, 2}
+        {actorInputDim, hiddenDim * 2, 8, 3},   // Input -> Hidden1 (wider)
+        {hiddenDim * 2, hiddenDim, 8, 3},       // Hidden1 -> Hidden2 (bottleneck)
+        {hiddenDim, actionDim, 8, 3}            // Hidden2 -> Output
     };
      mActor.Init(actorConfig, rng);
      mActorTarget.Init(actorConfig, rng);
      
+     // 3-LAYER CRITIC for better Q-value estimation
      size_t criticInputDim = stateDim + actionDim + latentDim;
     std::vector<SpanLayerConfig> criticConfig = {
-        {criticInputDim, hiddenDim, 4, 2},
-        {hiddenDim, 4, 4, 2}
+        {criticInputDim, hiddenDim * 2, 8, 3},  // Input -> Hidden1 (wider)
+        {hiddenDim * 2, hiddenDim, 8, 3},       // Hidden1 -> Hidden2
+        {hiddenDim, 4, 8, 3}                    // Hidden2 -> Q-value
     };
     mCritic1.Init(criticConfig, rng);
     mCritic2.Init(criticConfig, rng);

@@ -78,3 +78,6 @@ session-ses_*.md
 
 .gemini/
 gha-creds-*.json
+.aider*
+.agency/*
+!.agency/setup.sh

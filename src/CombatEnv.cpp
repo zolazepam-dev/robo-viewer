@@ -1,9 +1,12 @@
 #include <Jolt/Jolt.h>
 #include "CombatEnv.h"
 #include "CombatRobot.h"
+#include "RobotFactory.h"
+#include "RobotController.h"
 
 #include <cmath>
 #include <iostream>
+#include <fstream>
 #include <random>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -64,25 +67,36 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
         impulseMag += impulse.mFrictionImpulse2;
     }
 
-    mForceReadingsPerEnv[envIdx][0].impulseMagnitude[0] += impulseMag;
-    mForceReadingsPerEnv[envIdx][1].impulseMagnitude[0] += impulseMag;
+    auto& reading1 = mForceReadingsPerEnv[envIdx][0];
+    auto& reading2 = mForceReadingsPerEnv[envIdx][1];
+
+    if (reading1.impulseMagnitude.size() > 0)
+        reading1.impulseMagnitude[0] += impulseMag;
+    if (reading2.impulseMagnitude.size() > 0)
+        reading2.impulseMagnitude[0] += impulseMag;
 }
 
-void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, int stepsPerEpisode)
+void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, const std::string& robotConfigPath, int stepsPerEpisode)
 {
+    std::cerr << "[CombatEnv] Init for env " << envIndex << "..." << std::endl;
     mEnvIndex = envIndex;
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
+    mRobotConfigPath = robotConfigPath;
     mStepsPerEpisode = stepsPerEpisode;
 
     Reset();
     
+    // Initialize Controllers (The Brains)
+    mController1 = std::make_unique<RobotController>(mRobot1);
+    mController2 = std::make_unique<RobotController>(mRobot2);
+
     // Set observation dimension from robot configuration
     mObservationDim = mRobot1.config.observationDim;
     
     // Ensure observation buffers are properly sized
-    mRobot1.observationBuffer.resize(mObservationDim);
-    mRobot2.observationBuffer.resize(mObservationDim);
+    mObs1.resize(mObservationDim);
+    mObs2.resize(mObservationDim);
 }
 
 void CombatEnv::Reset()
@@ -103,9 +117,6 @@ void CombatEnv::Reset()
     mRobot2.totalDamageTaken = 0.0f;
     mRobot1.totalEnergyUsed = 0.0f;
     mRobot2.totalEnergyUsed = 0.0f;
-    // Reset force sensors with configured number of satellites
-    int numSatellites = mRobot1.config.numSatellites;
-    CombatContactListener::Get().ResetForceReadings(mEnvIndex, numSatellites);
 
     // Randomize KOTH point
     static std::mt19937 rng(std::random_device{}());
@@ -122,38 +133,106 @@ void CombatEnv::Reset()
         mKothVisualId = bodyInterface.CreateAndAddBody(kothSettings, JPH::EActivation::DontActivate);
     }
 
-    // 2. Reset existing robots instead of destroying/recreating
-    JPH::RVec3 pos1(-10.0f, 5.0f, 0.0f);
-    JPH::RVec3 pos2(10.0f, 5.0f, 0.0f);
+    // 2. Random spawn locations for both agents
+    // Spawn on opposite sides of arena with random positions
+    std::uniform_real_distribution<float> spawnX(-20.0f, -5.0f);  // Robot 1: left side
+    std::uniform_real_distribution<float> spawnX2(5.0f, 20.0f);   // Robot 2: right side
+    std::uniform_real_distribution<float> spawnY(2.0f, 8.0f);     // Height variation
+    std::uniform_real_distribution<float> spawnZ(-15.0f, 15.0f);  // Z-axis variation
     
+    JPH::RVec3 pos1(spawnX(rng), spawnY(rng), spawnZ(rng));
+    JPH::RVec3 pos2(spawnX2(rng), spawnY(rng), spawnZ(rng));
+    
+    // Ensure minimum spawn distance (prevent spawn killing)
+    float minDistance = 15.0f;
+    float maxAttempts = 10;
+    float attempts = 0;
+    while ((pos2 - pos1).Length() < minDistance && attempts < maxAttempts) {
+        pos1 = JPH::RVec3(spawnX(rng), spawnY(rng), spawnZ(rng));
+        pos2 = JPH::RVec3(spawnX2(rng), spawnY(rng), spawnZ(rng));
+        attempts++;
+    }
+
      if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) {
-         // First time initialization: load robots
-         mRobot1 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos1, mEnvIndex, 0);
-         mRobot1.type = RobotType::SATELLITE;
+         // First time initialization: load blue-prints then build
+         std::ifstream f(mRobotConfigPath);
+         if (!f.is_open()) {
+             std::cerr << "[CombatEnv] ERROR: Could not open robot config: " << mRobotConfigPath << std::endl;
+             return;
+         }
+         nlohmann::json j;
+         try {
+             f >> j;
+         } catch (const nlohmann::json::parse_error& e) {
+             std::cerr << "[CombatEnv] JSON Parse Error: " << e.what() << std::endl;
+             return;
+         }
+         auto config = RobotConfig::LoadFromJSON(j);
          
-         mRobot2 = mRobotLoader->LoadRobot("robots/combat_bot.json", mPhysicsSystem, pos2, mEnvIndex, 1);
-         mRobot2.type = RobotType::SATELLITE;
+         std::cerr << "[CombatEnv] Creating robot 1..." << std::endl;
+         mRobot1 = RobotFactory::CreateRobot(config, mPhysicsSystem, pos1, mEnvIndex, 0);
+         std::cerr << "[CombatEnv] Robot 1 created with ID: " << mRobot1.mainBodyId.GetIndex() << std::endl;
+         std::cerr << "[CombatEnv] Creating robot 2..." << std::endl;
+         mRobot2 = RobotFactory::CreateRobot(config, mPhysicsSystem, pos2, mEnvIndex, 1);
+         std::cerr << "[CombatEnv] Robot 2 created with ID: " << mRobot2.mainBodyId.GetIndex() << std::endl;
+         if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) { std::cerr << "[CombatEnv] FATAL: Robot creation failed for orbital_shard." << std::endl; return; }
+         
+         // Update internal pointers for controllers
+         mController1 = std::make_unique<RobotController>(mRobot1);
+         mController2 = std::make_unique<RobotController>(mRobot2);
      } else {
-         // Reset robot 1 using CombatRobotLoader's ResetRobot method
-         mRobotLoader->ResetRobot(mRobot1, mPhysicsSystem, pos1);
-         
-         // Reset robot 2 using CombatRobotLoader's ResetRobot method
-         mRobotLoader->ResetRobot(mRobot2, mPhysicsSystem, pos2);
+         // Reset robots using the new factory with random spawn positions
+         RobotFactory::ResetRobot(mRobot1, mPhysicsSystem, pos1);
+         RobotFactory::ResetRobot(mRobot2, mPhysicsSystem, pos2);
      }
+
+    // CRITICAL FIX: Reset force sensors AFTER robots are loaded
+    int numSatellites = mRobot1.config.numSatellites;
+    CombatContactListener::Get().ResetForceReadings(mEnvIndex, numSatellites);
 }
 
 void CombatEnv::QueueActions(const float* actions1, const float* actions2)
 {
     if (mDone) return;
     
-    mRobotLoader->ApplyResidualActions(mRobot1, actions1, mPhysicsSystem);
-    mRobotLoader->ApplyResidualActions(mRobot2, actions2, mPhysicsSystem);
+    mController1->ApplyResidualActions(actions1, mPhysicsSystem, 1.0f / 120.0f);
+    mController2->ApplyResidualActions(actions2, mPhysicsSystem, 1.0f / 120.0f);
 }
 
 void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* reward2, bool& done)
 {
     if (mDone) {
         done = true;
+        return;
+    }
+
+    mStepCount++;
+    // [REMOVED] std::cout << "[CombatEnv] CheckCollisions..." << std::endl;
+    CheckCollisions();
+    // [REMOVED] std::cout << "[CombatEnv] UpdateForceSensors..." << std::endl;
+    UpdateForceSensors();
+
+    CombatContactListener& listener = CombatContactListener::Get();
+    const ForceSensorReading& forces1 = listener.GetForceReading(mEnvIndex, 0);
+    const ForceSensorReading& forces2 = listener.GetForceReading(mEnvIndex, 1);
+
+    mController1->GetObservations(mRobot2, obs1, forces1, mPhysicsSystem);
+    mController2->GetObservations(mRobot1, obs2, forces2, mPhysicsSystem);
+
+    CalculateRewards(*reward1, *reward2);
+
+    if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= mStepsPerEpisode) {
+        mDone = true;
+    }
+    
+    done = mDone;
+}
+
+// Zero-copy harvesting - write directly to provided pointers (no intermediate buffers)
+void CombatEnv::HarvestStateZeroCopy(float* obs1, float* obs2, float* reward1, float* reward2, 
+                                     bool* done, VectorReward* vectorReward) {
+    if (mDone) {
+        if (done) *done = true;
         return;
     }
 
@@ -165,16 +244,37 @@ void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* re
     const ForceSensorReading& forces1 = listener.GetForceReading(mEnvIndex, 0);
     const ForceSensorReading& forces2 = listener.GetForceReading(mEnvIndex, 1);
 
-    BuildObservationVector(obs1, mRobot1, mRobot2, forces1);
-    BuildObservationVector(obs2, mRobot2, mRobot1, forces2);
+    // Write observations directly to provided pointers
+    mController1->GetObservations(mRobot2, obs1, forces1, mPhysicsSystem);
+    mController2->GetObservations(mRobot1, obs2, forces2, mPhysicsSystem);
 
     CalculateRewards(*reward1, *reward2);
+    
+    // Write vector reward if provided
+    if (vectorReward) {
+        *vectorReward = mReward1;  // Copy reward struct
+    }
 
     if (mRobot1.hp <= 0.0f || mRobot2.hp <= 0.0f || mStepCount >= mStepsPerEpisode) {
         mDone = true;
     }
     
-    done = mDone;
+    if (done) *done = mDone;
+}
+
+// Zero-copy observation pointer access
+const float* CombatEnv::GetObservationPtr(int robotIdx) const {
+    // Return pointer to internal observation buffer (if it exists)
+    // For now, return nullptr - observations are computed on-demand
+    return nullptr;
+}
+
+// Zero-copy reward pointer access
+const float* CombatEnv::GetRewardPtr(int robotIdx) const {
+    // Return pointer to first field (damage_dealt) as proxy for reward
+    if (robotIdx == 0) return &mReward1.damage_dealt;
+    if (robotIdx == 1) return &mReward2.damage_dealt;
+    return nullptr;
 }
 
 void CombatEnv::CheckCollisions()
@@ -183,10 +283,11 @@ void CombatEnv::CheckCollisions()
     const float spikeThreshold = 0.55f;
     const float engineThreshold = 1.0f; // Larger radius for engine slam
 
-    auto applyDamage = [&](CombatRobotData& attacker, CombatRobotData& victim) {
+    auto applyDamage = [&](Robot& attacker, Robot& victim) {
         if (attacker.mainBodyId.IsInvalid() || victim.mainBodyId.IsInvalid()) return;
         
-        JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
+        if (victim.mainBodyId.IsInvalid()) return;
+    JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
         
         if (attacker.type == RobotType::SATELLITE) {
             for (int i = 0; i < attacker.config.numSatellites; ++i) {
@@ -203,7 +304,8 @@ void CombatEnv::CheckCollisions()
         } else if (attacker.type == RobotType::INTERNAL_ENGINE) {
             // Internal engines deal damage when they are near the opponent 
             // (effectively slamming through their own shell into the opponent)
-            for (int i = 0; i < 3; ++i) {
+            for (int i = 0; i < (int)attacker.satellites.size(); ++i) {
+                if (i >= (int)attacker.satellites.size()) break;
                 if (attacker.satellites[i].coreBodyId.IsInvalid()) continue;
                 JPH::RVec3 engPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
                 if ((engPos - victimPos).LengthSq() < engineThreshold * engineThreshold) {
@@ -224,9 +326,10 @@ void CombatEnv::CheckCollisions()
 void CombatEnv::UpdateForceSensors()
 {
     CombatContactListener& listener = CombatContactListener::Get();
-    auto updateStress = [&](CombatRobotData& r, int rIdx) {
+    auto updateStress = [&](Robot& r, int rIdx) {
         if (r.mainBodyId.IsInvalid()) return;
-        for (int i = 0; i < r.config.numSatellites; ++i) {
+        int numSats = static_cast<int>(r.satellites.size());
+        for (int i = 0; i < numSats; ++i) {
             if (r.satellites[i].rotationJoint) {
                 listener.GetForceReading(mEnvIndex, rIdx).jointStress[i] = r.satellites[i].rotationJoint->GetTotalLambdaPosition().Length() * 0.001f;
             }
@@ -234,108 +337,6 @@ void CombatEnv::UpdateForceSensors()
     };
     updateStress(mRobot1, 0);
     updateStress(mRobot2, 1);
-}
-
-void CombatEnv::BuildObservationVector(float* obs, const CombatRobotData& robot,
-                                        const CombatRobotData& opponent, const ForceSensorReading& forces)
-{
-    if (robot.mainBodyId.IsInvalid() || opponent.mainBodyId.IsInvalid()) {
-        std::memset(obs, 0, robot.config.observationDim * sizeof(float));
-        return;
-    }
-    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
-    int idx = 0;
-
-    JPH::RVec3 myPos = bodyInterface.GetPosition(robot.mainBodyId);
-    JPH::Vec3 myVel = bodyInterface.GetLinearVelocity(robot.mainBodyId);
-    JPH::Vec3 myAngVel = bodyInterface.GetAngularVelocity(robot.mainBodyId);
-    JPH::Quat myRot = bodyInterface.GetRotation(robot.mainBodyId);
-
-    obs[idx++] = (float)myPos.GetX(); obs[idx++] = (float)myPos.GetY(); obs[idx++] = (float)myPos.GetZ();
-    obs[idx++] = myVel.GetX(); obs[idx++] = myVel.GetY(); obs[idx++] = myVel.GetZ();
-    obs[idx++] = myAngVel.GetX(); obs[idx++] = myAngVel.GetY(); obs[idx++] = myAngVel.GetZ();
-
-    JPH::RVec3 oppPos = bodyInterface.GetPosition(opponent.mainBodyId);
-    JPH::Vec3 oppVel = bodyInterface.GetLinearVelocity(opponent.mainBodyId);
-    JPH::RVec3 relPos = oppPos - myPos;
-
-    obs[idx++] = (float)relPos.GetX(); obs[idx++] = (float)relPos.GetY(); obs[idx++] = (float)relPos.GetZ();
-    obs[idx++] = oppVel.GetX(); obs[idx++] = oppVel.GetY(); obs[idx++] = oppVel.GetZ();
-
-    // KOTH Point (Relative)
-    JPH::RVec3 relKoth = mKothPoint - myPos;
-    obs[idx++] = (float)relKoth.GetX() / 20.0f;
-    obs[idx++] = (float)relKoth.GetY() / 20.0f;
-    obs[idx++] = (float)relKoth.GetZ() / 20.0f;
-
-    // Satellite / Engine states
-    for (int i = 0; i < robot.config.numSatellites; ++i) {
-        if (!robot.satellites[i].coreBodyId.IsInvalid()) {
-            JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].coreBodyId);
-            JPH::Vec3 v = bodyInterface.GetLinearVelocity(robot.satellites[i].coreBodyId);
-            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
-            obs[idx++] = v.GetX(); obs[idx++] = v.GetY(); obs[idx++] = v.GetZ();
-        } else {
-            for (int k = 0; k < 6; ++k) obs[idx++] = 0.0f;
-        }
-    }
-
-    // My Spikes
-    for (int i = 0; i < robot.config.numSatellites; ++i) {
-        if (!robot.satellites[i].spikeBodyId.IsInvalid()) {
-            JPH::RVec3 p = bodyInterface.GetPosition(robot.satellites[i].spikeBodyId);
-            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
-        } else {
-            for (int k = 0; k < 3; ++k) obs[idx++] = 0.0f;
-        }
-    }
-
-    // Opponent Spikes
-    for (int i = 0; i < opponent.config.numSatellites; ++i) {
-        if (!opponent.satellites[i].spikeBodyId.IsInvalid()) {
-            JPH::RVec3 p = bodyInterface.GetPosition(opponent.satellites[i].spikeBodyId);
-            obs[idx++] = (float)p.GetX(); obs[idx++] = (float)p.GetY(); obs[idx++] = (float)p.GetZ();
-        } else {
-            for (int k = 0; k < 3; ++k) obs[idx++] = 0.0f;
-        }
-    }
-
-    mRobotLoader->PerformLidarScan(const_cast<CombatRobotData&>(robot), mPhysicsSystem);
-    for (int i = 0; i < robot.config.numLidarRays; ++i) obs[idx++] = robot.lidarDistances[i] / robot.config.lidarMaxDistance;
-
-    obs[idx++] = robot.hp / 100.0f;
-    obs[idx++] = opponent.hp / 100.0f;
-    obs[idx++] = (float)(oppPos - myPos).Length() / 20.0f;
-    obs[idx++] = myRot.RotateAxisY().Dot((oppPos - myPos).Normalized());
-    obs[idx++] = (robot.hp - opponent.hp) / 100.0f;
-    
-    // Forces
-    for (int i = 0; i < robot.config.numSatellites; ++i) {
-        if (i < forces.impulseMagnitude.size()) {
-            obs[idx++] = forces.impulseMagnitude[i];
-        } else {
-            obs[idx++] = 0.0f;
-        }
-    }
-    for (int i = 0; i < robot.config.numSatellites; ++i) {
-        if (i < forces.jointStress.size()) {
-            obs[idx++] = forces.jointStress[i];
-        } else {
-            obs[idx++] = 0.0f;
-        }
-    }
-
-    // Current Mass Observations (for the new mass-shifting feature)
-    obs[idx++] = bodyInterface.GetShape(robot.mainBodyId)->GetMassProperties().mMass / 50.0f;
-    for (int i = 0; i < 3; ++i) {
-        if (!robot.satellites[i].coreBodyId.IsInvalid()) {
-            obs[idx++] = bodyInterface.GetShape(robot.satellites[i].coreBodyId)->GetMassProperties().mMass / 10.0f;
-        } else {
-            obs[idx++] = 0.0f;
-        }
-    }
-
-    while (idx < 256) obs[idx++] = 0.0f;
 }
 
 void CombatEnv::CalculateRewards(float& r1, float& r2)
@@ -422,6 +423,7 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     vr1.damage_dealt += (prox1 + approach1 + wallPenalty1);
     vr2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
 
+    if (!std::isfinite(vr1.Scalar())) { std::cerr << "[CombatEnv] Non-finite reward!" << std::endl; vr1.damage_dealt = 0; }
     r1 = vr1.Scalar();
     r2 = vr2.Scalar();
     

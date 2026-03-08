@@ -357,6 +357,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 PhysicsCore* core = vecEnv->GetPhysicsCore();
+                float timeScale = 1.0f;
                 core->GetPhysicsSystem().Update(1.0f / physicsHz * timeScale, 1, core->GetTempAllocator(), core->GetJobSystem());
 
                 {
