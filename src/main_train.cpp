@@ -417,12 +417,12 @@ int main(int argc, char* argv[]) {
             // DRAW using buffered state
             const auto& graphics = ui.GetGraphics();
             // Need to update Renderer::Draw to take buffer or use core only for static geometry
-            gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, glm::vec3(0.0f, 1.0f, 0.0f),
+            gRenderer->Draw(&vecEnv->GetPhysicsCore()->GetPhysicsSystem(), gCam.position, renderEnvIdx, gCam.front,
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                             graphics.showRobot1, graphics.showRobot2);
         } else {
             // Fallback for static world if no buffer yet
-            gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, glm::vec3(0.0f, 1.0f, 0.0f),
+            gRenderer->Draw(&vecEnv->GetPhysicsCore()->GetPhysicsSystem(), gCam.position, renderEnvIdx, gCam.front,
                             false, false, false, false, false);
         }
 

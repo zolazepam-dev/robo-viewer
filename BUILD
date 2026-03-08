@@ -31,6 +31,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@jolt//:jolt",
         "@imgui//:imgui",
         "@imgui//backends:platform-glfw",
@@ -48,6 +49,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@jolt//:jolt",
         "@imgui//:imgui",
         "@imgui//backends:platform-glfw",
@@ -71,6 +73,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
@@ -97,6 +100,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
@@ -123,6 +127,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
@@ -366,6 +371,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@jolt//:jolt",
         "@imgui//:imgui",
         "@imgui//backends:platform-glfw",
@@ -447,6 +453,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
     ],
     linkopts = ["-lGL", "-lfreetype", "-lpthread"],
     copts = [
@@ -480,6 +487,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
@@ -573,6 +581,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
@@ -595,6 +604,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
     ],
@@ -613,6 +623,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
     ],
@@ -644,6 +655,7 @@ cc_binary(
         "@glfw",
         "@glm",
         "@glew//:glew_static",
+        
         "@nlohmann_json//:json",
         "@jolt//:jolt",
     ],
