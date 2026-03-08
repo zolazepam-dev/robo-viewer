@@ -1,83 +1,187 @@
-# Bazel build output
-bazel-bin
-bazel-out
-bazel-robo-viewer
-bazel-testlogs
-bazel-micro_board
-external
-
-# Build artifacts and executables
+# ==========================
+# Build outputs
+# ==========================
+bazel-bin/
+bazel-genfiles/
+bazel-out/
+bazel-testlogs/
 *.o
-*.a
 *.so
+*.a
 *.dylib
+*.dll
 *.exe
-*.bin
-bulletproof_viewer
-
-# Build directories
 build/
-debug_room_viewer/
-random_robot_demo/
-random_room_demo/
-robot_demo/
-room_demo/
-sphere_demo/
-
-# IDE and editor files
-.idea/
-.clwb/
-*.swp
-*.swo
-.cache/
-.ai/
-.aiassistant/
-kilo-code/
-tenacious-debugger/
-tenacious-debugger.skill
-
-# Python files
-__pycache__/
-*.pyc
-*.pyo
-
-# Log and temporary files
-*.log
-*.tmp
-*.csv
-imgui.ini
-debugrec
-
-# RL training files
+dist/
 checkpoints/
 saved_models/
+*.bin
 
-# OS files
+# ==========================
+# Backup files
+# ==========================
+*.backup
+*.backup*
+*_backup*
+*.bak
+*.old
+*.orig
+*~
+
+# ==========================
+# Debug/Log files
+# ==========================
+*.log
+logs/
+*.dump
+*.stackdump
+
+# ==========================
+# IDE and editor files
+# ==========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 
-# Node.js/Bun
-node_modules/
-package-lock.json
-bun.lock
+# ==========================
+# Temporary files
+# ==========================
+*.tmp
+*.temp
+tmp/
+temp/
 
-# Backup files
-*.bak
-*_backup.txt
+# ==========================
+# Documentation generated files
+# ==========================
+*.md.bak
+*_BACKUP*
+*_FINAL*
+*_STATUS*
+*_SUMMARY*
+
+# ==========================
+# Archive files
+# ==========================
+*.tar.gz
 *.zip
-src.zip
+*.rar
+*.7z
+*.bak.tar.gz
 
-# Generated files
-compile_commands.json
-dodecahedron_preview.png
-dodecahedron_rotation.gif
-pyramid_preview.png
+# ==========================
+# SDK and toolchain downloads
+# ==========================
+emsdk/
+go_sdk/
+protoc_sdk/
+julia-*.tar.gz
 
-# Session files
-session-ses_*.md
+# ==========================
+# Third party build artifacts
+# ==========================
+third_party/*/build/
+third_party/*/build_*/
+third_party/*/*.lock
+third_party/Jolt/build_wasm/
 
-.gemini/
-gha-creds-*.json
-.aider*
-.agency/*
-!.agency/setup.sh
+# ==========================
+# Generated config files
+# ==========================
+viewer_config.json
+robot_configs.json
+*.json.bak
+
+# ==========================
+# Test and debug artifacts
+# ==========================
+test_*.cpp
+*_test.cpp
+*_test.cpp.backup
+integration_test.cpp
+gradient_check_test.cpp
+vecenv_test.cpp
+muon_optimizer_test.cpp
+train_benchmark.cpp
+glfw_test.cpp
+
+# ==========================
+# Old viewer variants
+# ==========================
+simple_viewer.cpp
+octopod_viewer.cpp
+shard_viewer.cpp
+octopod_gl_viewer.cpp
+octopod_hybrid_viewer.cpp
+mjcf_viewer.cpp*
+xml_viewer.cpp
+
+# ==========================
+# Standalone test files
+# ==========================
+test_*.cpp
+*_test.cpp
+
+# ==========================
+# Python cache
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# ==========================
+# Node modules (for WASM frontend)
+# ==========================
+wasm/node_modules/
+wasm/build/
+
+# ==========================
+# Git submodule working dirs
+# ==========================
+.clwb/
+
+# ==========================
+# AI/ML artifacts
+# ==========================
+.perf/
+physics_viewer/
+minion-code/
+gemini/
+qwen/
+.agency/
+.wasm_rl_pipeline/
+
+# ==========================
+# Robot config backups
+# ==========================
+robots/*_backup*
+robots/*.json.backup
+
+# ==========================
+# Shell scripts for testing
+# ==========================
+run_*.sh
+
+# ==========================
+# Miscellaneous
+# ==========================
+MODULE.bazel.backup
+BUILD.*
+HYBRID_VIEWER*
+ROBOT_LOADER*
+RobotLoader*
+REFACTORING*
+RENDERER*
+SOKOL*
+BGFX*
+MJCF_CONVERTER*
+NATIVE_JSON*
+OCTOPOD*
+IMGUI_VIEWER*
+JoltRL*
+FINAL_BUILD*
