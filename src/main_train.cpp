@@ -16,6 +16,7 @@
 #include <atomic>
 #include <algorithm>
 #include <cstring>
+#include <omp.h>
 
 #include "src/VectorizedEnv.h"
 #include "src/NeuralNetwork.h"
@@ -103,23 +104,39 @@ int main(int argc, char* argv[]) {
     glEnable(GL_DEPTH_TEST);
     glfwSetCursorPosCallback(window, mouse_callback);
 
+    std::cerr << "[main] Creating UI..." << std::endl;
     OverlayUIRefactored ui;
+    std::cerr << "[main] UI Init start..." << std::endl;
     ui.Init(window);
 
     // Initializing vectorized environments
+    std::cerr << "[main] Creating VectorizedEnv..." << std::endl;
     VectorizedEnv* vecEnv = new VectorizedEnv(numEnvs, ui.GetStepsPerEpisode());
-    vecEnv->Init();
+    std::string robotConfigPath = ui.GetConfig().robotConfigPath;
+    std::cerr << "[main] vecEnv->Init start with " << robotConfigPath << "..." << std::endl;
+    if (vecEnv) vecEnv->Init(robotConfigPath);
+
+    // DYNAMIC DIMENSIONS & ROBOT HANDLING
+    int stateDim = vecEnv->GetObservationDim();
+    int actionDim = vecEnv->GetActionDim();
+    
+    std::string robotName = vecEnv->GetEnv(0).GetRobot1().config.name;
+    if (robotName.empty()) robotName = "unknown_bot";
+    
+    std::string robotCheckpointDir = checkpointDir + "/" + robotName;
+    EnsureDir(robotCheckpointDir);
+
+    // [REMOVED] std::cout << "[main] Robot: " << robotName << " (Dims: " << stateDim << "x" << actionDim << ")" << std::endl;
+    // [REMOVED] std::cout << "[main] Checkpoint Dir: " << robotCheckpointDir << std::endl;
 
     // Prepare Telemetry File for micro_board
-    std::string telemetryPath = checkpointDir + "/telemetry.csv";
+    std::string telemetryPath = robotCheckpointDir + "/telemetry.csv";
     std::ofstream telemetryFile(telemetryPath, std::ios::trunc);
     if (telemetryFile.is_open()) {
         telemetryFile << "Step,Tag,Value\n"; // Header
     }
     
     gRenderer = new Renderer(1280, 720);
-    int stateDim = vecEnv->GetObservationDim(); // Should be 256
-    int actionDim = vecEnv->GetActionDim();      // Should be 56
     
     TD3Config td3cfg;
     TD3Trainer trainer(stateDim, actionDim, td3cfg);
@@ -127,10 +144,15 @@ int main(int argc, char* argv[]) {
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
     // Auto-load weights if available
-    std::string finalModelPath = checkpointDir + "/model_final.bin";
+    std::string finalModelPath = robotCheckpointDir + "/model_final.bin";
     if (fs::exists(finalModelPath)) {
-        trainer.Load(finalModelPath);
-        std::cout << "[main_train] Auto-loaded weights from: " << finalModelPath << std::endl;
+        try {
+            trainer.Load(finalModelPath);
+            std::cout << "[main_train] Auto-loaded weights from: " << finalModelPath << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[main_train] Failed to load checkpoint (likely architecture mismatch): " << e.what() << std::endl;
+            std::cerr << "[main_train] Starting with fresh weights." << std::endl;
+        }
     }
     
     // Sync opponent to start identical to main agent
@@ -144,6 +166,8 @@ int main(int argc, char* argv[]) {
     
     auto last_time = std::chrono::high_resolution_clock::now();
     long long totalSteps = 0;
+    const long long MAX_STEPS = 100000000;
+    bool reachedMaxSteps = false;
     float sps = 0;
     int step_counter = 0;
     int renderEnvIdx = 0;
@@ -157,6 +181,8 @@ int main(int argc, char* argv[]) {
     float currentRew2 = 0.0f;
     int currentOpponentIdx = 0;
     VectorReward lastVR1, lastVR2;
+    int frameCount = 0;
+    int renderSkip = 1;
     
 
     std::mt19937 leagueRng(std::random_device{}());
@@ -164,7 +190,7 @@ int main(int argc, char* argv[]) {
     // Fixed: Ensure global cam is used
     gCam.front = glm::normalize(glm::vec3(0, 2, 0) - gCam.position);
 
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window) && !reachedMaxSteps) {
         glfwPollEvents();
         auto now = std::chrono::high_resolution_clock::now();
         float dt = std::chrono::duration<float>(now - last_time).count();
@@ -200,10 +226,12 @@ int main(int argc, char* argv[]) {
         }
 
         if (!ui.IsPaused()) {
+            // [REMOVED] std::cout << "[main] Step start" << std::endl;
             const auto& obs = vecEnv->GetObservations();
             int numEnvs = vecEnv->GetNumEnvs();
             AlignedVector32<float> robotActions(numEnvs * 2 * actionDim);
             
+            // [REMOVED] std::cout << "[main] Batching observations" << std::endl;
             // Collect all robot 1 observations and environment indices
             static AlignedVector32<float> obs1Batch;
             static std::vector<int> indices1;
@@ -214,6 +242,8 @@ int main(int argc, char* argv[]) {
                 std::memcpy(obs1Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim), stateDim * sizeof(float));
                 indices1[i] = i * 2;
             }
+            
+            // [REMOVED] std::cout << "[main] Selecting actions for agent 1" << std::endl;
             trainer.SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
             
             // Collect all robot 2 observations and environment indices
@@ -227,21 +257,29 @@ int main(int argc, char* argv[]) {
                 indices2[i] = i * 2 + 1;
             }
             
+            // [REMOVED] std::cout << "[main] Selecting actions for agent 2" << std::endl;
             if (leaguePlayEnabled) {
                 opponentTrainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
             } else {
                 trainer.SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
             }
             
+            // [REMOVED] std::cout << "[main] Queuing actions" << std::endl;
+            // PARALLEL: Queue actions for all environments in parallel
+            #pragma omp parallel for num_threads(8)
             for (int i = 0; i < numEnvs; ++i) {
                 // Adjust indexing for robotActions because we batched them separately
                 vecEnv->GetEnv(i).QueueActions(robotActions.data() + (i * actionDim), robotActions.data() + (numEnvs * actionDim + i * actionDim));
             }
             
+            // [REMOVED] std::cout << "[main] Physics step" << std::endl;
             PhysicsCore* core = vecEnv->GetPhysicsCore();
             core->GetPhysicsSystem().Update(1.0f / physicsHz * timeScale, 1, core->GetTempAllocator(), core->GetJobSystem());
             
-            // Apply physics settings from UI
+            // [REMOVED] std::cout << "[main] Harvesting states" << std::endl;
+            vecEnv->HarvestStates();
+            
+            // ... (rest of the physics settings)
             {
                 const auto& phys = ui.GetPhysics();
                 JPH::PhysicsSettings settings;
@@ -319,6 +357,12 @@ int main(int argc, char* argv[]) {
                 trainer.Save(checkpointDir + "/model_step_" + std::to_string(totalSteps) + ".bin");
             }
             
+            if (totalSteps >= MAX_STEPS) {
+                reachedMaxSteps = true;
+                // [REMOVED] std::cout << "[main] Reached MAX_STEPS = " << MAX_STEPS << ", exiting..." << std::endl;
+                break;
+            }
+            
             totalSteps += 1;
             step_counter += 1;
         }
@@ -333,10 +377,10 @@ int main(int argc, char* argv[]) {
              EnsureDir(checkpointDir);
              
              // Reset the environment with new robot configuration
-             vecEnv->Shutdown();
-             delete vecEnv;
+             if(vecEnv) { vecEnv->Shutdown(); delete vecEnv; vecEnv = nullptr; }
              vecEnv = new VectorizedEnv(numEnvs, ui.GetStepsPerEpisode());
-             vecEnv->Init();
+             std::cerr << "[main] vecEnv->Init start..." << std::endl;
+    if (vecEnv) vecEnv->Init(robotConfigPath);
              
              // Initialize fresh brain model
              int stateDim = vecEnv->GetObservationDim();
@@ -394,11 +438,17 @@ int main(int argc, char* argv[]) {
         }
 
         static auto lastSpsTime = now;
+        static int totalEnvStepsAccum = 0;
+        
+        // Count actual environment steps completed (sum across all envs)
+        totalEnvStepsAccum += vecEnv->GetNumEnvs();
+        
         std::chrono::duration<float> spsElapsed = now - lastSpsTime;
         if (spsElapsed.count() >= 1.0f) { 
-            // SPS = steps per second * numEnvs (each step processes all envs)
-            sps = (step_counter * vecEnv->GetNumEnvs()) / spsElapsed.count(); 
-            step_counter = 0; 
+            // SPS = total environment steps / elapsed time
+            // This counts actual steps across ALL environments, not multiplication
+            sps = static_cast<float>(totalEnvStepsAccum) / spsElapsed.count(); 
+            totalEnvStepsAccum = 0;
             lastSpsTime = now; 
             
             // CSV Telemetry output for micro_board
@@ -418,31 +468,59 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Update HP display
+        // Update HP display - use actual HP from rendered environment
+        if (!vecEnv) continue;
         auto& envHP = vecEnv->GetEnv(renderEnvIdx);
-        ui.UpdateAgentHP(envHP.GetRobot1().hp, envHP.GetRobot2().hp);
+        float hp1 = envHP.GetRobot1().hp;
+        float hp2 = envHP.GetRobot2().hp;
+        
+        // Clamp HP to valid range to prevent display issues
+        hp1 = std::max(0.0f, std::min(100.0f, hp1));
+        hp2 = std::max(0.0f, std::min(100.0f, hp2));
+        ui.UpdateAgentHP(hp1, hp2);
 
-        // Update UI stats every frame
-        ui.UpdateStats(totalSteps, mEpisodes, sps, (currentRew1 + currentRew2) * 0.5f, 
-                        renderEnvIdx, vecEnv->GetNumEnvs());
+        // Update UI stats every frame - compute average reward from currentRew (render env only)
+        // For true multi-env avg reward, would need to accumulate during step processing
+        float avgReward = (currentRew1 + currentRew2) * 0.5f;
+        ui.UpdateStats(totalSteps, mEpisodes, sps, avgReward, renderEnvIdx, vecEnv ? vecEnv->GetNumEnvs() : 0);
 
         // Check for restart request from UI
         if (ui.ShouldRestartSim()) {
-            std::cout << "[main] Restarting with " << ui.GetConfig().numEnvs << " environments, " 
-                      << ui.GetStepsPerEpisode() << " steps per episode..." << std::endl;
+            // [REMOVED] std::cout << "[main] CRITICAL: Sim restart requested." << std::endl;
+            if (vecEnv) {
+                // [REMOVED] std::cout << "[main] Deleting vecEnv..." << std::endl;
+                delete vecEnv;
+                vecEnv = nullptr;
+            }
+            int newNumEnvs = ui.GetConfig().numEnvs;
+            int newSteps = ui.GetStepsPerEpisode();
+            std::string newRobotPath = ui.GetConfig().robotConfigPath;
             
-            // Recreate VectorizedEnv with new count and steps per episode
-            vecEnv->Shutdown();
-            delete vecEnv;
-            vecEnv = new VectorizedEnv(ui.GetConfig().numEnvs, ui.GetStepsPerEpisode());
-            vecEnv->Init();
+            // [REMOVED] std::cout << "[main] Creating new vecEnv (" << newNumEnvs << " envs) with " << newRobotPath << "..." << std::endl;
+            numEnvs = newNumEnvs;
+            vecEnv = new VectorizedEnv(numEnvs, newSteps);
+            vecEnv->Init(newRobotPath);            
             
-            // Reset stats
+            // Re-initialize trainer dimensions
+            stateDim = vecEnv->GetObservationDim();
+            actionDim = vecEnv->GetActionDim();
+            robotName = vecEnv->GetEnv(0).GetRobot1Ref().config.name;
+            robotCheckpointDir = checkpointDir + "/" + robotName;
+            EnsureDir(robotCheckpointDir);
+            
+            TD3Config td3cfg;
+            trainer = TD3Trainer(stateDim, actionDim, td3cfg);
+            opponentTrainer = TD3Trainer(stateDim, actionDim, td3cfg);
+            buffer = ReplayBuffer(td3cfg.bufferSize, stateDim, actionDim);
+            
+            std::string modelPath = robotCheckpointDir + "/model_final.bin";
+            if (fs::exists(modelPath)) {
+                try { trainer.Load(modelPath); } catch(...) {}
+            }
+
             totalSteps = 0;
             mEpisodes = 0;
-            
-            std::cout << "[main] Restart complete" << std::endl;
-            
+            // [REMOVED] std::cout << "[main] Restart successful. New Dims: " << stateDim << "x" << actionDim << std::endl;
             ui.ClearRestartRequest();
         }
 
@@ -452,8 +530,12 @@ int main(int argc, char* argv[]) {
         // Apply graphics settings from UI to renderer
         const auto& graphics = ui.GetGraphics();
 
-        if (renderEnabled && !headlessTurbo) {
-            gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front,
+        // Render skip optimization: only render every N frames for max SPS
+        frameCount++;
+        bool shouldRender = renderEnabled && !headlessTurbo && (frameCount % renderSkip == 0);
+        
+        if (shouldRender) {
+            gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, glm::vec3(0.0f, 1.0f, 0.0f),
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                             graphics.showRobot1, graphics.showRobot2);
         } else {
@@ -477,11 +559,23 @@ int main(int argc, char* argv[]) {
         glfwSwapBuffers(window);
     }
 
-    trainer.Save(checkpointDir + "/model_final.bin");
-    delete gRenderer;
-    vecEnv->Shutdown();
-    delete vecEnv;
+    std::string finalRobotPath = "robots/" + robotName + ".json";
+    int numSatellites = vecEnv->GetEnv(0).GetRobot1().config.numSatellites;
+    trainer.Save(robotCheckpointDir + "/model_final.bin", finalRobotPath, numSatellites, stateDim);
+    
+    // [REMOVED] std::cout << "[main] Final cleanup start..." << std::endl;
+    if (gRenderer) {
+        delete gRenderer;
+        gRenderer = nullptr;
+    }
+    
+    if (vecEnv) {
+        delete vecEnv;
+        vecEnv = nullptr;
+    }
+    
     ui.Shutdown();
     glfwTerminate();
+    // [REMOVED] std::cout << "[main] Cleanup complete. Exiting." << std::endl;
     return 0;
 }
