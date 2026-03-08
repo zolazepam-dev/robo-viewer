@@ -38,7 +38,7 @@ struct TD3Config
     int batchSize = 256;  // OPTIMIZED: Increased from 16 to 256 for better GPU utilization
     int bufferSize = 1000000;
     int startSteps = 500;
-    int snapshotInterval = 10000;
+    int snapshotInterval = 50000;
     
     // Target network update optimization
     int targetUpdateDelay = 10;  // OPTIMIZED: Update targets every 10 steps (was every step)

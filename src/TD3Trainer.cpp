@@ -100,7 +100,6 @@ void TD3Trainer::Train(ReplayBuffer& buffer)
     float totalTime = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - start).count();
     mPerfMetrics.Record(0.0f, 0.0f, bTime, totalTime, 0.0f, cTime + aTime, 0.0f, 0.0f);
 
-    if (mStepCount % 100 == 0) mPerfMetrics.PrintTable();
     mUpdateCount++; mStepCount++;
     if (mStepCount % mConfig.snapshotInterval == 0) SnapshotOpponent();
 }
@@ -119,6 +118,7 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
         int tid = omp_get_thread_num();
         std::mt19937 threadRng(mRng() + tid);
         std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
+
         #pragma omp for
         for (int i = 0; i < batchSize; ++i) {
             float* nextAction = mNextActions.data() + i * mActionDim;
@@ -129,8 +129,10 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
             size_t baseIdx = i * criticInputDim;
             std::memcpy(mCriticInputBuffer.data() + baseIdx, mBatchNextStates.data() + i * mStateDim, mStateDim * sizeof(float));
             std::memcpy(mCriticInputBuffer.data() + baseIdx + mStateDim, nextAction, mActionDim * sizeof(float));
-            AlignedVector32<float> z(latentDim); mModel.GetLatentMemory().GetLatentStates(z.data(), nullptr, 0);
-            std::memcpy(mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim, z.data(), latentDim * sizeof(float));
+
+            // USE INDIVIDUAL LATENT IF AVAILABLE (Mapping environment indices from buffer)
+            // For now, keep using a zeroed latent to maintain speed unless full dynamics are needed per batch item
+            std::memset(mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim, 0, latentDim * sizeof(float));
         }
     }
 
@@ -270,11 +272,51 @@ void TD3Trainer::ComputeActorGradient(ReplayBuffer& buffer)
 }
 
 void TD3Trainer::UpdateTargets() { mModel.UpdateTargets(mConfig.tau); }
-void TD3Trainer::SnapshotOpponent() { mOpponentPool.Snapshot(mModel.GetActor().GetAllWeights(), {}, mStepCount); }
-bool TD3Trainer::SampleOpponent() {
-    std::vector<float> weights, biases;
-    if (mOpponentPool.SampleOpponentRecent(weights, biases, mRng)) { mModel.GetActor().SetAllWeights(weights); return true; }
-    return false;
+// EXTERN FROM main_train.cpp
+#include <queue>
+#include <condition_variable>
+#include "VisualState.h" // Needed for IOTask definition visibility if we used it here, but we'll use a simpler extern
+
+struct IOTask {
+    enum Type { SAVE_MODEL, SNAPSHOT_OPPONENT };
+    Type type;
+    std::string path;
+    std::string robotPath;
+    int numSatellites;
+    int obsDim;
+    std::vector<float> weights;
+};
+extern std::queue<IOTask> gIOQueue;
+extern std::mutex gIOMutex;
+extern std::condition_variable gIOCV;
+
+void TD3Trainer::SnapshotOpponent() {
+    IOTask task;
+    task.type = IOTask::SNAPSHOT_OPPONENT;
+    task.weights = mModel.GetActor().GetAllWeights(); // Copy weights now
+    {
+        std::lock_guard<std::mutex> lock(gIOMutex);
+        gIOQueue.push(std::move(task));
+    }
+    gIOCV.notify_one();
+}
+
+void TD3Trainer::Save(const std::string& path, const std::string& robotPath, int numSatellites, int obsDim) const
+{
+    IOTask task;
+    task.type = IOTask::SAVE_MODEL;
+    task.path = path;
+    task.robotPath = robotPath;
+    task.numSatellites = numSatellites;
+    task.obsDim = obsDim;
+    // We need to const_cast to call GetAllWeights() or make it const
+    task.weights = const_cast<SpanActorCritic&>(mModel).GetActor().GetAllWeights();
+    
+    {
+        std::lock_guard<std::mutex> lock(gIOMutex);
+        gIOQueue.push(std::move(task));
+    }
+    gIOCV.notify_one();
 }
 
 void TD3Trainer::Save(const std::string& path) const
@@ -282,22 +324,10 @@ void TD3Trainer::Save(const std::string& path) const
     Save(path, "robots/combat_bot.json", 0, mStateDim);
 }
 
-void TD3Trainer::Save(const std::string& path, const std::string& robotPath, int numSatellites, int obsDim) const
-{
-    std::ofstream file(path, std::ios::binary);
-    if (!file.is_open()) return;
-    int version = 3; file.write(reinterpret_cast<char*>(&version), sizeof(int));
-    file.write(reinterpret_cast<char*>(const_cast<int*>(&mStateDim)), sizeof(int)); 
-    file.write(reinterpret_cast<char*>(const_cast<int*>(&mActionDim)), sizeof(int));
-    auto weights = mModel.GetActor().GetAllWeights();
-    int numWeights = static_cast<int>(weights.size()); file.write(reinterpret_cast<char*>(&numWeights), sizeof(int));
-    file.write(reinterpret_cast<char*>(weights.data()), numWeights * sizeof(float));
-    file.write(reinterpret_cast<char*>(const_cast<float*>(mPreferenceVector.data())), VECTOR_REWARD_DIM * sizeof(float));
-    int robotPathLen = static_cast<int>(robotPath.length()); file.write(reinterpret_cast<char*>(&robotPathLen), sizeof(int));
-    file.write(robotPath.c_str(), robotPathLen);
-    file.write(reinterpret_cast<char*>(&numSatellites), sizeof(int)); file.write(reinterpret_cast<char*>(&obsDim), sizeof(int));
-    uint32_t checksum = 0; for (float w : weights) checksum += *(uint32_t*)&w;
-    file.write(reinterpret_cast<char*>(&checksum), sizeof(uint32_t));
+bool TD3Trainer::SampleOpponent() {
+    std::vector<float> weights, biases;
+    if (mOpponentPool.SampleOpponentRecent(weights, biases, mRng)) { mModel.GetActor().SetAllWeights(weights); return true; }
+    return false;
 }
 
 void TD3Trainer::Load(const std::string& path)

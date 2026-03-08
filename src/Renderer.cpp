@@ -331,10 +331,11 @@ Renderer::~Renderer()
     if (mSphereVbo != 0) glDeleteBuffers(1, &mSphereVbo);
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
-
 void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront,
-                    bool showCollisionShapes, bool showAABBs, bool showContactPoints, bool showRobot1, bool showRobot2)
+                    bool showCollisionShapes, bool showAABBs, bool showContactPoints, bool showRobot1, bool showRobot2,
+                    const EnvVisualState* visualState)
 {
+    glEnable(GL_DEPTH_TEST);
     // TEMPORARILY DISABLE DEBUG DRAWING - causes crashes
     showCollisionShapes = false;
     showAABBs = false;
