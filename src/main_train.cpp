@@ -49,11 +49,13 @@ std::mutex gSimMutex;
 namespace fs = std::filesystem;
 
 struct FreeCamera {
-    glm::vec3 position{0.0f, 15.0f, 40.0f};
+    // Updated defaults for better initial view
+
+    glm::vec3 position{0.0f, 10.0f, 30.0f};
     glm::vec3 front{0.0f, 0.0f, -1.0f};
     glm::vec3 up{0.0f, 1.0f, 0.0f};
     float yaw = -90.0f;
-    float pitch = -20.0f;
+    float pitch = 0.0f;
     float speed = 30.0f;
     float sensitivity = 0.1f;
     bool active = false;
@@ -61,6 +63,7 @@ struct FreeCamera {
 
 // GLOBAL CAMERA - NO SHADOWING
 FreeCamera gCam;
+Camera gCamera;
 Renderer* gRenderer = nullptr;
 double gLastX, gLastY;
 bool gFirstMouse = true;
@@ -416,7 +419,7 @@ int main(int argc, char* argv[]) {
             // Need to update Renderer::Draw to take buffer or use core only for static geometry
             gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, glm::vec3(0.0f, 1.0f, 0.0f),
                             graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
-                            graphics.showRobot1, graphics.showRobot2, &visual);
+                            graphics.showRobot1, graphics.showRobot2);
         } else {
             // Fallback for static world if no buffer yet
             gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, glm::vec3(0.0f, 1.0f, 0.0f),

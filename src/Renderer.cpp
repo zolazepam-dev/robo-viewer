@@ -34,12 +34,17 @@ uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProj;
 
+out vec3 FragPos;
 out vec3 Normal;
+out vec3 ViewPos;
 
 void main()
 {
-    gl_Position = uProj * uView * uModel * vec4(aPos, 1.0);
+    vec4 world_pos = uModel * vec4(aPos, 1.0);
+    FragPos = world_pos.xyz;
     Normal = mat3(transpose(inverse(uModel))) * aNormal;
+    ViewPos = vec3(inverse(uView) * vec4(0.0, 0.0, 0.0, 1.0));
+    gl_Position = uProj * uView * world_pos;
 }
 )";
 
@@ -47,18 +52,101 @@ constexpr const char* kFragmentShader = R"(
 #version 330 core
 out vec4 FragColor;
 
+in vec3 FragPos;
 in vec3 Normal;
+in vec3 ViewPos;
 
+struct Light {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};
+
+uniform vec3 uViewPos;
 uniform vec3 uObjectColor;
+uniform float uMetallic;
+uniform float uRoughness;
 uniform float uAlpha;
+uniform Light uLights[4];
+uniform int uNumLights;
+
+const float PI = 3.14159265359;
+
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float nom = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+    return nom / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness) {
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+    float nom = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+    return nom / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 void main()
 {
-    // Dead simple: Light from top-front, two-sided
-    vec3 n = normalize(Normal);
-    vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
-    float diff = abs(dot(n, lightDir)) * 0.6 + 0.4;
-    FragColor = vec4(uObjectColor * diff, uAlpha);
+    vec3 N = normalize(Normal);
+    vec3 V = normalize(uViewPos - FragPos);
+    
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, uObjectColor, uMetallic);
+    
+    vec3 Lo = vec3(0.0);
+    
+    for(int i = 0; i < uNumLights; ++i) {
+        vec3 L = normalize(uLights[i].position - FragPos);
+        vec3 H = normalize(V + L);
+        float distance = length(uLights[i].position - FragPos);
+        float attenuation = 1.0 / (distance * distance);
+        vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;
+        
+        float NDF = DistributionGGX(N, H, uRoughness);
+        float G = GeometrySmith(N, V, L, uRoughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+        
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - uMetallic;
+        
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * uObjectColor / PI + specular) * radiance * NdotL;
+    }
+    
+    vec3 ambient = vec3(0.15) * uObjectColor;
+    
+    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+    vec3 reflection = mix(vec3(0.1), vec3(0.8), fresnel) * uMetallic;
+    
+    vec3 color = ambient + Lo + reflection;
+    
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0/2.2));
+    
+    FragColor = vec4(color, uAlpha);
 }
 )";
 
@@ -201,7 +289,7 @@ Renderer::Renderer(int width, int height)
     glBindVertexArray(0);
 
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10000.0f);
+    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 500.0f);
 
     mLights[0] = {glm::vec3(15.0f, 30.0f, 15.0f), glm::vec3(1.0f, 0.95f, 0.9f), 80.0f};
     mLights[1] = {glm::vec3(-15.0f, 25.0f, -10.0f), glm::vec3(0.6f, 0.7f, 1.0f), 50.0f};
@@ -231,7 +319,7 @@ Renderer::Renderer(int width, int height)
 
 void Renderer::Resize(int width, int height) {
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10000.0f);
+    mProjection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 500.0f);
 }
 
 Renderer::~Renderer()
@@ -244,23 +332,19 @@ Renderer::~Renderer()
     if (mSphereVao != 0) glDeleteVertexArrays(1, &mSphereVao);
 }
 
-void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront, const glm::vec3& cameraUp,
-                    bool showCollisionShapes, bool showAABBs, bool showAABBs_unused, bool showRobot1, bool showRobot2,
-                    const EnvVisualState* visualState)
+void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPos, int envIndex, const glm::vec3& cameraFront,
+                    bool showCollisionShapes, bool showAABBs, bool showContactPoints, bool showRobot1, bool showRobot2)
 {
-    // ... setup code ...
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDisable(GL_CULL_FACE);
-    glClearColor(0.15f, 0.15f, 0.2f, 1.0f); 
+    // TEMPORARILY DISABLE DEBUG DRAWING - causes crashes
+    showCollisionShapes = false;
+    showAABBs = false;
+    
+    glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (physicsCore == nullptr || mProgram == 0) return;
+    if (physicsSystem == nullptr || mProgram == 0) return;
 
-    JPH::PhysicsSystem* physicsSystem = &physicsCore->GetPhysicsSystem();
-    JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
-
-    mView = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    mView = glm::lookAt(cameraPos, cameraPos + cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
     mViewPosition = cameraPos;
 
     glUseProgram(mProgram);
@@ -270,71 +354,279 @@ void Renderer::Draw(PhysicsCore* physicsCore, const glm::vec3& cameraPos, int en
     glUniform1i(mNumLightsLoc, 4);
     
     for (int i = 0; i < 4; ++i) {
-        glm::vec3 lightPos = cameraPos + mLights[i].position;
-        glUniform3fv(mLightPosLoc[i], 1, glm::value_ptr(lightPos));
+        glUniform3fv(mLightPosLoc[i], 1, glm::value_ptr(mLights[i].position));
         glUniform3fv(mLightColorLoc[i], 1, glm::value_ptr(mLights[i].color));
-        glUniform1f(mLightIntensityLoc[i], mLights[i].intensity * 100.0f);
+        glUniform1f(mLightIntensityLoc[i], mLights[i].intensity);
     }
 
-    // 1. RENDER STATIC ARENA (using PhysicsCore)
-    const JPH::ObjectLayer staticLayer = Layers::STATIC;
-    JPH::BodyIDVector staticBodies;
-    physicsCore->GetBodiesByLayers(staticBodies, { staticLayer });
+    JPH::BodyInterface& body_interface = physicsSystem->GetBodyInterface();
+    
+    JPH::BodyIDVector bodies;
+    physicsSystem->GetBodies(bodies);
 
-    auto renderRaw = [&](const JPH::Shape* s, const JPH::RMat44& transform, const glm::vec3& color, float alpha) {
-        if (!s) return;
-        glm::vec3 scale(1.0f);
-        bool is_sphere = false;
-        if (s->GetSubType() == JPH::EShapeSubType::Sphere) {
-            scale = glm::vec3(static_cast<const JPH::SphereShape*>(s)->GetRadius());
-            is_sphere = true;
-        } else if (s->GetSubType() == JPH::EShapeSubType::Box) {
-            const JPH::Vec3 half = static_cast<const JPH::BoxShape*>(s)->GetHalfExtent();
-            scale = glm::vec3(half.GetX() * 2.0f, half.GetY() * 2.0f, half.GetZ() * 2.0f);
-        }
-        glm::mat4 model = ToGlmMat4(transform) * glm::scale(glm::mat4(1.0f), scale);
-        glUniformMatrix4fv(mModelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        glUniform3fv(mObjectColorLoc, 1, glm::value_ptr(color));
-        glUniform1f(mAlphaLoc, alpha);
-        if (is_sphere) { glBindVertexArray(mSphereVao); glDrawElements(GL_TRIANGLES, mSphereIndexCount, GL_UNSIGNED_INT, nullptr); }
-        else { glBindVertexArray(mCubeVao); glDrawArrays(GL_TRIANGLES, 0, 36); }
+    const JPH::ObjectLayer staticLayer = Layers::STATIC;
+    const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
+    const JPH::ObjectLayer ghostLayer = Layers::GHOST_BASE + envIndex;
+
+    auto renderBody = [&](const JPH::BodyID& body_id, float forcedAlpha = -1.0f) {
+        JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+        if (layer != staticLayer && layer != envBaseLayer && layer != ghostLayer) return;
+
+        JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
+        const JPH::Shape* shape_ptr = shape.GetPtr();
+        if (shape_ptr == nullptr) return;
+
+        const JPH::RMat44 worldTransform = body_interface.GetWorldTransform(body_id);
+        
+        auto drawShape = [&](const JPH::Shape* s, const JPH::RMat44& transform, auto& self) -> void {
+            if (s->GetSubType() == JPH::EShapeSubType::StaticCompound || s->GetSubType() == JPH::EShapeSubType::MutableCompound) {
+                const auto* compound = static_cast<const JPH::StaticCompoundShape*>(s);
+                for (uint32_t i = 0; i < compound->GetNumSubShapes(); ++i) {
+                    const auto& sub = compound->GetSubShape(i);
+                    JPH::RMat44 subTransform = JPH::RMat44::sRotationTranslation(sub.GetRotation(), JPH::Vec3(sub.mPositionCOM));
+                    self(sub.mShape, transform * subTransform, self);
+                }
+                return;
+            }
+
+            glm::vec3 scale(1.0f);
+            bool draw_sphere = false;
+
+            switch (s->GetSubType()) {
+            case JPH::EShapeSubType::Sphere: {
+                const auto* sphere = static_cast<const JPH::SphereShape*>(s);
+                scale = glm::vec3(sphere->GetRadius());
+                draw_sphere = true;
+                break;
+            }
+            case JPH::EShapeSubType::Box: {
+                const auto* box = static_cast<const JPH::BoxShape*>(s);
+                const JPH::Vec3 half = box->GetHalfExtent();
+                scale = glm::vec3(half.GetX() * 2.0f, half.GetY() * 2.0f, half.GetZ() * 2.0f);
+                break;
+            }
+            case JPH::EShapeSubType::Cylinder: {
+                const auto* cylinder = static_cast<const JPH::CylinderShape*>(s);
+                scale = glm::vec3(cylinder->GetRadius(), cylinder->GetHalfHeight() * 2.0f, cylinder->GetRadius());
+                break;
+            }
+            default: {
+                const JPH::Vec3 extent = s->GetLocalBounds().GetExtent();
+                scale = glm::vec3(extent.GetX() * 2.0f, extent.GetY() * 2.0f, extent.GetZ() * 2.0f);
+                break;
+            }
+            }
+
+            glm::mat4 model = ToGlmMat4(transform);
+            model = model * glm::scale(glm::mat4(1.0f), scale);
+
+            glUniformMatrix4fv(mModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            
+            const int body_index = static_cast<int>(body_id.GetIndex());
+            glm::vec3 objectColor;
+            float metallic = 0.9f;
+            float roughness = 0.1f;
+            float alpha = (forcedAlpha > 0.0f) ? forcedAlpha : 1.0f;
+            
+            if (layer == staticLayer) {
+                objectColor = glm::vec3(0.4f, 0.4f, 0.4f);
+                metallic = 0.1f;
+                roughness = 0.9f;
+                if (transform.GetTranslation().GetY() < -0.1f) objectColor = glm::vec3(0.2f, 0.2f, 0.25f);
+            } else if (layer == ghostLayer) {
+                objectColor = glm::vec3(1.0f, 0.2f, 0.2f);
+                alpha = 0.6f;
+                metallic = 0.5f;
+                roughness = 0.5f;
+            } else if (body_index % 3 == 0) {
+                objectColor = glm::vec3(0.0f, 0.8f, 0.8f);
+            } else if (body_index % 3 == 1) {
+                objectColor = glm::vec3(0.8f, 0.0f, 0.8f);
+            } else {
+                objectColor = glm::vec3(1.0f, 0.9f, 0.1f);
+            }
+            
+            glUniform3fv(mObjectColorLoc, 1, glm::value_ptr(objectColor));
+            glUniform1f(mMetallicLoc, metallic);
+            glUniform1f(mRoughnessLoc, roughness);
+            glUniform1f(mAlphaLoc, alpha);
+
+            if (draw_sphere) {
+                glBindVertexArray(mSphereVao);
+                glDrawElements(GL_TRIANGLES, mSphereIndexCount, GL_UNSIGNED_INT, nullptr);
+            } else {
+                glBindVertexArray(mCubeVao);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+            }
+        };
+
+        drawShape(shape_ptr, worldTransform, drawShape);
     };
 
-    for (const auto& bid : staticBodies) {
-        renderRaw(body_interface.GetShape(bid).GetPtr(), body_interface.GetWorldTransform(bid), glm::vec3(0.4f, 0.4f, 0.4f), 1.0f);
+    // Pass 1: Opaque
+    for (const JPH::BodyID& body_id : bodies) {
+        if (body_id.IsInvalid()) continue;
+        JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+        JPH::RVec3 pos = body_interface.GetCenterOfMassPosition(body_id);
+        
+        bool isWall = (layer == staticLayer && pos.GetY() > 1.0f);
+        if (!isWall) {
+            renderBody(body_id, 1.0f);
+        }
     }
 
-    // 2. RENDER ROBOTS (From visualState buffer if available, else live)
-    if (visualState) {
-        if (showRobot1) {
-            JPH::RMat44 t1 = JPH::RMat44::sRotationTranslation(
-                JPH::Quat(visualState->r1.rx, visualState->r1.ry, visualState->r1.rz, visualState->r1.rw), 
-                JPH::Vec3(visualState->r1.x, visualState->r1.y, visualState->r1.z)
-            );
-            // Use sphere shape for robot 1 visual (approximate for SPS)
-            JPH::SphereShape s1(0.5f);
-            renderRaw(&s1, t1, glm::vec3(0.0f, 0.8f, 0.8f), 1.0f);
-        }
-        if (showRobot2) {
-            JPH::RMat44 t2 = JPH::RMat44::sRotationTranslation(
-                JPH::Quat(visualState->r2.rx, visualState->r2.ry, visualState->r2.rz, visualState->r2.rw), 
-                JPH::Vec3(visualState->r2.x, visualState->r2.y, visualState->r2.z)
-            );
-            // Use sphere shape for robot 2 visual (approximate for SPS)
-            JPH::SphereShape s2(0.5f);
-            renderRaw(&s2, t2, glm::vec3(0.8f, 0.0f, 0.8f), 1.0f);
-        }
-    } else {
-        // Fallback: Query live Jolt bodies (Slow, blocks Sim)
-        const JPH::ObjectLayer envBaseLayer = Layers::MOVING_BASE + envIndex;
-        const JPH::ObjectLayer movingBaseLayer = Layers::MOVING_BASE;
-        const JPH::ObjectLayer ghostLayer = Layers::GHOST_BASE + envIndex;
+    // Pass 2: Transparent Walls
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    for (const JPH::BodyID& body_id : bodies) {
+        if (body_id.IsInvalid()) continue;
+        JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+        JPH::RVec3 pos = body_interface.GetCenterOfMassPosition(body_id);
         
-        JPH::BodyIDVector liveBodies;
-        physicsCore->GetBodiesByLayers(liveBodies, { envBaseLayer, movingBaseLayer, ghostLayer });
-        for (const auto& bid : liveBodies) {
-            renderRaw(body_interface.GetShape(bid).GetPtr(), body_interface.GetWorldTransform(bid), glm::vec3(1.0f, 1.0f, 0.0f), 1.0f);
+        bool isWall = (layer == staticLayer && pos.GetY() > 1.0f);
+        if (isWall) {
+            renderBody(body_id, 0.3f);
         }
+    }
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+
+    // Debug drawing: wireframe collision shapes
+    if (showCollisionShapes) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        
+        for (const JPH::BodyID& body_id : bodies) {
+            if (body_id.IsInvalid()) continue;
+            JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+            if (layer != staticLayer && layer != envBaseLayer && layer != ghostLayer) continue;
+
+            JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
+            const JPH::Shape* shape_ptr = shape.GetPtr();
+            if (shape_ptr == nullptr) continue;
+
+            const JPH::RMat44 worldTransform = body_interface.GetWorldTransform(body_id);
+
+            auto drawWireframeShape = [&](const JPH::Shape* s, const JPH::RMat44& transform, auto& self) -> void {
+                if (s->GetSubType() == JPH::EShapeSubType::StaticCompound || s->GetSubType() == JPH::EShapeSubType::MutableCompound) {
+                    const auto* compound = static_cast<const JPH::StaticCompoundShape*>(s);
+                    for (uint32_t i = 0; i < compound->GetNumSubShapes(); ++i) {
+                        const auto& sub = compound->GetSubShape(i);
+                        JPH::RMat44 subTransform = JPH::RMat44::sRotationTranslation(sub.GetRotation(), JPH::Vec3(sub.mPositionCOM));
+                        self(sub.mShape, transform * subTransform, self);
+                    }
+                    return;
+                }
+
+                glm::vec3 scale(1.0f);
+                bool draw_sphere = false;
+
+                switch (s->GetSubType()) {
+                case JPH::EShapeSubType::Sphere: {
+                    const auto* sphere = static_cast<const JPH::SphereShape*>(s);
+                    scale = glm::vec3(sphere->GetRadius());
+                    draw_sphere = true;
+                    break;
+                }
+                case JPH::EShapeSubType::Box: {
+                    const auto* box = static_cast<const JPH::BoxShape*>(s);
+                    const JPH::Vec3 half = box->GetHalfExtent();
+                    scale = glm::vec3(half.GetX() * 2.0f, half.GetY() * 2.0f, half.GetZ() * 2.0f);
+                    break;
+                }
+                case JPH::EShapeSubType::Cylinder: {
+                    const auto* cylinder = static_cast<const JPH::CylinderShape*>(s);
+                    scale = glm::vec3(cylinder->GetRadius(), cylinder->GetHalfHeight() * 2.0f, cylinder->GetRadius());
+                    break;
+                }
+                default: {
+                    const JPH::Vec3 extent = s->GetLocalBounds().GetExtent();
+                    scale = glm::vec3(extent.GetX() * 2.0f, extent.GetY() * 2.0f, extent.GetZ() * 2.0f);
+                    break;
+                }
+                }
+
+                glm::mat4 model = ToGlmMat4(transform);
+                model = model * glm::scale(glm::mat4(1.0f), scale);
+
+                glUniformMatrix4fv(mModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform3f(mObjectColorLoc, 1.0f, 1.0f, 0.0f);
+                glUniform1f(mMetallicLoc, 0.0f);
+                glUniform1f(mRoughnessLoc, 1.0f);
+                glUniform1f(mAlphaLoc, 1.0f);
+
+                if (draw_sphere) {
+                    glBindVertexArray(mSphereVao);
+                    glDrawElements(GL_TRIANGLES, mSphereIndexCount, GL_UNSIGNED_INT, nullptr);
+                } else {
+                    glBindVertexArray(mCubeVao);
+                    glDrawArrays(GL_TRIANGLES, 0, 36);
+                }
+            };
+
+            drawWireframeShape(shape_ptr, worldTransform, drawWireframeShape);
+        }
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
+    // Debug drawing: AABBs
+    if (showAABBs) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+        for (const JPH::BodyID& body_id : bodies) {
+            if (body_id.IsInvalid()) continue;
+            JPH::ObjectLayer layer = body_interface.GetObjectLayer(body_id);
+            if (layer != staticLayer && layer != envBaseLayer && layer != ghostLayer) continue;
+
+            JPH::RefConst<JPH::Shape> shape = body_interface.GetShape(body_id);
+            const JPH::Shape* shape_ptr = shape.GetPtr();
+            if (shape_ptr == nullptr) continue;
+
+            JPH::AABox localBounds = shape_ptr->GetLocalBounds();
+            const JPH::Vec3& min = localBounds.mMin;
+            const JPH::Vec3& max = localBounds.mMax;
+
+            JPH::RMat44 worldTransform = body_interface.GetWorldTransform(body_id);
+
+            JPH::Vec3 worldMin(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+            JPH::Vec3 worldMax(std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest());
+
+            JPH::RVec3 corners[8] = {
+                worldTransform * JPH::RVec3(min.GetX(), min.GetY(), min.GetZ()),
+                worldTransform * JPH::RVec3(max.GetX(), min.GetY(), min.GetZ()),
+                worldTransform * JPH::RVec3(min.GetX(), max.GetY(), min.GetZ()),
+                worldTransform * JPH::RVec3(max.GetX(), max.GetY(), min.GetZ()),
+                worldTransform * JPH::RVec3(min.GetX(), min.GetY(), max.GetZ()),
+                worldTransform * JPH::RVec3(max.GetX(), min.GetY(), max.GetZ()),
+                worldTransform * JPH::RVec3(min.GetX(), max.GetY(), max.GetZ()),
+                worldTransform * JPH::RVec3(max.GetX(), max.GetY(), max.GetZ()),
+            };
+
+            for (int i = 0; i < 8; ++i) {
+                worldMin = JPH::Vec3::sMin(worldMin, corners[i]);
+                worldMax = JPH::Vec3::sMax(worldMax, corners[i]);
+            }
+
+            JPH::RMat44 aabbTransform = JPH::RMat44::sTranslation((worldMin + worldMax) * 0.5f);
+            glm::vec3 aabbScale(max.GetX() - min.GetX(), max.GetY() - min.GetY(), max.GetZ() - min.GetZ());
+
+            glm::mat4 model = ToGlmMat4(aabbTransform);
+            model = model * glm::scale(glm::mat4(1.0f), aabbScale);
+
+            glUniformMatrix4fv(mModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3f(mObjectColorLoc, 0.0f, 1.0f, 0.0f);
+            glUniform1f(mMetallicLoc, 0.0f);
+            glUniform1f(mRoughnessLoc, 1.0f);
+            glUniform1f(mAlphaLoc, 1.0f);
+
+            glBindVertexArray(mCubeVao);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 
     glBindVertexArray(0);
@@ -346,14 +638,6 @@ GLuint Renderer::CompileShader(GLenum type, const char* source)
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
-
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "Shader Compilation Error (" << (type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") << "):\n" << infoLog << std::endl;
-    }
     return shader;
 }
 
@@ -363,14 +647,6 @@ GLuint Renderer::LinkProgram(GLuint vertexShader, GLuint fragmentShader)
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
     glLinkProgram(program);
-
-    GLint success;
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        std::cerr << "Shader Linking Error:\n" << infoLog << std::endl;
-    }
     return program;
 }
 
