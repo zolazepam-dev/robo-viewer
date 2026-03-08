@@ -44,6 +44,11 @@ inline void AssertAligned32(const void* ptr) {
 void ForwardMoLU_AVX2(float* data, size_t size);
 void ForwardMoLU_Scalar(float* data, size_t size);
 
+// Backward pass for MoLU activation
+// Requires cached forward input values for proper gradient computation
+void BackwardMoLU_AVX2(float* grad, const float* cached_input, size_t size);
+void BackwardMoLU_Scalar(float* grad, const float* cached_input, size_t size);
+
 void ForwardTanh_AVX2(float* data, size_t size);
 void ForwardReLU_AVX2(float* data, size_t size);
 void ForwardSigmoid_AVX2(float* data, size_t size);

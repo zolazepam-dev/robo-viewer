@@ -26,41 +26,53 @@ void ForwardMoLU_AVX2(float* data, size_t size)
     const __m256 clampHi = _mm256_set1_ps(10.0f);
     const __m256 clampLo = _mm256_set1_ps(-10.0f);
     
+    // Higher-order rational approximation for tanh(x)
+    const __m256 p0 = _mm256_set1_ps(105.0f);
+    const __m256 p1 = _mm256_set1_ps(10.0f);
+    const __m256 q0 = _mm256_set1_ps(105.0f);
+    const __m256 q1 = _mm256_set1_ps(45.0f);
+    const __m256 minusOne = _mm256_set1_ps(-1.0f);
+    
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
         __m256 x = _mm256_load_ps(data + i);
         
-        x = _mm256_min_ps(x, clampHi);
-        x = _mm256_max_ps(x, clampLo);
+        // xc = clamp(x, -4, 4) for the rational part to avoid overflow/instability
+        __m256 xc = _mm256_min_ps(x, _mm256_set1_ps(4.0f));
+        xc = _mm256_max_ps(xc, _mm256_set1_ps(-4.0f));
         
-        __m256 x2 = _mm256_mul_ps(x, x);
+        __m256 xc2 = _mm256_mul_ps(xc, xc);
+        __m256 xc4 = _mm256_mul_ps(xc2, xc2);
         
-        const __m256 pade_a = _mm256_set1_ps(0.275f);
-        const __m256 pade_b = _mm256_set1_ps(0.664f);
+        // num = xc * (105 + 10 * xc^2)
+        __m256 num = _mm256_fmadd_ps(p1, xc2, p0);
+        num = _mm256_mul_ps(xc, num);
         
-        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
-        num = _mm256_mul_ps(x, num);
-        
-        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
+        // den = 105 + 45 * xc^2 + xc^4
+        __m256 den = _mm256_fmadd_ps(q1, xc2, q0);
+        den = _mm256_add_ps(den, xc4);
         
         __m256 rcp = _mm256_rcp_ps(den);
-        __m256 rcp2 = _mm256_mul_ps(rcp, rcp);
-        __m256 correction = _mm256_fnmadd_ps(den, rcp2, rcp);
-        rcp = _mm256_add_ps(rcp, correction);
+        rcp = _mm256_mul_ps(rcp, _mm256_sub_ps(_mm256_set1_ps(2.0f), _mm256_mul_ps(den, rcp)));
         
         __m256 th = _mm256_mul_ps(num, rcp);
         
-        __m256 one_plus_th = _mm256_add_ps(one, th);
-        __m256 result = _mm256_mul_ps(half, _mm256_mul_ps(x, one_plus_th));
+        // For values outside [-4, 4], use +/- 1
+        __m256 isHi = _mm256_cmp_ps(x, _mm256_set1_ps(4.0f), _CMP_GT_OQ);
+        __m256 isLo = _mm256_cmp_ps(x, _mm256_set1_ps(-4.0f), _CMP_LT_OQ);
+        th = _mm256_blendv_ps(th, one, isHi);
+        th = _mm256_blendv_ps(th, minusOne, isLo);
         
+        __m256 result = _mm256_mul_ps(half, _mm256_mul_ps(x, _mm256_add_ps(one, th)));
         _mm256_store_ps(data + i, result);
     }
     
     for (; i < size; ++i)
     {
-        float x = std::clamp(data[i], -10.0f, 10.0f);
-        data[i] = 0.5f * x * (1.0f + tanhf(x));
+        float x = data[i];
+        float xc = std::clamp(x, -10.0f, 10.0f);
+        data[i] = 0.5f * x * (1.0f + tanhf(xc));
     }
 }
 
@@ -73,6 +85,8 @@ void ForwardTanh_AVX2(float* data, size_t size)
     const __m256 one = _mm256_set1_ps(1.0f);
     const __m256 clampHi = _mm256_set1_ps(10.0f);
     const __m256 clampLo = _mm256_set1_ps(-10.0f);
+    const __m256 pade_a = _mm256_set1_ps(0.275f);
+    const __m256 pade_b = _mm256_set1_ps(0.664f);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
@@ -82,50 +96,19 @@ void ForwardTanh_AVX2(float* data, size_t size)
         x = _mm256_max_ps(x, clampLo);
         
         __m256 x2 = _mm256_mul_ps(x, x);
-        
-        // Pade approximation for tanh(x)
-        const __m256 pade_a = _mm256_set1_ps(0.275f);
-        const __m256 pade_b = _mm256_set1_ps(0.664f);
-        
         __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
         num = _mm256_mul_ps(x, num);
-        
         __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
         
-        // Fast reciprocal with Newton-Raphson
         __m256 rcp = _mm256_rcp_ps(den);
-        __m256 rcp2 = _mm256_mul_ps(rcp, rcp);
-        __m256 correction = _mm256_fnmadd_ps(den, rcp2, rcp);
-        rcp = _mm256_add_ps(rcp, correction);
+        rcp = _mm256_mul_ps(rcp, _mm256_sub_ps(_mm256_set1_ps(2.0f), _mm256_mul_ps(den, rcp)));
         
-        __m256 result = _mm256_mul_ps(num, rcp);
-        _mm256_store_ps(data + i, result);
+        _mm256_store_ps(data + i, _mm256_mul_ps(num, rcp));
     }
     
     for (; i < size; ++i)
     {
-        float x = std::clamp(data[i], -10.0f, 10.0f);
-        data[i] = tanhf(x);
-    }
-}
-
-void ForwardReLU_AVX2(float* data, size_t size)
-{
-    AssertAligned32(data);
-    const size_t simdWidth = 8;
-    const size_t simdEnd = size - (size % simdWidth);
-    const __m256 zero = _mm256_setzero_ps();
-    
-    size_t i = 0;
-    for (; i < simdEnd; i += simdWidth)
-    {
-        __m256 x = _mm256_load_ps(data + i);
-        _mm256_store_ps(data + i, _mm256_max_ps(zero, x));
-    }
-    
-    for (; i < size; ++i)
-    {
-        data[i] = std::max(0.0f, data[i]);
+        data[i] = tanhf(std::clamp(data[i], -10.0f, 10.0f));
     }
 }
 
@@ -137,26 +120,26 @@ void ForwardSigmoid_AVX2(float* data, size_t size)
     
     const __m256 half = _mm256_set1_ps(0.5f);
     const __m256 one = _mm256_set1_ps(1.0f);
+    const __m256 pade_a = _mm256_set1_ps(0.275f);
+    const __m256 pade_b = _mm256_set1_ps(0.664f);
     
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
         // sigmoid(x) = 0.5 * tanh(0.5 * x) + 0.5
         __m256 x = _mm256_load_ps(data + i);
-        __m256 half_x = _mm256_mul_ps(x, half);
+        __m256 hx = _mm256_mul_ps(x, half);
         
-        // Inlined tanh for performance
-        __m256 x2 = _mm256_mul_ps(half_x, half_x);
-        const __m256 pade_a = _mm256_set1_ps(0.275f);
-        const __m256 pade_b = _mm256_set1_ps(0.664f);
-        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
-        num = _mm256_mul_ps(half_x, num);
-        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
+        __m256 hx2 = _mm256_mul_ps(hx, hx);
+        __m256 num = _mm256_fmadd_ps(pade_a, hx2, one);
+        num = _mm256_mul_ps(hx, num);
+        __m256 den = _mm256_fmadd_ps(pade_b, hx2, one);
+        
         __m256 rcp = _mm256_rcp_ps(den);
-        __m256 th = _mm256_mul_ps(num, rcp);
+        rcp = _mm256_mul_ps(rcp, _mm256_sub_ps(_mm256_set1_ps(2.0f), _mm256_mul_ps(den, rcp)));
         
-        __m256 result = _mm256_fmadd_ps(half, th, half);
-        _mm256_store_ps(data + i, result);
+        __m256 th = _mm256_mul_ps(num, rcp);
+        _mm256_store_ps(data + i, _mm256_fmadd_ps(half, th, half));
     }
     
     for (; i < size; ++i)
@@ -228,67 +211,105 @@ void FMAVector_AVX2(float* dst, const float* a, const float* b, size_t size)
 
 void Softmax_AVX2(float* data, size_t size)
 {
-    float maxVal = data[0];
-    for (size_t i = 1; i < size; ++i)
+    AssertAligned32(data);
+    const size_t simdWidth = 8;
+    const size_t simdEnd = size - (size % simdWidth);
+    
+    // 1. Find Max
+    __m256 maxVec = _mm256_set1_ps(-1e30f);
+    for (size_t i = 0; i < simdEnd; i += simdWidth)
     {
-        if (data[i] > maxVal) maxVal = data[i];
+        maxVec = _mm256_max_ps(maxVec, _mm256_load_ps(data + i));
     }
     
-    ScaleVector_AVX2(data, -1.0f, size);
-    for (size_t i = 0; i < size; ++i)
+    float maxVal = -1e30f;
+    alignas(32) float maxBuf[8];
+    _mm256_store_ps(maxBuf, maxVec);
+    for (int i = 0; i < 8; ++i) maxVal = std::max(maxVal, maxBuf[i]);
+    for (size_t i = simdEnd; i < size; ++i) maxVal = std::max(maxVal, data[i]);
+    
+    // 2. Exp and Sum
+    __m256 sumVec = _mm256_setzero_ps();
+    __m256 mVec = _mm256_set1_ps(maxVal);
+    
+    for (size_t i = 0; i < simdEnd; i += simdWidth)
     {
-        data[i] = expf(data[i] + maxVal);
+        __m256 x = _mm256_load_ps(data + i);
+        // Exponential approximation (very rough but fast) or scalar fallback for expf
+        // For accuracy, we'll use scalar expf in this part or a vectorized exp if available
+        for (int j = 0; j < 8; ++j) {
+            data[i + j] = expf(data[i + j] - maxVal);
+        }
+        sumVec = _mm256_add_ps(sumVec, _mm256_load_ps(data + i));
     }
     
-    float sum = 0.0f;
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = simdEnd; i < size; ++i)
     {
-        sum += data[i];
+        data[i] = expf(data[i] - maxVal);
     }
     
-    if (sum > 0.0f)
-    {
-        ScaleVector_AVX2(data, 1.0f / sum, size);
-    }
+    float totalSum = 0.0f;
+    alignas(32) float sumBuf[8];
+    _mm256_store_ps(sumBuf, sumVec);
+    for (int i = 0; i < 8; ++i) totalSum += sumBuf[i];
+    for (size_t i = simdEnd; i < size; ++i) totalSum += data[i];
+    
+    // 3. Normalize
+    ScaleVector_AVX2(data, 1.0f / totalSum, size);
 }
 
 void LayerNorm_AVX2(float* data, size_t size, const float* gamma, const float* beta)
 {
-    float mean = 0.0f;
-    for (size_t i = 0; i < size; ++i)
-    {
-        mean += data[i];
-    }
-    mean /= static_cast<float>(size);
-    
-    float variance = 0.0f;
-    for (size_t i = 0; i < size; ++i)
-    {
-        float diff = data[i] - mean;
-        variance += diff * diff;
-    }
-    variance /= static_cast<float>(size);
-    
-    const float eps = 1e-5f;
-    const float invStd = 1.0f / sqrtf(variance + eps);
-    
+    AssertAligned32(data);
     const size_t simdWidth = 8;
     const size_t simdEnd = size - (size % simdWidth);
-    const __m256 meanVec = _mm256_set1_ps(mean);
-    const __m256 invStdVec = _mm256_set1_ps(invStd);
     
+    // 1. Mean
+    __m256 sumVec = _mm256_setzero_ps();
+    for (size_t i = 0; i < simdEnd; i += simdWidth)
+    {
+        sumVec = _mm256_add_ps(sumVec, _mm256_load_ps(data + i));
+    }
+    
+    float sum = 0.0f;
+    alignas(32) float sumBuf[8];
+    _mm256_store_ps(sumBuf, sumVec);
+    for (int i = 0; i < 8; ++i) sum += sumBuf[i];
+    for (size_t i = simdEnd; i < size; ++i) sum += data[i];
+    
+    float mean = sum / static_cast<float>(size);
+    __m256 meanVec = _mm256_set1_ps(mean);
+    
+    // 2. Variance
+    __m256 varVec = _mm256_setzero_ps();
+    for (size_t i = 0; i < simdEnd; i += simdWidth)
+    {
+        __m256 diff = _mm256_sub_ps(_mm256_load_ps(data + i), meanVec);
+        varVec = _mm256_add_ps(varVec, _mm256_mul_ps(diff, diff));
+    }
+    
+    float varSum = 0.0f;
+    _mm256_store_ps(sumBuf, varVec);
+    for (int i = 0; i < 8; ++i) varSum += sumBuf[i];
+    for (size_t i = simdEnd; i < size; ++i) {
+        float diff = data[i] - mean;
+        varSum += diff * diff;
+    }
+    
+    float variance = varSum / static_cast<float>(size);
+    float invStd = 1.0f / sqrtf(variance + 1e-5f);
+    __m256 invStdVec = _mm256_set1_ps(invStd);
+    
+    // 3. Normalize and scale
     size_t i = 0;
     for (; i < simdEnd; i += simdWidth)
     {
-        __m256 x = _mm256_loadu_ps(data + i);
+        __m256 x = _mm256_load_ps(data + i);
         __m256 g = _mm256_loadu_ps(gamma + i);
         __m256 b = _mm256_loadu_ps(beta + i);
         
-        __m256 centered = _mm256_sub_ps(x, meanVec);
-        __m256 normalized = _mm256_mul_ps(centered, invStdVec);
-        __m256 scaled = _mm256_fmadd_ps(normalized, g, b);
-        
-        _mm256_storeu_ps(data + i, scaled);
+        __m256 norm = _mm256_mul_ps(_mm256_sub_ps(x, meanVec), invStdVec);
+        _mm256_store_ps(data + i, _mm256_fmadd_ps(norm, g, b));
     }
     
     for (; i < size; ++i)
@@ -781,5 +802,86 @@ void MatVec_Vertical_AVX2(const float* weights, const float* inputs, float* outp
             }
             outCol[batchIdx] = sum;
         }
+    }
+}
+
+// ============================================================================
+// MoLU BACKWARD PASS
+// ============================================================================
+
+void BackwardMoLU_Scalar(float* grad, const float* cached_input, size_t size)
+{
+    // MoLU forward: y = 0.5 * x * (1 + tanh(x))
+    // MoLU derivative: dy/dx = 0.5 * (1 + tanh(x)) + 0.5 * x * (1 - tanh(x)^2)
+    // Backward: grad_out *= dy/dx
+    for (size_t i = 0; i < size; ++i)
+    {
+        float x = cached_input[i];
+        float tanh_x = tanhf(x);
+        float tanh_sq = tanh_x * tanh_x;
+        float derivative = 0.5f * (1.0f + tanh_x) + 0.5f * x * (1.0f - tanh_sq);
+        grad[i] *= derivative;
+    }
+}
+
+void BackwardMoLU_AVX2(float* grad, const float* cached_input, size_t size)
+{
+    AssertAligned32(grad);
+    AssertAligned32(cached_input);
+
+    const size_t simdWidth = 8;
+    const size_t simdEnd = size - (size % simdWidth);
+
+    const __m256 half = _mm256_set1_ps(0.5f);
+    const __m256 one = _mm256_set1_ps(1.0f);
+    const __m256 two = _mm256_set1_ps(2.0f);
+    const __m256 clampHi = _mm256_set1_ps(10.0f);
+    const __m256 clampLo = _mm256_set1_ps(-10.0f);
+
+    // Pade constants for tanh(x)
+    const __m256 pade_a = _mm256_set1_ps(0.275f);
+    const __m256 pade_b = _mm256_set1_ps(0.664f);
+
+    size_t i = 0;
+    for (; i < simdEnd; i += simdWidth)
+    {
+        // Load cached input and gradient
+        __m256 x = _mm256_load_ps(cached_input + i);
+        __m256 g = _mm256_load_ps(grad + i);
+
+        // Clamp x for numerical stability
+        __m256 xc = _mm256_min_ps(x, clampHi);
+        xc = _mm256_max_ps(xc, clampLo);
+
+        // Compute tanh(x) using Pade approximation
+        __m256 x2 = _mm256_mul_ps(xc, xc);
+        __m256 num = _mm256_fmadd_ps(pade_a, x2, one);
+        num = _mm256_mul_ps(xc, num);
+        __m256 den = _mm256_fmadd_ps(pade_b, x2, one);
+        __m256 rcp = _mm256_rcp_ps(den);
+        rcp = _mm256_mul_ps(rcp, _mm256_sub_ps(two, _mm256_mul_ps(den, rcp)));
+        __m256 tanh_x = _mm256_mul_ps(num, rcp);
+
+        // Compute derivative: dy/dx = 0.5 * (1 + tanh(x)) + 0.5 * x * (1 - tanh(x)^2)
+        __m256 one_plus_tanh = _mm256_add_ps(one, tanh_x);
+        __m256 tanh_sq = _mm256_mul_ps(tanh_x, tanh_x);
+        __m256 one_minus_tanh_sq = _mm256_sub_ps(one, tanh_sq);
+        __m256 x_times = _mm256_mul_ps(x, one_minus_tanh_sq);
+        __m256 deriv = _mm256_mul_ps(half, one_plus_tanh);
+        deriv = _mm256_fmadd_ps(half, x_times, deriv);
+
+        // Multiply gradient by derivative
+        __m256 result = _mm256_mul_ps(g, deriv);
+        _mm256_store_ps(grad + i, result);
+    }
+
+    // Handle remainder
+    for (; i < size; ++i)
+    {
+        float x = cached_input[i];
+        float tanh_x = tanhf(std::clamp(x, -10.0f, 10.0f));
+        float tanh_sq = tanh_x * tanh_x;
+        float derivative = 0.5f * (1.0f + tanh_x) + 0.5f * x * (1.0f - tanh_sq);
+        grad[i] *= derivative;
     }
 }

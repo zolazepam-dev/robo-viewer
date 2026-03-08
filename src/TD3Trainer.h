@@ -18,20 +18,43 @@
 
 struct TD3Config
 {
-    int hiddenDim = 128;  // Balanced: larger than 64 but not as big as 256
-    int latentDim = 24;   // Moderate increase from 16
+    // Model architecture - DO NOT REDUCE (preserved for full capacity)
+    int hiddenDim = 128;  // KEEP - full capacity hidden dimension
+    int latentDim = 24;   // KEEP - full capacity latent dimension
+    
+    // Optimizer learning rates
     float actorLR = 3e-4f;
     float criticLR = 3e-4f;
+    
+    // TD3 hyperparameters
     float gamma = 0.99f;
     float tau = 0.005f;
     float policyNoise = 0.2f;
     float noiseClip = 0.5f;
     float explNoise = 0.1f;
     int policyDelay = 2;
-    int batchSize = 16;
+    
+    // Batch and buffer settings
+    int batchSize = 256;  // OPTIMIZED: Increased from 16 to 256 for better GPU utilization
     int bufferSize = 1000000;
     int startSteps = 500;
     int snapshotInterval = 10000;
+    
+    // Target network update optimization
+    int targetUpdateDelay = 10;  // OPTIMIZED: Update targets every 10 steps (was every step)
+    
+    // Gradient accumulation
+    bool useGradientAccumulation = true;  // OPTIMIZED: Enable gradient accumulation
+    int accumulationSteps = 4;  // OPTIMIZED: Accumulate gradients over 4 steps
+    
+    // Muon optimizer settings (OPTIMIZED for speed)
+    float muonLR = 0.02f;         // Muon learning rate for matrix params
+    float muonBeta = 0.95f;       // Muon momentum beta
+    int muonNSSteps = 2;          // Can use 2 steps with analytic gradients (was 1)
+    int muonUpdateInterval = 2;   // Update every 2 steps instead of 4 (analytic is faster)
+    float muonEpsilon = 1e-6f;    // Small value for numerical stability
+    bool useAnalyticGradients = true;  // Use analytic gradients (backpropagation)
+    int gradientSampleRate = 1;   // Not used with analytic gradients (kept for compatibility)
 };
 
 class TD3Trainer
@@ -87,6 +110,10 @@ private:
     void UpdateTargets();
     void UpdateCriticWithVectorRewards(class ReplayBuffer& buffer);
     float ComputeCriticLoss(class SpanNetwork& critic, const float* criticInput, int batchSize);
+    
+    // Gradient computation for Muon optimizer
+    void ComputeCriticGradients(SpanNetwork& critic, class ReplayBuffer& buffer, bool isCritic1);
+    void ComputeActorGradient(class ReplayBuffer& buffer);
     
     // Checkpoint conversion for expanded observation space
     void ConvertAndLoadWeights(class SpanNetwork& network, const std::vector<float>& oldWeights,

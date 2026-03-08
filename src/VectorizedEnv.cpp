@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <omp.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 
@@ -95,15 +96,54 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
 void VectorizedEnv::Step(const AlignedVector32<float>& actions)
 {
     const int actionDim = mActionDim;
-    for (int i = 0; i < mNumEnvs; ++i)
+    const int numEnvs = mNumEnvs;
+    
+    // OPTIMIZED: Parallel action queuing using OpenMP
+    #pragma omp parallel for num_threads(8) schedule(static)
+    for (int i = 0; i < numEnvs; ++i)
     {
         if (mAllDones[i]) continue;
-        mEnvs[i].QueueActions(actions.data() + (i * 2 * actionDim), actions.data() + (i * 2 * actionDim + actionDim));
+        mEnvs[i].QueueActions(
+            actions.data() + (i * 2 * actionDim),
+            actions.data() + (i * 2 * actionDim + actionDim)
+        );
     }
 
+    // Physics step (single-threaded for Jolt safety)
     mPhysicsCore.Step(1.0f / 60.0f);
 
-    HarvestStates();
+    // OPTIMIZED: Parallel state harvesting using OpenMP
+    HarvestStatesParallel();
+}
+
+void VectorizedEnv::HarvestStatesParallel()
+{
+    const int numEnvs = mNumEnvs;
+    const int obsDim = mObservationDim;
+    
+    // OPTIMIZED: Parallel harvesting with OpenMP
+    #pragma omp parallel for num_threads(8) schedule(static)
+    for (int i = 0; i < numEnvs; ++i)
+    {
+        if (mAllDones[i]) continue;
+
+        int obsOffset = i * obsDim * 2;
+        float* obs1 = mAllObservations.data() + obsOffset;
+        float* obs2 = mAllObservations.data() + obsOffset + obsDim;
+        float* reward1 = mAllRewards.data() + (i * 2);
+        float* reward2 = mAllRewards.data() + (i * 2 + 1);
+        bool done = false;
+
+        mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
+        mAllDones[i] = done;
+    }
+
+    // Parallel vector reward harvesting
+    #pragma omp parallel for num_threads(8) schedule(static)
+    for (int i = 0; i < numEnvs; ++i) {
+        if (mAllDones[i]) continue;
+        mAllVectorRewards[i] = mEnvs[i].GetRobot1Reward();
+    }
 }
 
 void VectorizedEnv::HarvestStates()

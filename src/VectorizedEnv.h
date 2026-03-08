@@ -18,6 +18,7 @@ public:
     void Shutdown();
     void Step(const AlignedVector32<float>& actions);
     void HarvestStates();
+    void HarvestStatesParallel();  // OpenMP-parallelized version
     void HarvestStatesZeroCopy();  // Zero-copy version - returns pointers
     void Reset(int envIndex = -1);
     void ResetDoneEnvs();

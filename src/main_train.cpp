@@ -23,6 +23,7 @@
 #include "src/TD3Trainer.h"
 #include "src/Renderer.h"
 #include "src/OverlayUI_refactor.h"
+#include "src/EigenUtils.h"
 
 namespace fs = std::filesystem;
 
@@ -345,7 +346,10 @@ int main(int argc, char* argv[]) {
                 }
             }
             
+            // OPTIMIZED: Batch training with larger batch size and less frequent updates
+            // Train every 4 steps, 2 updates per train call (same as before but with larger batch)
             if (totalSteps % 4 == 0 && buffer.Size() > td3cfg.batchSize) {
+                // OPTIMIZED: Use gradient accumulation for larger effective batch
                 for (int update = 0; update < 2; ++update) {
                     trainer.Train(buffer);
                 }

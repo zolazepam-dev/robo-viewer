@@ -9,6 +9,7 @@ refresh_compile_commands(
         "//:viewer": "",
         "//:train_headless": "",
         "//:system_test": "",
+        "//:muon_optimizer_test": "",
     },
 )
 
@@ -140,6 +141,40 @@ cc_binary(
         "-flto",
         "-fno-strict-aliasing",
         "-I/usr/include/eigen3",
+        "-DEIGEN_ENABLE_AVX2",
+        "-fopenmp",
+        "-fassociative-math",
+        "-freciprocal-math",
+        "-fsigned-zeros",
+        "-fno-trapping-math"
+    ],
+)
+
+cc_binary(
+    name = "train_benchmark",
+    srcs = ["//src:train_benchmark.cpp"],
+    data = [
+        "//robots:combat_bot.json",
+        "//robots:test_bot.json",
+    ],
+    deps = [
+        "//src:core",
+        "//modules/replay:replay",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+    ],
+    linkopts = ["-lpthread", "-lgomp"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-DJPH_DEBUG_RENDERER",
+        "-march=native",
+        "-ffast-math",
+        "-fno-strict-aliasing",
+        "-I/usr/include/eigen3",
+        "-DEIGEN_ENABLE_AVX2",
         "-fopenmp"
     ],
 )
@@ -611,4 +646,23 @@ cc_binary(
     ],
     linkopts = ["-lGL", "-lpthread"],
     copts = ["-std=c++17", "-mavx2", "-mfma", "-O3"],
+)
+
+# Muon Optimizer Test - Verifies Muon is actually updating weights
+cc_binary(
+    name = "muon_optimizer_test",
+    srcs = ["//src:muon_optimizer_test.cpp"],
+    deps = [
+        "//src:core",
+        "@jolt//:jolt",
+    ],
+    copts = [
+        "-std=c++17", 
+        "-mavx2", 
+        "-mfma", 
+        "-O3", 
+        "-march=native",
+        "-I/usr/include/eigen3"
+    ],
+    linkopts = ["-lgomp", "-lpthread"],
 )

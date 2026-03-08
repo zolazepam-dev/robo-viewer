@@ -81,6 +81,7 @@ cc_library(
         "LockFreeQueue.h",
         "InternalRobot.h",
         "ArmaEigenUtils.h",
+        "EigenUtils.h",
         "PerformanceProfiler.h",
         "OptimizedMath.h",
         "MuonOptimizer.h",

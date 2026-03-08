@@ -25,19 +25,28 @@ public:
     TensorProductBSpline() = default;
     TensorProductBSpline(const TensorProductBSpline& other) = default;
     TensorProductBSpline& operator=(const TensorProductBSpline& other) = default;
-    
+
     void Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng);
-    
+
     void Forward(const float* input, float* output);
     void ForwardBatch(const float* input, float* output, int batchSize);
+    void ForwardBatchEigen(const float* input, float* output, int batchSize);  // Eigen-optimized
+    void ForwardBatchAVX2(const float* input, float* output, int batchSize);   // AVX2-optimized
     void ForwardAVX2(const float* input, float* output);
-    
+
+    // Backward pass for analytic gradients
+    // input: original input to forward pass (needed for recomputing basis)
+    // output_grad: gradient of loss w.r.t. output [outputDim]
+    // input_grad: gradient of loss w.r.t. input [inputDim] (can be nullptr)
+    // control_points_grad: gradient of loss w.r.t. control points [numParams] (accumulated)
+    void Backward(const float* input, const float* output_grad, float* input_grad, float* control_points_grad);
+
     AlignedVector32<float>& GetControlPoints() { return mControlPoints; }
     const AlignedVector32<float>& GetControlPoints() const { return mControlPoints; }
-    
+
     AlignedVector32<float>& GetControlPointGradients() { return mControlPointGradients; }
     const AlignedVector32<float>& GetControlPointGradients() const { return mControlPointGradients; }
-    
+
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
     int GetNumKnots() const { return mNumKnots; }
@@ -46,21 +55,21 @@ public:
 private:
     void ComputeBasisFunctions(float x, float* basis, int& spanIdx);
     void ComputeKnotVector();
-    
+
     size_t mInputDim = 0;
     size_t mOutputDim = 0;
     int mNumKnots = 8;
     int mSplineDegree = 3;
-    
+
     // Basis function lookup table for optimization
     static constexpr int BASIS_LOOKUP_SIZE = 1024;
     AlignedVector32<float> mBasisLookupTable;  // [BASIS_LOOKUP_SIZE][degree+1]
     bool mUseLookupTable = false;
-    
+
     AlignedVector32<float> mKnots;
     AlignedVector32<float> mControlPoints;
     AlignedVector32<float> mControlPointGradients;  // For backpropagation
-    
+
     AlignedVector32<float> mBasisFunctionsBuffer;
     std::vector<int> mSpanIndicesBuffer;
     AlignedVector32<float> mBasisBuffer;
@@ -73,30 +82,46 @@ public:
     SpanNetwork() = default;
     SpanNetwork(const SpanNetwork& other) = default;
     SpanNetwork& operator=(const SpanNetwork& other) = default;
-    
+
     void Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt19937& rng);
-    
+
     void Forward(const float* input, float* output);
     void ForwardBatch(const float* input, float* output, int batchSize);
     void ForwardWithLatent(const float* input, float* output, SecondOrderLatentMemory& latent, int envIdx);
-    
+
+    // Forward pass with caching for backpropagation
+    void ForwardWithCache(const float* input, float* output);
+    void ForwardBatchWithCache(const float* input, float* output, int batchSize);
+
+    // Backward pass for analytic gradients
+    // input: original network input
+    // output_grad: gradient of loss w.r.t. network output [outputDim]
+    // input_grad: gradient of loss w.r.t. network input [inputDim] (can be nullptr)
+    // accumulate_grads: if true, accumulate gradients; if false, zero first
+    void Backward(const float* input, const float* output_grad, float* input_grad = nullptr, bool accumulate_grads = true);
+
     std::vector<float> GetAllWeights() const;
     void SetAllWeights(const std::vector<float>& weights);
     size_t GetNumWeights() const;
-    
+
     // Gradient computation for Muon optimizer
     std::vector<float> GetAllGradients() const;
     void SetAllGradients(const std::vector<float>& grads);
     void ZeroGradients();
-    void ComputeGradients(const float* input, const float* output, const float* target, int batchSize);
-    
+    void ScaleGradients(float scale);  // Scale all gradients by a factor
+    void ComputeGradients(const float* input, const float* output, const float* target, int batchSize, int sampleRate = 16);
+
     TensorProductBSpline& GetLayer(size_t idx) { return mLayers[idx]; }
     const TensorProductBSpline& GetLayer(size_t idx) const { return mLayers[idx]; }
     size_t GetNumLayers() const { return mLayers.size(); }
-    
+
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
-    
+
+    // Access to cached values for backpropagation
+    const std::vector<AlignedVector32<float>>& GetCachedLayerInputs() const { return mCachedLayerInputs; }
+    const std::vector<AlignedVector32<float>>& GetCachedLayerOutputs() const { return mCachedLayerOutputs; }
+
     void SoftUpdate(const SpanNetwork& other, float tau);
 
 private:
@@ -105,8 +130,13 @@ private:
     std::vector<size_t> mLayerOutputDims;
     size_t mInputDim = 0;
     size_t mOutputDim = 0;
-    
+
     AlignedVector32<float> mActivationBuffer;
+
+    // Caching buffers for backpropagation
+    std::vector<AlignedVector32<float>> mCachedLayerInputs;   // Input to each layer
+    std::vector<AlignedVector32<float>> mCachedLayerOutputs;  // Output of each layer (after activation)
+    AlignedVector32<float> mTempGradBuffer;                   // Temporary gradient buffer
 };
 
 class alignas(32) SpanActorCritic

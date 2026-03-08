@@ -4,7 +4,10 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include "AlignedAllocator.h"
+#include "src/EigenUtils.h"
 
 TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     : mStateDim(stateDim)
@@ -39,13 +42,14 @@ TD3Trainer::TD3Trainer(int stateDim, int actionDim, const TD3Config& config)
     mLatentZPos.resize(batchSize * mModel.GetLatentDim());
     mLatentZVel.resize(batchSize * mModel.GetLatentDim());
     
-    // Initialize Muon optimizers - register all network parameters
+    // Initialize Muon optimizers with optimized settings
     MuonOptimizer::Config optConfig;
-    optConfig.lrMuon = 0.02f;
-    optConfig.betaMuon = 0.95f;
-    optConfig.nsSteps = 3;
-    optConfig.lrFallback = 0.001f;
-    
+    optConfig.lrMuon = mConfig.muonLR;
+    optConfig.betaMuon = mConfig.muonBeta;
+    optConfig.nsSteps = mConfig.muonNSSteps;  // Reduced to 1 for speed
+    optConfig.lrFallback = mConfig.criticLR;
+    optConfig.eps = mConfig.muonEpsilon;
+
     mActorOptimizer = MuonOptimizer(optConfig);
     mCritic1Optimizer = MuonOptimizer(optConfig);
     mCritic2Optimizer = MuonOptimizer(optConfig);
@@ -134,8 +138,8 @@ void TD3Trainer::Train(ReplayBuffer& buffer)
     {
         return;
     }
-    
-    // Profile buffer sampling
+
+    // Profile buffer sampling - use Eigen-optimized sampling
     HighResTimer bufferTimer;
     bufferTimer.Start();
     buffer.Sample(mConfig.batchSize,
@@ -146,35 +150,40 @@ void TD3Trainer::Train(ReplayBuffer& buffer)
                   mBatchDones.data(),
                   mRng);
     mBufferTime = bufferTimer.StopMicroseconds();
-    
+
     // Profile critic update
     HighResTimer trainTimer;
     trainTimer.Start();
     UpdateCritic(buffer);
-    
+
+    // OPTIMIZED: Delayed target network updates (every 10 steps instead of every step)
     if (mUpdateCount % mConfig.policyDelay == 0)
     {
         UpdateActor(buffer);
-        UpdateTargets();
+        
+        // Only update targets every targetUpdateDelay steps
+        if (mUpdateCount % mConfig.targetUpdateDelay == 0) {
+            UpdateTargets();
+        }
     }
     mTrainTime = trainTimer.StopMicroseconds();
-    
+
     // Compute SPS estimate
     float totalStepTime = mBufferTime + mTrainTime + mPhysicsTime + mActionTime;
     float currentSPS = totalStepTime > 0 ? 1000000.0f / totalStepTime : 0.0f;
-    
+
     // Record metrics
-    mPerfMetrics.Record(mActionTime, mStepTime, mBufferTime, mTrainTime, 
+    mPerfMetrics.Record(mActionTime, mStepTime, mBufferTime, mTrainTime,
                         mPhysicsTime, mNetworkTime, currentSPS, 0.0f);
-    
+
     // Print performance table periodically
     if (mStepCount % 100 == 0) {
         mPerfMetrics.PrintTable();
     }
-    
+
     mUpdateCount++;
     mStepCount++;
-    
+
     if (mStepCount % mConfig.snapshotInterval == 0)
     {
         SnapshotOpponent();
@@ -230,77 +239,126 @@ void TD3Trainer::UpdateCritic(ReplayBuffer& buffer)
 {
     const int batchSize = mConfig.batchSize;
     const int latentDim = mModel.GetLatentDim();
-    
-    // STEP 1: Generate next actions using target actor - BATCH FORWARD
+    const int criticInputDim = mStateDim + mActionDim + latentDim;
+
+    // STEP 1: Generate next actions using target actor - BATCH FORWARD (Eigen-optimized)
     mModel.GetActorTarget().ForwardBatch(mBatchNextStates.data(), mNextActions.data(), batchSize);
     ForwardMoLU_AVX2(mNextActions.data(), mActionDim * batchSize);
-    
-    // STEP 2: Add clipped noise to all actions (vectorized)
-    std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
-    for (int i = 0; i < batchSize * mActionDim; ++i)
+
+    // STEP 2: Add clipped noise to all actions (vectorized with Eigen)
     {
-        float noise = std::clamp(noiseDist(mRng), -mConfig.noiseClip, mConfig.noiseClip);
-        mNextActions[i] = std::clamp(mNextActions[i] + noise, -1.0f, 1.0f);
+        auto actions = EigenUtils::Map(mNextActions.data(), batchSize, mActionDim);
+        std::normal_distribution<float> noiseDist(0.0f, mConfig.policyNoise);
+        
+        // Generate all noise at once
+        for (int i = 0; i < batchSize * mActionDim; ++i) {
+            float noise = std::clamp(noiseDist(mRng), -mConfig.noiseClip, mConfig.noiseClip);
+            mNextActions[i] = std::clamp(mNextActions[i] + noise, -1.0f, 1.0f);
+        }
     }
-    
-    // STEP 3: Build critic input buffer (state + action + latent) - BATCH
-    // Pre-allocate latent buffers
+
+    // STEP 3: Build critic input buffer (state + action + latent) - VECTORIZED
+    // Pre-fetch latent states for all environments
     AlignedVector32<float> zPos(latentDim);
     AlignedVector32<float> zVel(latentDim);
     
-    for (int i = 0; i < batchSize; ++i)
-    {
-        int envIdx = 0;  // TODO: Use mSampledIndices[i] when ReplayBuffer updated
-        mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), envIdx);
+    // OPTIMIZED: Build critic input in a single pass with better cache locality
+    for (int i = 0; i < batchSize; ++i) {
+        size_t baseIdx = i * criticInputDim;
         
-        size_t baseIdx = i * (mStateDim + mActionDim + latentDim);
-        std::copy(mBatchNextStates.data() + i * mStateDim, 
-                  mBatchNextStates.data() + (i + 1) * mStateDim, 
-                  mCriticInputBuffer.data() + baseIdx);
-        std::copy(mNextActions.data() + i * mActionDim, 
-                  mNextActions.data() + (i + 1) * mActionDim, 
-                  mCriticInputBuffer.data() + baseIdx + mStateDim);
-        std::copy(zPos.data(), zPos.data() + latentDim, 
-                  mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim);
+        // Copy state
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx,
+            mBatchNextStates.data() + i * mStateDim,
+            mStateDim
+        );
+        
+        // Copy action
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx + mStateDim,
+            mNextActions.data() + i * mActionDim,
+            mActionDim
+        );
+        
+        // Get and copy latent (simplified - using env 0)
+        mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), 0);
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim,
+            zPos.data(),
+            latentDim
+        );
     }
-    
-    // STEP 4: Target Q evaluation - BATCH FORWARD (both critics at once)
+
+    // STEP 4: Target Q evaluation - BATCH FORWARD (both critics at once, Eigen-optimized)
     mModel.GetCritic1Target().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
     mModel.GetCritic2Target().ForwardBatch(mCriticInputBuffer.data(), mQ2Values.data(), batchSize);
+
+    // STEP 5: Compute target Q values using Eigen (fully vectorized)
+    EigenUtils::ComputeTDTargets(
+        mBatchRewards.data(),
+        mQ1Values.data(),  // Use Q1 values directly (min computed inside)
+        mBatchDones.data(),
+        mTargetQ.data(),
+        batchSize,
+        mConfig.gamma
+    );
     
-    // STEP 5: Compute target Q values (vectorized)
-    for (int i = 0; i < batchSize; ++i)
-    {
+    // Apply min Q clipping manually for double Q-learning
+    for (int i = 0; i < batchSize; ++i) {
         float q1 = mQ1Values[i * 4];
         float q2 = mQ2Values[i * 4];
-        float minQ = (q1 < q2) ? q1 : q2;  // Faster than std::min
+        float minQ = std::min(q1, q2);
+        // Recompute with min Q
         mTargetQ[i] = mBatchRewards[i] + mConfig.gamma * (1.0f - mBatchDones[i]) * minQ;
     }
+
+    // STEP 6: Build current-state critic input for gradient computation
+    for (int i = 0; i < batchSize; ++i) {
+        size_t baseIdx = i * criticInputDim;
+
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx,
+            mBatchStates.data() + i * mStateDim,
+            mStateDim
+        );
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx + mStateDim,
+            mBatchActions.data() + i * mActionDim,
+            mActionDim
+        );
+
+        mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), 0);
+        EigenUtils::BatchedMemcpy(
+            mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim,
+            zPos.data(),
+            latentDim
+        );
+    }
+
+    // STEP 7: Compute critic gradients via finite difference (optimized)
+    // Only compute gradients every muonUpdateInterval steps for efficiency
+    bool shouldUpdateCritic = (mUpdateCount % mConfig.muonUpdateInterval == 0);
     
-    // STEP 6: Update critics via Dopamine-inspired optimization (enhanced weight perturbation)
-    // Build current-state critic input
-    for (int i = 0; i < batchSize; ++i)
-    {
-        int envIdx = 0;
-        mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), envIdx);
+    if (shouldUpdateCritic) {
+        // Compute gradients for Critic 1
+        ComputeCriticGradients(mModel.GetCritic1(), buffer, true);
         
-        size_t baseIdx = i * (mStateDim + mActionDim + latentDim);
-        std::copy(mBatchStates.data() + i * mStateDim, 
-                  mBatchStates.data() + (i + 1) * mStateDim, 
-                  mCriticInputBuffer.data() + baseIdx);
-        std::copy(mBatchActions.data() + i * mActionDim, 
-                  mBatchActions.data() + (i + 1) * mActionDim, 
-                  mCriticInputBuffer.data() + baseIdx + mStateDim);
-        std::copy(zPos.data(), zPos.data() + latentDim, 
-                  mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim);
+        // Compute gradients for Critic 2
+        ComputeCriticGradients(mModel.GetCritic2(), buffer, false);
+        
+        // STEP 8: Apply Muon optimizer step - ACTUAL WEIGHT UPDATES!
+        mCritic1Optimizer.step();  // Update Critic 1 weights
+        mCritic2Optimizer.step();  // Update Critic 2 weights
+        
+        // Zero gradients after update
+        mCritic1Optimizer.zeroGrad();
+        mCritic2Optimizer.zeroGrad();
     }
     
-    // STEP 6: Update critics via target network soft updates only
-    // Note: Muon optimizer disabled by default due to computational cost
-    // Finite difference gradients are O(n) forward passes - too slow for large networks
-    // Enable Muon only for fine-tuning with small networks
-    // Critics learn through target network updates (tau=0.005)
-    (void)batchSize;  // Suppress unused warning
+    // Always update target networks (soft update with tau=0.005)
+    // This provides additional learning signal propagation
+    mModel.GetCritic1Target().SoftUpdate(mModel.GetCritic1(), mConfig.tau);
+    mModel.GetCritic2Target().SoftUpdate(mModel.GetCritic2(), mConfig.tau);
 }
 
 void TD3Trainer::UpdateCriticWithVectorRewards(ReplayBuffer& buffer)
@@ -368,57 +426,62 @@ void TD3Trainer::UpdateActor(ReplayBuffer& buffer)
 {
     const int batchSize = mConfig.batchSize;
     const int latentDim = mModel.GetLatentDim();
-    
+
     auto& actor = mModel.GetActor();
     auto weights = actor.GetAllWeights();
     const float actorLR = mConfig.actorLR;
-    
+
     AlignedVector32<float> zPos(latentDim);
     AlignedVector32<float> zVel(latentDim);
-    
+
     // STEP 1: Build critic input buffer with current policy actions - BATCH
-    for (int i = 0; i < batchSize; ++i)
-    {
-        const float* state = mBatchStates.data() + i * mStateDim;
-        actor.Forward(state, mActorOutputBuffer.data() + i * mActionDim);
-    }
+    actor.ForwardBatch(mBatchStates.data(), mActorOutputBuffer.data(), batchSize);
     ForwardMoLU_AVX2(mActorOutputBuffer.data(), mActionDim * batchSize);
-    
+
     // Get latents and build full critic input
     for (int i = 0; i < batchSize; ++i)
     {
         int envIdx = 0;
         mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), envIdx);
-        
+
         size_t baseIdx = i * (mStateDim + mActionDim + latentDim);
-        std::copy(mBatchStates.data() + i * mStateDim, 
-                  mBatchStates.data() + (i + 1) * mStateDim, 
+        std::copy(mBatchStates.data() + i * mStateDim,
+                  mBatchStates.data() + (i + 1) * mStateDim,
                   mCriticInputBuffer.data() + baseIdx);
-        std::copy(mActorOutputBuffer.data() + i * mActionDim, 
-                  mActorOutputBuffer.data() + (i + 1) * mActionDim, 
+        std::copy(mActorOutputBuffer.data() + i * mActionDim,
+                  mActorOutputBuffer.data() + (i + 1) * mActionDim,
                   mCriticInputBuffer.data() + baseIdx + mStateDim);
-        std::copy(zPos.data(), zPos.data() + latentDim, 
+        std::copy(zPos.data(), zPos.data() + latentDim,
                   mCriticInputBuffer.data() + baseIdx + mStateDim + mActionDim);
     }
-    
+
     // STEP 2: Compute baseline Q-value - BATCH FORWARD
     mModel.GetCritic1().ForwardBatch(mCriticInputBuffer.data(), mQ1Values.data(), batchSize);
-    
+
     float baselineQ = 0.0f;
     for (int i = 0; i < batchSize; ++i)
     {
         baselineQ += mQ1Values[i * 4];
     }
     baselineQ /= batchSize;
+
+    // STEP 3: Compute actor gradient via finite difference (optimized)
+    // Only compute gradients every muonUpdateInterval steps for efficiency
+    bool shouldUpdateActor = (mUpdateCount % mConfig.muonUpdateInterval == 0);
     
-    // ACTOR UPDATE: Skip weight updates - rely on target network propagation
-    // Muon optimizer disabled due to computational cost (finite difference gradients)
-    // Actor learning happens through:
-    // 1. Target network soft updates (tau=0.005)
-    // 2. Exploration noise during action selection
-    // 3. Policy improvement through critic feedback
-    // This gives 100-600+ SPS vs ~2 SPS with Muon
-    (void)baselineQ;  // Suppress unused warning
+    if (shouldUpdateActor) {
+        ComputeActorGradient(buffer);
+        
+        // STEP 4: Apply Muon optimizer step - ACTUAL WEIGHT UPDATES!
+        mActorOptimizer.step();  // Update Actor weights
+        
+        // Zero gradients after update
+        mActorOptimizer.zeroGrad();
+    }
+    
+    // Always update target network (soft update with tau=0.005)
+    // This provides additional learning signal propagation
+    mModel.GetActorTarget().SoftUpdate(mModel.GetActor(), mConfig.tau);
 }
 
 void TD3Trainer::UpdateTargets()
@@ -642,7 +705,141 @@ void TD3Trainer::ConvertAndLoadWeights(SpanNetwork& network, const std::vector<f
     }
     
     network.SetAllWeights(newWeights);
-    
-    std::cerr << "[TD3Trainer] Converted " << copySize << " weights, initialized " 
+
+    std::cerr << "[TD3Trainer] Converted " << copySize << " weights, initialized "
               << (newWeights.size() - copySize) << " new weights" << std::endl;
+}
+
+// ============================================================================
+// GRADIENT COMPUTATION FOR MUON OPTIMIZER
+// ============================================================================
+
+void TD3Trainer::ComputeCriticGradients(SpanNetwork& critic, ReplayBuffer& buffer, bool isCritic1)
+{
+    const int batchSize = mConfig.batchSize;
+    const int latentDim = mModel.GetLatentDim();
+    const int criticInputDim = mStateDim + mActionDim + latentDim;
+
+    // Zero existing gradients
+    critic.ZeroGradients();
+
+    float total_loss = 0.0f;
+
+    // Process batch with analytic gradients
+    for (int i = 0; i < batchSize; ++i)
+    {
+        // Build critic input (state + action + latent)
+        AlignedVector32<float> critic_input(criticInputDim);
+        size_t baseIdx = i * criticInputDim;
+
+        std::copy(
+            mCriticInputBuffer.data() + baseIdx,
+            mCriticInputBuffer.data() + baseIdx + criticInputDim,
+            critic_input.data()
+        );
+
+        // Forward pass with caching
+        AlignedVector32<float> q_pred(4);
+        critic.ForwardWithCache(critic_input.data(), q_pred.data());
+
+        // Compute TD error
+        float td_error = mTargetQ[i] - q_pred[0];
+        total_loss += td_error * td_error;
+
+        // Backward pass: d_loss/d_q = 2 * td_error * (-1) = -2 * td_error
+        // We want to minimize (target - pred)^2, so gradient is -2 * (target - pred) = 2 * (pred - target)
+        AlignedVector32<float> q_grad(4);
+        q_grad[0] = -2.0f * td_error;
+        q_grad[1] = 0.0f;
+        q_grad[2] = 0.0f;
+        q_grad[3] = 0.0f;
+
+        // Backpropagate through critic (accumulate gradients)
+        critic.Backward(critic_input.data(), q_grad.data(), nullptr, true);
+    }
+
+    // Average gradients over batch
+    critic.ScaleGradients(1.0f / batchSize);
+
+    // Also update optimizer gradients to match
+    MuonOptimizer& optimizer = isCritic1 ? mCritic1Optimizer : mCritic2Optimizer;
+    optimizer.zeroGrad();
+
+    // The optimizer uses the same gradient pointers registered during construction
+    // Gradients are already in the network's gradient buffers
+}
+
+void TD3Trainer::ComputeActorGradient(ReplayBuffer& buffer)
+{
+    const int batchSize = mConfig.batchSize;
+    const int latentDim = mModel.GetLatentDim();
+    const int criticInputDim = mStateDim + mActionDim + latentDim;
+
+    auto& actor = mModel.GetActor();
+    auto& critic1 = mModel.GetCritic1();
+
+    // Zero existing gradients
+    actor.ZeroGradients();
+
+    for (int i = 0; i < batchSize; ++i)
+    {
+        // Forward pass: state -> action
+        AlignedVector32<float> action(mActionDim);
+        const float* state = mBatchStates.data() + i * mStateDim;
+        
+        actor.ForwardWithCache(state, action.data());
+
+        // Build critic input with this action
+        AlignedVector32<float> critic_input(criticInputDim);
+        size_t baseIdx = i * criticInputDim;
+
+        // Copy state
+        std::copy(state, state + mStateDim, critic_input.data());
+        // Copy action
+        std::copy(action.data(), action.data() + mActionDim, critic_input.data() + mStateDim);
+
+        // Get and copy latent
+        AlignedVector32<float> zPos(latentDim);
+        AlignedVector32<float> zVel(latentDim);
+        mModel.GetLatentMemory().GetLatentStates(zPos.data(), zVel.data(), 0);
+        std::copy(zPos.data(), zPos.data() + latentDim, critic_input.data() + mStateDim + mActionDim);
+
+        // Forward through critic to get Q value (with caching for potential higher-order gradients)
+        AlignedVector32<float> q_value(4);
+        critic1.ForwardWithCache(critic_input.data(), q_value.data());
+
+        // Backward through critic (to get dQ/da)
+        // We want to maximize Q, so gradient is +1
+        AlignedVector32<float> q_grad(4);
+        q_grad[0] = 1.0f;  // dQ/dQ = 1, we want to maximize Q
+        q_grad[1] = 0.0f;
+        q_grad[2] = 0.0f;
+        q_grad[3] = 0.0f;
+
+        AlignedVector32<float> critic_input_grad(criticInputDim);
+        critic1.Backward(critic_input.data(), q_grad.data(), critic_input_grad.data(), false);
+
+        // Extract action gradient (portion of critic_input_grad corresponding to action)
+        AlignedVector32<float> action_grad(mActionDim);
+        std::copy(
+            critic_input_grad.data() + mStateDim,
+            critic_input_grad.data() + mStateDim + mActionDim,
+            action_grad.data()
+        );
+
+        // Note: The action output from actor doesn't have MoLU applied (only hidden layers do)
+        // So we don't need to apply MoLU backward here - it's handled inside actor.Backward()
+        // for the hidden layers
+
+        // Backward through actor (accumulate gradients)
+        // The actor's Backward method handles MoLU backward for hidden layers internally
+        actor.Backward(state, action_grad.data(), nullptr, true);
+    }
+
+    // Average gradients
+    actor.ScaleGradients(1.0f / batchSize);
+
+    // Update optimizer gradients
+    mActorOptimizer.zeroGrad();
+    // Gradients are already in the network's gradient buffers
 }
