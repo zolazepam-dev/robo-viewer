@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     // Initialize Training Environment (Headless)
     std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << std::endl;
     VectorizedEnv vecEnv(config.numParallelEnvs, 7200); // Default 7200 steps per episode
-    vecEnv.Init();
+    vecEnv.Init("robots/combat_bot.json");
     
     int stateDim = vecEnv.GetObservationDim();
     int actionDim = vecEnv.GetActionDim();
@@ -119,6 +119,8 @@ int main(int argc, char* argv[]) {
     ReplayBuffer buffer(td3cfg.bufferSize, stateDim, actionDim);
     
     AlignedVector32<float> actions(totalActionDim, 0.0f);
+    AlignedVector32<float> prevObs(config.numParallelEnvs * stateDim * 2, 0.0f);
+    bool firstStep = true;
     
     std::mt19937 rng(42);
     std::normal_distribution<float> noiseDist(0.0f, 1.0f);
@@ -142,11 +144,44 @@ int main(int argc, char* argv[]) {
     while (totalSteps < config.maxSteps) {
         auto loopStart = std::chrono::high_resolution_clock::now();
         
+        // 1. Get Current Observations
+        const auto& allObs = vecEnv.GetObservations();
+        if (!firstStep) {
+            // Store transitions from PREVIOUS step to CURRENT state
+            const auto& allRewards = vecEnv.GetRewards();
+            const auto& allDones = vecEnv.GetDones();
+            
+            for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
+                // Robot 1 transition
+                const float* s1 = prevObs.data() + envIdx * stateDim * 2;
+                const float* s1_next = allObs.data() + envIdx * stateDim * 2;
+                const float* a1 = actions.data() + envIdx * actionDim * 2;
+                float r1 = allRewards[envIdx * 2];
+                
+                // Robot 2 transition
+                const float* s2 = s1 + stateDim;
+                const float* s2_next = s1_next + stateDim;
+                const float* a2 = a1 + actionDim;
+                float r2 = allRewards[envIdx * 2 + 1];
+                
+                buffer.Add(s1, a1, r1, s1_next, allDones[envIdx]);
+                buffer.Add(s2, a2, r2, s2_next, allDones[envIdx]);
+                
+                avgRewards[rewardIdx % 100] = (r1 + r2) / 2.0f;
+                rewardIdx++;
+                if (allDones[envIdx]) episodes++;
+            }
+        }
+        
+        // 2. Cache current obs for next step's transition
+        std::copy(allObs.begin(), allObs.end(), prevObs.begin());
+        firstStep = false;
+
+        // 3. Select Next Actions
         auto actionStart = std::chrono::high_resolution_clock::now();
         if (totalSteps < td3cfg.startSteps) {
             for (int i = 0; i < totalActionDim; ++i) actions[i] = noiseDist(rng);
         } else {
-            const auto& allObs = vecEnv.GetObservations();
             for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
                 const float* obs1 = allObs.data() + envIdx * stateDim * 2;
                 const float* obs2 = obs1 + stateDim;
@@ -159,35 +194,14 @@ int main(int argc, char* argv[]) {
         auto actionEnd = std::chrono::high_resolution_clock::now();
         auto actionTime = std::chrono::duration_cast<std::chrono::microseconds>(actionEnd - actionStart).count();
 
+        // 4. Step Environment
         auto stepStart = std::chrono::high_resolution_clock::now();
         vecEnv.Step(actions);
         vecEnv.ResetDoneEnvs();
         auto stepEnd = std::chrono::high_resolution_clock::now();
         auto stepTime = std::chrono::duration_cast<std::chrono::microseconds>(stepEnd - stepStart).count();
 
-        auto bufferStart = std::chrono::high_resolution_clock::now();
-        const auto& allObs = vecEnv.GetObservations();
-        const auto& allRewards = vecEnv.GetRewards();
-        const auto& allDones = vecEnv.GetDones();
-        
-        for (int envIdx = 0; envIdx < config.numParallelEnvs; ++envIdx) {
-            const float* obs1 = allObs.data() + envIdx * stateDim * 2;
-            const float* obs2 = obs1 + stateDim;
-            const float* act1 = actions.data() + envIdx * actionDim * 2;
-            const float* act2 = act1 + actionDim;
-            float r1 = allRewards[envIdx * 2];
-            float r2 = allRewards[envIdx * 2 + 1];
-            
-            buffer.Add(obs1, act1, r1, obs2, allDones[envIdx]);
-            buffer.Add(obs2, act2, r2, obs1, allDones[envIdx]);
-            
-            avgRewards[rewardIdx % 100] = (r1 + r2) / 2.0f;
-            rewardIdx++;
-            if (allDones[envIdx]) episodes++;
-        }
-        auto bufferEnd = std::chrono::high_resolution_clock::now();
-        auto bufferTime = std::chrono::duration_cast<std::chrono::microseconds>(bufferEnd - bufferStart).count();
-
+        // 5. Train
         auto trainStart = std::chrono::high_resolution_clock::now();
         if (buffer.Size() >= td3cfg.startSteps) trainer.Train(buffer);
         auto trainEnd = std::chrono::high_resolution_clock::now();
@@ -203,7 +217,6 @@ int main(int argc, char* argv[]) {
                       << " | Loop: " << loopTime << "us" 
                       << " | Action: " << actionTime << "us"
                       << " | Step: " << stepTime << "us"
-                      << " | Buffer: " << bufferTime << "us"
                       << " | Train: " << trainTime << "us" << std::endl;
         }
         

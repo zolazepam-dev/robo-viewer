@@ -265,7 +265,7 @@ cc_binary(
         "@nlohmann_json//:json",
         "@jolt//:jolt",
     ],
-    linkopts = ["-lpthread", "-flto"],
+    linkopts = ["-lpthread", "-flto", "-lgomp"],
     copts = [
         "-std=c++17",
         "-O3",
@@ -275,7 +275,10 @@ cc_binary(
         "-march=native",
         "-ffast-math",
         "-flto",
-        "-fno-strict-aliasing"
+        "-fno-strict-aliasing",
+        "-I/usr/include/eigen3",
+        "-DEIGEN_ENABLE_AVX2",
+        "-fopenmp"
     ],
 )
 

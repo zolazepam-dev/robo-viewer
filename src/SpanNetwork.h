@@ -76,6 +76,11 @@ private:
     AlignedVector32<float> mTempOutput;
 };
 
+struct SpanCache {
+    std::vector<AlignedVector32<float>> layerInputs;
+    std::vector<AlignedVector32<float>> layerOutputs;
+};
+
 class alignas(32) SpanNetwork
 {
 public:
@@ -90,14 +95,12 @@ public:
     void ForwardWithLatent(const float* input, float* output, SecondOrderLatentMemory& latent, int envIdx);
 
     // Forward pass with caching for backpropagation
+    void ForwardWithCache(const float* input, float* output, SpanCache& cache);
     void ForwardWithCache(const float* input, float* output);
-    void ForwardBatchWithCache(const float* input, float* output, int batchSize);
+    void ForwardBatchWithCache(const float* input, float* output, int batchSize, std::vector<SpanCache>& caches);
 
     // Backward pass for analytic gradients
-    // input: original network input
-    // output_grad: gradient of loss w.r.t. network output [outputDim]
-    // input_grad: gradient of loss w.r.t. network input [inputDim] (can be nullptr)
-    // accumulate_grads: if true, accumulate gradients; if false, zero first
+    void Backward(const float* input, const float* output_grad, float* input_grad, float* cp_grad_base, SpanCache& cache);
     void Backward(const float* input, const float* output_grad, float* input_grad = nullptr, bool accumulate_grads = true);
 
     std::vector<float> GetAllWeights() const;
@@ -118,10 +121,6 @@ public:
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
 
-    // Access to cached values for backpropagation
-    const std::vector<AlignedVector32<float>>& GetCachedLayerInputs() const { return mCachedLayerInputs; }
-    const std::vector<AlignedVector32<float>>& GetCachedLayerOutputs() const { return mCachedLayerOutputs; }
-
     void SoftUpdate(const SpanNetwork& other, float tau);
 
 private:
@@ -133,10 +132,8 @@ private:
 
     AlignedVector32<float> mActivationBuffer;
 
-    // Caching buffers for backpropagation
-    std::vector<AlignedVector32<float>> mCachedLayerInputs;   // Input to each layer
-    std::vector<AlignedVector32<float>> mCachedLayerOutputs;  // Output of each layer (after activation)
-    AlignedVector32<float> mTempGradBuffer;                   // Temporary gradient buffer
+    // INTERNAL CACHE (kept for single-threaded compatibility)
+    SpanCache mInternalCache;
 };
 
 class alignas(32) SpanActorCritic

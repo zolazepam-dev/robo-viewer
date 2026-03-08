@@ -29,13 +29,114 @@ OverlayUIRefactored::OverlayUIRefactored()
         mPhysicsHistory[i].reserve(HISTORY_MAX);
     }
     
-    // Initialize available robot configurations
-    mRobotSelection.availableRobots = {
-        { "Internal Engine Bot", "internal_engine.json", 100.0f, 6000.0f, 2.0f, 0.3f, 100.0f, 10.0f, 450.0f },
-        { "Shell Bot", "shell_bot.json", 80.0f, 4000.0f, 2.5f, 0.5f, 150.0f, 8.0f, 600.0f },
-        { "Wedge Bot", "wedge_bot.json", 120.0f, 5000.0f, 1.8f, 0.4f, 120.0f, 12.0f, 500.0f },
-        { "Drum Bot", "drum_bot.json", 90.0f, 7000.0f, 2.2f, 0.35f, 130.0f, 15.0f, 700.0f }
-    };
+    // Available robots will be loaded from ConfigManager
+}
+
+// ... existing Init, NewFrame, Render, DrawAllTabs, Shutdown, UpdateStats, PushRewardData, PushPhysicsMetrics, DrawCyberpunkStyle, PlotLine, DrawTabBar ...
+
+void OverlayUIRefactored::UItoCentral(CentralConfig& cfg)
+{
+    // Physics
+    cfg.physics.gravityY = mPhysics.gravityY;
+    cfg.physics.timestep = mPhysics.timestep;
+    cfg.physics.velocitySteps = mPhysics.velocitySteps;
+    cfg.physics.positionSteps = mPhysics.positionSteps;
+    cfg.physics.Baumgarte = mPhysics.Baumgarte;
+    cfg.physics.penetrationSlop = mPhysics.penetrationSlop;
+    cfg.physics.speculativeContactDistance = mPhysics.speculativeContactDistance;
+    cfg.physics.allowSleep = mPhysics.allowSleep;
+    cfg.physics.timeScale = mTimeScale;
+    cfg.physics.stepsPerEpisode = mStepsPerEpisode;
+
+    // Robot
+    cfg.robot.enginePower = mRobotTune.enginePower;
+    cfg.robot.reactionWheelPower = mRobotTune.reactionWheelPower;
+    cfg.robot.shellRadius = mRobotTune.shellRadius;
+    cfg.robot.shellThickness = mRobotTune.shellThickness;
+    cfg.robot.shellMass = mRobotTune.shellMass;
+    cfg.robot.motorSpeed = mRobotTune.motorSpeed;
+    cfg.robot.motorTorque = mRobotTune.motorTorque;
+
+    // Graphics
+    cfg.graphics.showCollisionShapes = mGraphics.showCollisionShapes;
+    cfg.graphics.showAABBs = mGraphics.showAABBs;
+    cfg.graphics.showContactPoints = mGraphics.showContactPoints;
+    cfg.graphics.showRobot1 = mGraphics.showRobot1;
+    cfg.graphics.showRobot2 = mGraphics.showRobot2;
+    cfg.graphics.showInternalEngines = mGraphics.showInternalEngines;
+    cfg.graphics.cameraDistance = mGraphics.cameraDistance;
+    cfg.graphics.cameraAzimuth = mGraphics.cameraAzimuth;
+    cfg.graphics.cameraElevation = mGraphics.cameraElevation;
+
+    // Training
+    cfg.training.numEnvs = mConfig.numEnvs;
+    cfg.training.checkpointInterval = mConfig.checkpointInterval;
+    cfg.training.checkpointDir = mConfig.checkpointDir;
+    cfg.training.robotConfigPath = mConfig.robotConfigPath;
+}
+
+void OverlayUIRefactored::CentraltoUI(const CentralConfig& cfg)
+{
+    // Physics
+    mPhysics.gravityY = cfg.physics.gravityY;
+    mPhysics.timestep = cfg.physics.timestep;
+    mPhysics.velocitySteps = cfg.physics.velocitySteps;
+    mPhysics.positionSteps = cfg.physics.positionSteps;
+    mPhysics.Baumgarte = cfg.physics.Baumgarte;
+    mPhysics.penetrationSlop = cfg.physics.penetrationSlop;
+    mPhysics.speculativeContactDistance = cfg.physics.speculativeContactDistance;
+    mPhysics.allowSleep = cfg.physics.allowSleep;
+    mTimeScale = cfg.physics.timeScale;
+    mStepsPerEpisode = cfg.physics.stepsPerEpisode;
+
+    // Robot
+    mRobotTune.enginePower = cfg.robot.enginePower;
+    mRobotTune.reactionWheelPower = cfg.robot.reactionWheelPower;
+    mRobotTune.shellRadius = cfg.robot.shellRadius;
+    mRobotTune.shellThickness = cfg.robot.shellThickness;
+    mRobotTune.shellMass = cfg.robot.shellMass;
+    mRobotTune.motorSpeed = cfg.robot.motorSpeed;
+    mRobotTune.motorTorque = cfg.robot.motorTorque;
+
+    // Graphics
+    mGraphics.showCollisionShapes = cfg.graphics.showCollisionShapes;
+    mGraphics.showAABBs = cfg.graphics.showAABBs;
+    mGraphics.showContactPoints = cfg.graphics.showContactPoints;
+    mGraphics.showRobot1 = cfg.graphics.showRobot1;
+    mGraphics.showRobot2 = cfg.graphics.showRobot2;
+    mGraphics.showInternalEngines = cfg.graphics.showInternalEngines;
+    mGraphics.cameraDistance = cfg.graphics.cameraDistance;
+    mGraphics.cameraAzimuth = cfg.graphics.cameraAzimuth;
+    mGraphics.cameraElevation = cfg.graphics.cameraElevation;
+
+    // Training
+    mConfig.numEnvs = cfg.training.numEnvs;
+    mConfig.checkpointInterval = cfg.training.checkpointInterval;
+    mConfig.checkpointDir = cfg.training.checkpointDir;
+    mConfig.robotConfigPath = cfg.training.robotConfigPath;
+    
+    // Update robot selection UI
+    mRobotSelection.availableRobots.clear();
+    for (const auto& def : cfg.robotDefinitions) {
+        mRobotSelection.availableRobots.push_back({
+            def.name, def.configPath, def.enginePower, def.reactionWheelPower,
+            def.shellRadius, def.shellThickness, def.shellMass,
+            def.motorSpeed, def.motorTorque
+        });
+    }
+}
+
+void OverlayUIRefactored::SaveSettings(const std::string& path)
+{
+    UItoCentral(ConfigManager::GetInstance().GetConfig());
+    ConfigManager::GetInstance().SaveConfig(path);
+}
+
+void OverlayUIRefactored::LoadSettings(const std::string& path)
+{
+    if (ConfigManager::GetInstance().LoadConfig(path)) {
+        CentraltoUI(ConfigManager::GetInstance().GetConfig());
+    }
 }
 
 void OverlayUIRefactored::Init(GLFWwindow* window)
@@ -866,131 +967,5 @@ const std::string& OverlayUIRefactored::GetSelectedRobotType() const
     return mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name;
 }
 
-// ================================
-// SETTINGS SAVE/LOAD
-// ================================
-
-#include <fstream>
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
-
-void OverlayUIRefactored::SaveSettings(const std::string& path)
-{
-    json j;
-    
-    // Physics settings
-    j["physics"]["gravityY"] = mPhysics.gravityY;
-    j["physics"]["timestep"] = mPhysics.timestep;
-    j["physics"]["velocitySteps"] = mPhysics.velocitySteps;
-    j["physics"]["positionSteps"] = mPhysics.positionSteps;
-    j["physics"]["Baumgarte"] = mPhysics.Baumgarte;
-    j["physics"]["penetrationSlop"] = mPhysics.penetrationSlop;
-    j["physics"]["speculativeContactDistance"] = mPhysics.speculativeContactDistance;
-    j["physics"]["allowSleep"] = mPhysics.allowSleep;
-    j["physics"]["timeScale"] = mTimeScale;
-    j["physics"]["stepsPerEpisode"] = mStepsPerEpisode;
-    
-    // Robot settings
-    j["robot"]["enginePower"] = mRobotTune.enginePower;
-    j["robot"]["reactionWheelPower"] = mRobotTune.reactionWheelPower;
-    j["robot"]["shellRadius"] = mRobotTune.shellRadius;
-    j["robot"]["shellThickness"] = mRobotTune.shellThickness;
-    j["robot"]["shellMass"] = mRobotTune.shellMass;
-    j["robot"]["motorSpeed"] = mRobotTune.motorSpeed;
-    j["robot"]["motorTorque"] = mRobotTune.motorTorque;
-    
-    // Graphics settings
-    j["graphics"]["showCollisionShapes"] = mGraphics.showCollisionShapes;
-    j["graphics"]["showAABBs"] = mGraphics.showAABBs;
-    j["graphics"]["showContactPoints"] = mGraphics.showContactPoints;
-    j["graphics"]["showRobot1"] = mGraphics.showRobot1;
-    j["graphics"]["showRobot2"] = mGraphics.showRobot2;
-    j["graphics"]["showInternalEngines"] = mGraphics.showInternalEngines;
-    j["graphics"]["cameraDistance"] = mGraphics.cameraDistance;
-    j["graphics"]["cameraAzimuth"] = mGraphics.cameraAzimuth;
-    j["graphics"]["cameraElevation"] = mGraphics.cameraElevation;
-    
-    // Training config
-    j["training"]["numEnvs"] = mConfig.numEnvs;
-    j["training"]["checkpointInterval"] = mConfig.checkpointInterval;
-    j["training"]["checkpointDir"] = mConfig.checkpointDir;
-    j["training"]["robotConfigPath"] = mConfig.robotConfigPath;
-
-    std::ofstream file(path);    if (file.is_open()) {
-        file << j.dump(2);
-        file.close();
-        std::cout << "[OverlayUI] Settings saved to: " << path << std::endl;
-    }
-}
-
-void OverlayUIRefactored::LoadSettings(const std::string& path)
-{
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        std::cout << "[OverlayUI] No settings file found at: " << path << std::endl;
-        return;
-    }
-    
-    try {
-        json j;
-        file >> j;
-        
-        // Physics settings
-        if (j.contains("physics")) {
-            const auto& p = j["physics"];
-            if (p.contains("gravityY")) mPhysics.gravityY = p["gravityY"];
-            if (p.contains("timestep")) mPhysics.timestep = p["timestep"];
-            if (p.contains("velocitySteps")) mPhysics.velocitySteps = p["velocitySteps"];
-            if (p.contains("positionSteps")) mPhysics.positionSteps = p["positionSteps"];
-            if (p.contains("Baumgarte")) mPhysics.Baumgarte = p["Baumgarte"];
-            if (p.contains("penetrationSlop")) mPhysics.penetrationSlop = p["penetrationSlop"];
-            if (p.contains("speculativeContactDistance")) mPhysics.speculativeContactDistance = p["speculativeContactDistance"];
-            if (p.contains("allowSleep")) mPhysics.allowSleep = p["allowSleep"];
-            if (p.contains("timeScale")) mTimeScale = p["timeScale"];
-            if (p.contains("stepsPerEpisode")) mStepsPerEpisode = p["stepsPerEpisode"];
-        }
-        
-        // Robot settings
-        if (j.contains("robot")) {
-            const auto& r = j["robot"];
-            if (r.contains("enginePower")) mRobotTune.enginePower = r["enginePower"];
-            if (r.contains("reactionWheelPower")) mRobotTune.reactionWheelPower = r["reactionWheelPower"];
-            if (r.contains("shellRadius")) mRobotTune.shellRadius = r["shellRadius"];
-            if (r.contains("shellThickness")) mRobotTune.shellThickness = r["shellThickness"];
-            if (r.contains("shellMass")) mRobotTune.shellMass = r["shellMass"];
-            if (r.contains("motorSpeed")) mRobotTune.motorSpeed = r["motorSpeed"];
-            if (r.contains("motorTorque")) mRobotTune.motorTorque = r["motorTorque"];
-        }
-        
-        // Graphics settings
-        if (j.contains("graphics")) {
-            const auto& g = j["graphics"];
-            if (g.contains("showCollisionShapes")) mGraphics.showCollisionShapes = g["showCollisionShapes"];
-            if (g.contains("showAABBs")) mGraphics.showAABBs = g["showAABBs"];
-            if (g.contains("showContactPoints")) mGraphics.showContactPoints = g["showContactPoints"];
-            if (g.contains("showRobot1")) mGraphics.showRobot1 = g["showRobot1"];
-            if (g.contains("showRobot2")) mGraphics.showRobot2 = g["showRobot2"];
-            if (g.contains("showInternalEngines")) mGraphics.showInternalEngines = g["showInternalEngines"];
-            if (g.contains("cameraDistance")) mGraphics.cameraDistance = g["cameraDistance"];
-            if (g.contains("cameraAzimuth")) mGraphics.cameraAzimuth = g["cameraAzimuth"];
-            if (g.contains("cameraElevation")) mGraphics.cameraElevation = g["cameraElevation"];
-        }
-        
-        // Training config
-        if (j.contains("training")) {
-            const auto& t = j["training"];
-            if (t.contains("numEnvs")) mConfig.numEnvs = t["numEnvs"];
-            if (t.contains("checkpointInterval")) mConfig.checkpointInterval = t["checkpointInterval"];
-            if (t.contains("checkpointDir")) mConfig.checkpointDir = t["checkpointDir"];
-            if (t.contains("robotConfigPath")) mConfig.robotConfigPath = t["robotConfigPath"];
-        }
-        
-        std::cout << "[OverlayUI] Settings loaded from: " << path << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "[OverlayUI] Error loading settings: " << e.what() << std::endl;
-    }
-    
-    file.close();
-}
 
 

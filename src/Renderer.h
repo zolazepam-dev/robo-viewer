@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include "VisualState.h"
 
 struct Light {
     glm::vec3 position;
@@ -33,7 +34,8 @@ public:
                const glm::vec3& cameraFront = glm::vec3(0.0f, 0.0f, -1.0f),
                const glm::vec3& cameraUp = glm::vec3(0.0f, 1.0f, 0.0f),
                bool showCollisionShapes = false, bool showAABBs = false, bool showContactPoints = false,
-               bool showRobot1 = true, bool showRobot2 = true);
+               bool showRobot1 = true, bool showRobot2 = true,
+               const struct EnvVisualState* visualState = nullptr);
     void Resize(int width, int height);
 
 private:

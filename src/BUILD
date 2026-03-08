@@ -61,6 +61,7 @@ cc_library(
         "ShardEnv.cpp",
         "MuonOptimizer.cpp",
         "ParallelPhysics.cpp",
+        "ConfigManager.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -69,6 +70,7 @@ cc_library(
         "RobotLoader.h",
         "OverlayUI.h",
         "OverlayUI_refactor.h",
+        "ConfigManager.h",
         "VectorizedEnv.h",
         "CombatEnv.h",
         "TD3Trainer.h",
@@ -87,6 +89,7 @@ cc_library(
         "MuonOptimizer.h",
         "SIMDObservations.h",
         "ParallelPhysics.h",
+        "VisualState.h",
         "Aircraft.h",
         "AircraftEnv.h",
         "Robot.h",
@@ -193,5 +196,23 @@ cc_binary(
         "-mfma",
         "-DJPH_DEBUG_RENDERER",
         "-march=native",
+    ],
+)
+
+cc_binary(
+    name = "gradient_check_test",
+    srcs = ["gradient_check_test.cpp"],
+    deps = [
+        ":core",
+        "@jolt//:jolt",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-DJPH_DEBUG_RENDERER",
+        "-march=native",
+        "-I/usr/include/eigen3"
     ],
 )

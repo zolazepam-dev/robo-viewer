@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <GLFW/glfw3.h>
+#include "ConfigManager.h"
 
 // Forward declarations
 class VectorizedEnv;
@@ -148,6 +149,9 @@ public:
     // Settings save/load
     void SaveSettings(const std::string& path = "viewer_config.json");
     void LoadSettings(const std::string& path = "viewer_config.json");
+
+    void UItoCentral(CentralConfig& cfg);
+    void CentraltoUI(const CentralConfig& cfg);
 
     void DrawAllTabs();
     

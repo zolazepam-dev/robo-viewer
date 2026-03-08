@@ -5,7 +5,10 @@
 #include <vector>
 #include <random>
 #include <ctime>
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include "AlignedAllocator.h"
+#include "src/EigenUtils.h"
 
 void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng)
 {
@@ -17,27 +20,27 @@ void TensorProductBSpline::Init(size_t inputDim, size_t outputDim, int numKnots,
     ComputeKnotVector();
     
     size_t numBasis = static_cast<size_t>(numKnots + splineDegree + 1);
-    size_t controlPointsPerOutput = numBasis;
-    size_t totalControlPoints = outputDim * controlPointsPerOutput;
+    size_t outputDimAligned = PAD_TO_AVX2(outputDim);
+    size_t totalControlPoints = numBasis * outputDimAligned;
     
-    mControlPoints.resize(totalControlPoints);
+    mControlPoints.resize(totalControlPoints, 0.0f);
+    mControlPointGradients.resize(totalControlPoints, 0.0f);
     
     std::normal_distribution<float> dist(0.0f, 0.1f);
-    for (auto& cp : mControlPoints)
-    {
-        cp = dist(rng);
+    for (size_t b = 0; b < numBasis; ++b) {
+        for (size_t o = 0; o < outputDim; ++o) {
+            mControlPoints[b * outputDimAligned + o] = dist(rng);
+        }
     }
     
     mBasisBuffer.resize(numBasis);
     mBasisFunctionsBuffer.resize(inputDim * (mSplineDegree + 1));
     mSpanIndicesBuffer.resize(inputDim);
     mTempOutput.resize(outputDim);
-    mControlPointGradients.resize(totalControlPoints, 0.0f);  // Initialize gradients to zero
     
-    // Precompute basis function lookup table for optimization
     mBasisLookupTable.resize(BASIS_LOOKUP_SIZE * (mSplineDegree + 1));
     for (int i = 0; i < BASIS_LOOKUP_SIZE; ++i) {
-        float x = (static_cast<float>(i) / static_cast<float>(BASIS_LOOKUP_SIZE - 1)); // [0, 1]
+        float x = (static_cast<float>(i) / static_cast<float>(BASIS_LOOKUP_SIZE - 1));
         int spanIdx;
         ComputeBasisFunctions(x, &mBasisLookupTable[i * (mSplineDegree + 1)], spanIdx);
     }
@@ -48,150 +51,178 @@ void TensorProductBSpline::ComputeKnotVector()
 {
     int numKnots = mNumKnots + mSplineDegree + 1;
     mKnots.resize(numKnots);
-    
     int numInternal = mNumKnots - mSplineDegree - 1;
     float step = 1.0f / static_cast<float>(numInternal + 1);
-    
-    for (int i = 0; i <= mSplineDegree; ++i)
-    {
-        mKnots[i] = 0.0f;
-    }
-    
-    for (int i = 0; i < numInternal; ++i)
-    {
-        mKnots[mSplineDegree + 1 + i] = (i + 1) * step;
-    }
-    
-    for (int i = mKnots.size() - mSplineDegree - 1; i < static_cast<int>(mKnots.size()); ++i)
-    {
-        mKnots[i] = 1.0f;
-    }
+    for (int i = 0; i <= mSplineDegree; ++i) mKnots[i] = 0.0f;
+    for (int i = 0; i < numInternal; ++i) mKnots[mSplineDegree + 1 + i] = (i + 1) * step;
+    for (int i = mKnots.size() - mSplineDegree - 1; i < static_cast<int>(mKnots.size()); ++i) mKnots[i] = 1.0f;
 }
 
 void TensorProductBSpline::ComputeBasisFunctions(float x, float* basis, int& spanIdx)
 {
     x = std::clamp(x, 0.0f, 1.0f);
-    
     spanIdx = mSplineDegree;
-    for (int i = mSplineDegree; i < static_cast<int>(mKnots.size()) - mSplineDegree - 1; ++i)
-    {
-        if (x >= mKnots[i] && x < mKnots[i + 1])
-        {
-            spanIdx = i;
-            break;
-        }
+    for (int i = mSplineDegree; i < static_cast<int>(mKnots.size()) - mSplineDegree - 1; ++i) {
+        if (x >= mKnots[i] && x < mKnots[i + 1]) { spanIdx = i; break; }
     }
     if (x >= 1.0f - 1e-6f) spanIdx = static_cast<int>(mKnots.size()) - mSplineDegree - 2;
-    
-    for (int i = 0; i <= mSplineDegree; ++i)
-    {
-        basis[i] = 0.0f;
-    }
+    for (int i = 0; i <= mSplineDegree; ++i) basis[i] = 0.0f;
     basis[0] = 1.0f;
-    
-    for (int j = 1; j <= mSplineDegree; ++j)
-    {
+    for (int j = 1; j <= mSplineDegree; ++j) {
         float saved = 0.0f;
-        for (int r = j; r >= 0; --r)
-        {
+        for (int r = j; r >= 0; --r) {
             int idx = spanIdx - j + r + 1;
             float knotDiff = mKnots[idx + mSplineDegree - j] - mKnots[idx];
-            float temp = 0.0f;
-            
-            if (std::abs(knotDiff) > 1e-8f)
-            {
-                temp = basis[r] / knotDiff;
-            }
-            
+            float temp = (std::abs(knotDiff) > 1e-8f) ? basis[r] / knotDiff : 0.0f;
             basis[r + 1] = basis[r + 1] + temp * (mKnots[spanIdx + j + 1] - mKnots[idx + mSplineDegree - j] > 1e-8f ? 
                          (mKnots[spanIdx + j + 1] - mKnots[idx]) / mKnots[spanIdx + j + 1] : 0.0f);
-            if (r > 0)
-            {
-                basis[r] = saved + temp * (mKnots[idx] - mKnots[spanIdx] > 1e-8f ? 
+            if (r > 0) basis[r] = saved + temp * (mKnots[idx] - mKnots[spanIdx] > 1e-8f ? 
                           (mKnots[idx] - mKnots[spanIdx]) / (mKnots[idx] - mKnots[spanIdx]) : 0.0f);
-            }
             saved = temp * (mKnots[spanIdx + j + 1] - x);
         }
     }
-    
-    for (int i = 0; i <= mSplineDegree; ++i)
-    {
-        basis[i] = std::max(0.0f, basis[i]);
-    }
+    for (int i = 0; i <= mSplineDegree; ++i) basis[i] = std::max(0.0f, basis[i]);
 }
 
 void TensorProductBSpline::Forward(const float* input, float* output)
 {
     const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
     const int degreePlus1 = mSplineDegree + 1;
-
-    // Use optimized lookup table if available
-    if (mUseLookupTable) {
-        // 1. Look up basis functions using precomputed table
-        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
-        {
-            float x = tanhf(input[inIdx]) * 0.5f + 0.5f;  // Normalize to [0, 1]
-            // Clamp to [0, 1] range
-            if (x < 0.0f) x = 0.0f;
-            if (x > 1.0f) x = 1.0f;
-            
-            // Map to lookup table index
-            float scaled = x * (BASIS_LOOKUP_SIZE - 1);
-            int idx = (int)scaled;
-            if (idx >= BASIS_LOOKUP_SIZE) idx = BASIS_LOOKUP_SIZE - 1;
-            
-            // Copy precomputed basis functions
-            const float* lookupBasis = &mBasisLookupTable[idx * degreePlus1];
-            float* destBasis = &mBasisFunctionsBuffer[inIdx * degreePlus1];
-            for (int i = 0; i < degreePlus1; ++i) {
-                destBasis[i] = lookupBasis[i];
-            }
-            mSpanIndicesBuffer[inIdx] = mSplineDegree; // Use default span
-        }
-    } else {
-        // Original computation (backup)
-        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
-        {
-            float x = tanhf(input[inIdx]) * 0.5f + 0.5f;
-            int spanIdx;
-            ComputeBasisFunctions(x, &mBasisFunctionsBuffer[inIdx * degreePlus1], spanIdx);
-            mSpanIndicesBuffer[inIdx] = spanIdx;
-        }
+    const size_t outputDimAligned = PAD_TO_AVX2(mOutputDim);
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        float x = tanhf(input[inIdx]) * 0.5f + 0.5f;
+        x = std::clamp(x, 0.0f, 1.0f);
+        int idx = (int)(x * (BASIS_LOOKUP_SIZE - 1));
+        if (idx >= BASIS_LOOKUP_SIZE) idx = BASIS_LOOKUP_SIZE - 1;
+        const float* lookupBasis = &mBasisLookupTable[idx * degreePlus1];
+        float* destBasis = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        for (int i = 0; i < degreePlus1; ++i) destBasis[i] = lookupBasis[i];
     }
-
-    // 2. Optimized Accumulation with precomputed cp pointers
-    for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx)
-    {
-        const float* cpBase = mControlPoints.data() + outIdx * numBasis;
-        float sum = 0.0f;
-        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx)
-        {
-            const float* basisFuncs = &mBasisFunctionsBuffer[inIdx * degreePlus1];
-            int spanIdx = mSpanIndicesBuffer[inIdx];
-            
-            for (int b = 0; b <= mSplineDegree; ++b)
-            {
-                int basisIdx = spanIdx - mSplineDegree + b;
-                if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis)
-                {
-                    sum += basisFuncs[b] * cpBase[basisIdx];
-                }
+    std::fill(output, output + mOutputDim, 0.0f);
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        const float* basisFuncs = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        int spanIdx = mSplineDegree;
+        for (int b = 0; b <= mSplineDegree; ++b) {
+            int basisIdx = spanIdx - mSplineDegree + b;
+            if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
+                float bVal = basisFuncs[b];
+                const float* cpRow = mControlPoints.data() + basisIdx * outputDimAligned;
+                for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx) output[outIdx] += bVal * cpRow[outIdx];
             }
         }
-        output[outIdx] = sum / static_cast<float>(mInputDim);
     }
-}
-
-void TensorProductBSpline::ForwardBatch(const float* input, float* output, int batchSize)
-{
-    for (int b = 0; b < batchSize; ++b) {
-        Forward(input + b * mInputDim, output + b * mOutputDim);
-    }
+    ScaleVector_AVX2(output, 1.0f / static_cast<float>(mInputDim), mOutputDim);
 }
 
 void TensorProductBSpline::ForwardAVX2(const float* input, float* output)
 {
-    Forward(input, output);
+    const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
+    const int degreePlus1 = mSplineDegree + 1;
+    const size_t outputDimAligned = PAD_TO_AVX2(mOutputDim);
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        float x = tanhf(input[inIdx]) * 0.5f + 0.5f;
+        x = std::clamp(x, 0.0f, 1.0f);
+        int idx = (int)(x * (BASIS_LOOKUP_SIZE - 1));
+        if (idx >= BASIS_LOOKUP_SIZE) idx = BASIS_LOOKUP_SIZE - 1;
+        const float* lookupBasis = &mBasisLookupTable[idx * degreePlus1];
+        float* destBasis = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        for (int i = 0; i < degreePlus1; ++i) destBasis[i] = lookupBasis[i];
+    }
+    std::memset(output, 0, mOutputDim * sizeof(float));
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        const float* basisFuncs = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        int spanIdx = mSplineDegree;
+        for (int b = 0; b <= mSplineDegree; ++b) {
+            int basisIdx = spanIdx - mSplineDegree + b;
+            if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
+                __m256 bVec = _mm256_set1_ps(basisFuncs[b]);
+                const float* cpRow = mControlPoints.data() + basisIdx * outputDimAligned;
+                size_t outIdx = 0;
+                for (; outIdx + 8 <= mOutputDim; outIdx += 8) {
+                    __m256 sum = _mm256_loadu_ps(output + outIdx);
+                    __m256 cp = _mm256_load_ps(cpRow + outIdx); 
+                    sum = _mm256_fmadd_ps(bVec, cp, sum);
+                    _mm256_storeu_ps(output + outIdx, sum);
+                }
+                for (; outIdx < mOutputDim; ++outIdx) output[outIdx] += basisFuncs[b] * cpRow[outIdx];
+            }
+        }
+    }
+    ScaleVector_AVX2(output, 1.0f / static_cast<float>(mInputDim), mOutputDim);
+}
+
+void TensorProductBSpline::ForwardBatch(const float* input, float* output, int batchSize)
+{
+    for (int b = 0; b < batchSize; ++b) ForwardAVX2(input + b * mInputDim, output + b * mOutputDim);
+}
+
+void TensorProductBSpline::ForwardBatchAVX2(const float* input, float* output, int batchSize)
+{
+    for (int b = 0; b < batchSize; ++b) ForwardAVX2(input + b * mInputDim, output + b * mOutputDim);
+}
+
+void TensorProductBSpline::ForwardBatchEigen(const float* input, float* output, int batchSize)
+{
+    ForwardBatchAVX2(input, output, batchSize);
+}
+
+void TensorProductBSpline::Backward(const float* input, const float* output_grad, float* input_grad, float* control_points_grad)
+{
+    const size_t numBasis = static_cast<size_t>(mNumKnots + mSplineDegree + 1);
+    const int degreePlus1 = mSplineDegree + 1;
+    const size_t outputDimAligned = PAD_TO_AVX2(mOutputDim);
+    const float invInputDim = 1.0f / static_cast<float>(mInputDim);
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        float x = tanhf(input[inIdx]) * 0.5f + 0.5f;
+        x = std::clamp(x, 0.0f, 1.0f);
+        int idx = (int)(x * (BASIS_LOOKUP_SIZE - 1));
+        if (idx >= BASIS_LOOKUP_SIZE) idx = BASIS_LOOKUP_SIZE - 1;
+        const float* lookupBasis = &mBasisLookupTable[idx * degreePlus1];
+        float* destBasis = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        for (int i = 0; i < degreePlus1; ++i) destBasis[i] = lookupBasis[i];
+    }
+    for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+        const float* basisFuncs = &mBasisFunctionsBuffer[inIdx * degreePlus1];
+        int spanIdx = mSplineDegree;
+        for (int b = 0; b <= mSplineDegree; ++b) {
+            int basisIdx = spanIdx - mSplineDegree + b;
+            if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
+                float bVal = basisFuncs[b];
+                float* cpGradRow = control_points_grad + basisIdx * outputDimAligned;
+                for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx) {
+                    cpGradRow[outIdx] += bVal * output_grad[outIdx] * invInputDim;
+                }
+            }
+        }
+    }
+    if (input_grad != nullptr) {
+        const float delta = 1e-4f;
+        for (size_t inIdx = 0; inIdx < mInputDim; ++inIdx) {
+            float inVal = input[inIdx];
+            float tanhVal = tanhf(inVal);
+            float normDeriv = 0.5f * (1.0f - tanhVal * tanhVal);
+            float x = tanhVal * 0.5f + 0.5f;
+            float x_plus = std::clamp(x + delta, 0.0f, 1.0f);
+            float x_minus = std::clamp(x - delta, 0.0f, 1.0f);
+            int idx_p = (int)(x_plus * (BASIS_LOOKUP_SIZE - 1));
+            int idx_m = (int)(x_minus * (BASIS_LOOKUP_SIZE - 1));
+            const float* b_p = &mBasisLookupTable[idx_p * degreePlus1];
+            const float* b_m = &mBasisLookupTable[idx_m * degreePlus1];
+            float inGradAccum = 0.0f;
+            int spanIdx = mSplineDegree;
+            for (int b = 0; b <= mSplineDegree; ++b) {
+                int basisIdx = spanIdx - mSplineDegree + b;
+                if (basisIdx >= 0 && static_cast<size_t>(basisIdx) < numBasis) {
+                    float bDeriv = (b_p[b] - b_m[b]) / (2.0f * delta);
+                    const float* cpRow = mControlPoints.data() + basisIdx * outputDimAligned;
+                    for (size_t outIdx = 0; outIdx < mOutputDim; ++outIdx) {
+                        inGradAccum += output_grad[outIdx] * bDeriv * cpRow[outIdx] * invInputDim;
+                    }
+                }
+            }
+            input_grad[inIdx] = inGradAccum * normDeriv;
+        }
+    }
 }
 
 void SpanNetwork::Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt19937& rng)
@@ -199,422 +230,247 @@ void SpanNetwork::Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt
     mLayers.resize(layerConfigs.size());
     mLayerInputDims.resize(layerConfigs.size());
     mLayerOutputDims.resize(layerConfigs.size());
-    
     size_t maxDim = 0;
-    for (size_t i = 0; i < layerConfigs.size(); ++i)
-    {
+    for (size_t i = 0; i < layerConfigs.size(); ++i) {
         mLayerInputDims[i] = layerConfigs[i].inputDim;
         mLayerOutputDims[i] = layerConfigs[i].outputDim;
-        mLayers[i].Init(layerConfigs[i].inputDim, layerConfigs[i].outputDim,
-                        layerConfigs[i].numKnots, layerConfigs[i].splineDegree, rng);
-        
+        mLayers[i].Init(layerConfigs[i].inputDim, layerConfigs[i].outputDim, layerConfigs[i].numKnots, layerConfigs[i].splineDegree, rng);
         maxDim = std::max(maxDim, std::max(layerConfigs[i].inputDim, layerConfigs[i].outputDim));
     }
-    
-    if (!layerConfigs.empty())
-    {
-        mInputDim = layerConfigs.front().inputDim;
-        mOutputDim = layerConfigs.back().outputDim;
-    }
-    
+    if (!layerConfigs.empty()) { mInputDim = layerConfigs.front().inputDim; mOutputDim = layerConfigs.back().outputDim; }
     mActivationBuffer.resize(maxDim * 2);
 }
 
 void SpanNetwork::Forward(const float* input, float* output)
 {
     if (mLayers.empty()) return;
-    
-    const float* currentInput = input;
-    float* currentOutput = mActivationBuffer.data();
-    
-    for (size_t i = 0; i < mLayers.size(); ++i)
-    {
-        mLayers[i].ForwardAVX2(currentInput, currentOutput);
-        
-        if (i < mLayers.size() - 1)
-        {
-            ForwardMoLU_AVX2(currentOutput, mLayerOutputDims[i]);
-        }
-        
-        float* temp = const_cast<float*>(currentInput);
-        currentInput = currentOutput;
-        currentOutput = temp;
+    const float* curIn = input;
+    float* curOut = mActivationBuffer.data();
+    float* nextOut = mActivationBuffer.data() + mActivationBuffer.size() / 2;
+    for (size_t i = 0; i < mLayers.size(); ++i) {
+        mLayers[i].ForwardAVX2(curIn, curOut);
+        if (i < mLayers.size() - 1) ForwardMoLU_AVX2(curOut, mLayerOutputDims[i]);
+        curIn = curOut;
+        curOut = (curOut == mActivationBuffer.data()) ? nextOut : mActivationBuffer.data();
     }
-    
-    std::memcpy(output, currentOutput, mOutputDim * sizeof(float));
+    std::memcpy(output, curIn, mOutputDim * sizeof(float));
 }
 
 void SpanNetwork::ForwardBatch(const float* input, float* output, int batchSize)
 {
     if (mLayers.empty()) return;
-    
-    int maxDim = 0;
-    for (size_t i = 0; i < mLayers.size(); ++i) {
-        maxDim = std::max(maxDim, (int)std::max(mLayerInputDims[i], mLayerOutputDims[i]));
-    }
-    
-    AlignedVector32<float> activationBuffer(maxDim * batchSize * 2);
-    AlignedVector32<float> tempBuffer(maxDim * batchSize);
-    
-    // First layer
-    mLayers[0].ForwardBatch(input, tempBuffer.data(), batchSize);
-    if (mLayers.size() > 1) {
-        ForwardMoLU_AVX2(tempBuffer.data(), mLayerOutputDims[0] * batchSize);
-    }
-    
-    // Hidden layers
-    for (size_t i = 1; i < mLayers.size() - 1; ++i) {
-        mLayers[i].ForwardBatch(tempBuffer.data(), activationBuffer.data(), batchSize);
-        ForwardMoLU_AVX2(activationBuffer.data(), mLayerOutputDims[i] * batchSize);
-        std::swap(tempBuffer, activationBuffer);
-    }
-    
-    // Last layer
-    if (mLayers.size() > 1) {
-        mLayers.back().ForwardBatch(tempBuffer.data(), output, batchSize);
-    } else {
-        std::copy(tempBuffer.begin(), tempBuffer.begin() + batchSize * mOutputDim, output);
-    }
+    for (int b = 0; b < batchSize; ++b) Forward(input + b * mInputDim, output + b * mOutputDim);
 }
 
 void SpanNetwork::ForwardWithLatent(const float* input, float* output, SecondOrderLatentMemory& latent, int envIdx)
 {
     float* zPos = latent.GetPosition(envIdx);
-    float* zVel = latent.GetVelocity(envIdx);
-    
-    int combinedDim = mInputDim + latent.latentDim;
-    alignas(32) AlignedVector32<float> combinedInput(combinedDim);
-    
-    std::copy(input, input + mInputDim, combinedInput.begin());
-    std::copy(zPos, zPos + latent.latentDim, combinedInput.begin() + mInputDim);
-    
-    Forward(combinedInput.data(), output);
+    AlignedVector32<float> combined(mInputDim + latent.latentDim);
+    std::copy(input, input + mInputDim, combined.begin());
+    std::copy(zPos, zPos + latent.latentDim, combined.begin() + mInputDim);
+    Forward(combined.data(), output);
+}
+
+void SpanNetwork::ForwardWithCache(const float* input, float* output, SpanCache& cache)
+{
+    if (mLayers.empty()) return;
+    cache.layerInputs.resize(mLayers.size());
+    cache.layerOutputs.resize(mLayers.size());
+    const float* curIn = input;
+    for (size_t i = 0; i < mLayers.size(); ++i) {
+        cache.layerInputs[i].resize(mLayerInputDims[i]);
+        std::memcpy(cache.layerInputs[i].data(), curIn, mLayerInputDims[i] * sizeof(float));
+        cache.layerOutputs[i].resize(mLayerOutputDims[i]);
+        mLayers[i].ForwardAVX2(curIn, cache.layerOutputs[i].data());
+        if (i < mLayers.size() - 1) ForwardMoLU_AVX2(cache.layerOutputs[i].data(), mLayerOutputDims[i]);
+        curIn = cache.layerOutputs[i].data();
+    }
+    std::memcpy(output, curIn, mOutputDim * sizeof(float));
+}
+
+void SpanNetwork::ForwardWithCache(const float* input, float* output)
+{
+    ForwardWithCache(input, output, mInternalCache);
+}
+
+void SpanNetwork::ForwardBatchWithCache(const float* input, float* output, int batchSize, std::vector<SpanCache>& caches)
+{
+    caches.resize(batchSize);
+    for (int b = 0; b < batchSize; ++b) ForwardWithCache(input + b * mInputDim, output + b * mOutputDim, caches[b]);
+}
+
+void SpanNetwork::Backward(const float* input, const float* output_grad, float* input_grad, float* cp_grad_base, SpanCache& cache)
+{
+    if (mLayers.empty()) return;
+    AlignedVector32<float> currentGrad(mOutputDim);
+    std::memcpy(currentGrad.data(), output_grad, mOutputDim * sizeof(float));
+    size_t gradOffset = 0;
+    for (int i = static_cast<int>(mLayers.size()) - 1; i >= 0; --i) {
+        AlignedVector32<float> nextGrad(mLayerInputDims[i]);
+        float* layer_cp_grad = cp_grad_base ? (cp_grad_base + gradOffset) : mLayers[i].GetControlPointGradients().data();
+        mLayers[i].Backward(cache.layerInputs[i].data(), currentGrad.data(), nextGrad.data(), layer_cp_grad);
+        if (i > 0) {
+            for (size_t j = 0; j < mLayerOutputDims[i-1]; ++j) {
+                float x = cache.layerOutputs[i-1][j];
+                float th = tanhf(std::clamp(x, -10.0f, 10.0f));
+                nextGrad[j] *= (0.5f * (1.0f + th) + 0.5f * x * (1.0f - th * th));
+            }
+        }
+        currentGrad = nextGrad;
+    }
+    if (input_grad) std::memcpy(input_grad, currentGrad.data(), mInputDim * sizeof(float));
+}
+
+void SpanNetwork::Backward(const float* input, const float* output_grad, float* input_grad, bool accumulate_grads)
+{
+    if (!accumulate_grads) ZeroGradients();
+    Backward(input, output_grad, input_grad, nullptr, mInternalCache);
 }
 
 std::vector<float> SpanNetwork::GetAllWeights() const
 {
-    std::vector<float> weights;
-    for (const auto& layer : mLayers)
-    {
-        const auto& cp = layer.GetControlPoints();
-        weights.insert(weights.end(), cp.begin(), cp.end());
-    }
-    return weights;
+    std::vector<float> w;
+    for (const auto& l : mLayers) { const auto& cp = l.GetControlPoints(); w.insert(w.end(), cp.begin(), cp.end()); }
+    return w;
 }
 
 void SpanNetwork::SetAllWeights(const std::vector<float>& weights)
 {
-    size_t offset = 0;
-    for (auto& layer : mLayers)
-    {
-        auto& cp = layer.GetControlPoints();
-        size_t n = cp.size();
-        std::copy(weights.begin() + offset, weights.begin() + offset + n, cp.begin());
-        offset += n;
-    }
+    size_t off = 0;
+    for (auto& l : mLayers) { auto& cp = l.GetControlPoints(); std::copy(weights.begin() + off, weights.begin() + off + cp.size(), cp.begin()); off += cp.size(); }
 }
 
-size_t SpanNetwork::GetNumWeights() const
-{
-    int total = 0;
-    for (const auto& layer : mLayers)
-    {
-        total += layer.GetNumParams();
-    }
-    return total;
-}
+size_t SpanNetwork::GetNumWeights() const { size_t t = 0; for (const auto& l : mLayers) t += l.GetNumParams(); return t; }
 
 void SpanNetwork::SoftUpdate(const SpanNetwork& other, float tau)
 {
-    auto myWeights = GetAllWeights();
-    auto otherWeights = other.GetAllWeights();
-    
-    for (size_t i = 0; i < myWeights.size(); ++i)
-    {
-        myWeights[i] = (1.0f - tau) * myWeights[i] + tau * otherWeights[i];
+    for (size_t i = 0; i < mLayers.size(); ++i) {
+        auto& cp = mLayers[i].GetControlPoints(); const auto& ocp = other.mLayers[i].GetControlPoints();
+        for (size_t j = 0; j < cp.size(); ++j) cp[j] = (1.0f - tau) * cp[j] + tau * ocp[j];
     }
-    
-    SetAllWeights(myWeights);
 }
 
 std::vector<float> SpanNetwork::GetAllGradients() const
 {
-    std::vector<float> grads;
-    for (const auto& layer : mLayers)
-    {
-        const auto& grad = layer.GetControlPointGradients();
-        grads.insert(grads.end(), grad.begin(), grad.end());
-    }
-    return grads;
+    std::vector<float> g;
+    for (const auto& l : mLayers) { const auto& grad = l.GetControlPointGradients(); g.insert(g.end(), grad.begin(), grad.end()); }
+    return g;
 }
 
 void SpanNetwork::SetAllGradients(const std::vector<float>& grads)
 {
-    size_t offset = 0;
-    for (auto& layer : mLayers)
-    {
-        auto& grad = layer.GetControlPointGradients();
-        size_t n = grad.size();
-        std::copy(grads.begin() + offset, grads.begin() + offset + n, grad.begin());
-        offset += n;
-    }
+    size_t off = 0;
+    for (auto& l : mLayers) { auto& g = l.GetControlPointGradients(); std::copy(grads.begin() + off, grads.begin() + off + g.size(), g.begin()); off += g.size(); }
 }
 
-void SpanNetwork::ZeroGradients()
-{
-    for (auto& layer : mLayers)
-    {
-        auto& grad = layer.GetControlPointGradients();
-        std::fill(grad.begin(), grad.end(), 0.0f);
-    }
-}
+void SpanNetwork::ZeroGradients() { for (auto& l : mLayers) std::fill(l.GetControlPointGradients().begin(), l.GetControlPointGradients().end(), 0.0f); }
 
-void SpanNetwork::ComputeGradients(const float* input, const float* output, const float* target, int batchSize)
+void SpanNetwork::ScaleGradients(float scale) { for (auto& l : mLayers) ScaleVector_AVX2(l.GetControlPointGradients().data(), scale, l.GetControlPointGradients().size()); }
+
+void SpanNetwork::ComputeGradients(const float* input, const float* output, const float* target, int batchSize, int sampleRate)
 {
-    // Simple finite difference gradient approximation for B-spline control points
-    // This is a placeholder - proper analytic gradients would require implementing
-    // full backpropagation through the B-spline basis functions
-    
     ZeroGradients();
-    
-    const float epsilon = 1e-4f;
-    auto originalWeights = GetAllWeights();
-    auto grads = GetAllGradients();
-    
-    // For each control point, compute gradient via finite differences
-    for (size_t i = 0; i < originalWeights.size(); i += 64) {  // Sample every 64th for speed
-        float originalWeight = originalWeights[i];
-        
-        // Perturb weight
-        originalWeights[i] = originalWeight + epsilon;
-        SetAllWeights(originalWeights);
-        
-        // Forward pass with perturbed weight
-        AlignedVector32<float> perturbedOutput(batchSize * GetOutputDim());
-        ForwardBatch(input, perturbedOutput.data(), batchSize);
-        
-        // Compute loss gradient
+    const float eps = 1e-4f;
+    auto weights = GetAllWeights(); auto grads = GetAllGradients();
+    AlignedVector32<float> perturbed(batchSize * GetOutputDim());
+    for (size_t i = 0; i < weights.size(); i += sampleRate) {
+        float oldW = weights[i]; weights[i] += eps; SetAllWeights(weights);
+        ForwardBatch(input, perturbed.data(), batchSize);
         float lossGrad = 0.0f;
         for (int b = 0; b < batchSize; ++b) {
             for (size_t d = 0; d < GetOutputDim(); ++d) {
-                float diff = perturbedOutput[b * GetOutputDim() + d] - output[b * GetOutputDim() + d];
-                lossGrad += 2.0f * diff * (target[b * GetOutputDim() + d] - output[b * GetOutputDim() + d]);
+                float diff = (perturbed[b * GetOutputDim() + d] - output[b * GetOutputDim() + d]) / eps;
+                lossGrad += 2.0f * diff * (output[b * GetOutputDim() + d] - target[b * GetOutputDim() + d]);
             }
         }
-        lossGrad /= (batchSize * GetOutputDim() * epsilon);
-        
-        // Store gradient
-        grads[i] = lossGrad;
-        
-        // Restore original weight
-        originalWeights[i] = originalWeight;
+        grads[i] = (lossGrad / (batchSize * GetOutputDim())) * sampleRate;
+        weights[i] = oldW;
     }
-    
-    SetAllWeights(originalWeights);
-    SetAllGradients(grads);
+    SetAllWeights(weights); SetAllGradients(grads);
 }
 
 void SpanActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng)
 {
-    mStateDim = stateDim;
-     mActionDim = actionDim;
-     mHiddenDim = hiddenDim;
-     mLatentDim = latentDim;
-     
-     // 3-LAYER DEEP NETWORK with wider hidden dims for expanded obs space
-     size_t actorInputDim = stateDim + latentDim;
-    std::vector<SpanLayerConfig> actorConfig = {
-        {actorInputDim, hiddenDim * 2, 8, 3},   // Input -> Hidden1 (wider)
-        {hiddenDim * 2, hiddenDim, 8, 3},       // Hidden1 -> Hidden2 (bottleneck)
-        {hiddenDim, actionDim, 8, 3}            // Hidden2 -> Output
-    };
-     mActor.Init(actorConfig, rng);
-     mActorTarget.Init(actorConfig, rng);
-     
-     // 3-LAYER CRITIC for better Q-value estimation
-     size_t criticInputDim = stateDim + actionDim + latentDim;
-    std::vector<SpanLayerConfig> criticConfig = {
-        {criticInputDim, hiddenDim * 2, 8, 3},  // Input -> Hidden1 (wider)
-        {hiddenDim * 2, hiddenDim, 8, 3},       // Hidden1 -> Hidden2
-        {hiddenDim, 4, 8, 3}                    // Hidden2 -> Q-value
-    };
-    mCritic1.Init(criticConfig, rng);
-    mCritic2.Init(criticConfig, rng);
-    mCritic1Target.Init(criticConfig, rng);
-    mCritic2Target.Init(criticConfig, rng);
-    
+    mStateDim = stateDim; mActionDim = actionDim; mHiddenDim = hiddenDim; mLatentDim = latentDim;
+    std::vector<SpanLayerConfig> actorCfg = {{stateDim + latentDim, hiddenDim * 2, 8, 3}, {hiddenDim * 2, hiddenDim, 8, 3}, {hiddenDim, actionDim, 8, 3}};
+    mActor.Init(actorCfg, rng); mActorTarget.Init(actorCfg, rng);
+    std::vector<SpanLayerConfig> criticCfg = {{stateDim + actionDim + latentDim, hiddenDim * 2, 8, 3}, {hiddenDim * 2, hiddenDim, 8, 3}, {hiddenDim, 4, 8, 3}};
+    mCritic1.Init(criticCfg, rng); mCritic2.Init(criticCfg, rng);
+    mCritic1Target.Init(criticCfg, rng); mCritic2Target.Init(criticCfg, rng);
     mLatentMemory.Init(stateDim, latentDim, rng);
-    
-    mStateActionBuffer.resize(criticInputDim);
-    mLatentBuffer.resize(latentDim);
-    mNoiseBuffer.resize(actionDim);
+    mStateActionBuffer.resize(stateDim + actionDim + latentDim);
 }
 
 void SpanActorCritic::SelectAction(const float* state, float* action, float* logProb, bool addNoise, int envIdx)
 {
     mLatentMemory.StepLatentDynamics(state, 1);
-    
-    AlignedVector32<float> zPos(LATENT_DIM);
-    AlignedVector32<float> zVel(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), zVel.data(), envIdx);
-    
-    size_t combinedDim = mStateDim + mLatentDim;
-    alignas(32) AlignedVector32<float> combined(combinedDim);
+    AlignedVector32<float> zPos(LATENT_DIM); mLatentMemory.GetLatentStates(zPos.data(), nullptr, envIdx);
+    AlignedVector32<float> combined(mStateDim + mLatentDim);
     std::copy(state, state + mStateDim, combined.begin());
-    std::copy(zPos.data(), zPos.data() + mLatentDim, combined.begin() + mStateDim);
-    
+    std::copy(zPos.begin(), zPos.end(), combined.begin() + mStateDim);
     mActor.Forward(combined.data(), action);
-    
     ForwardMoLU_AVX2(action, mActionDim);
-    
-    if (addNoise)
-    {
-        std::normal_distribution<float> noiseDist(0.0f, 0.1f);
-        std::mt19937 localRng(0);
-        
+    if (addNoise) {
+        std::normal_distribution<float> dist(0.0f, 0.1f); std::mt19937 localRng(0);
         float noiseSum = 0.0f;
-        for (size_t i = 0; i < mActionDim; ++i)
-        {
-            float noise = noiseDist(localRng);
-            action[i] = std::clamp(action[i] + noise, -1.0f, 1.0f);
-            noiseSum += noise * noise;
+        for (size_t i = 0; i < mActionDim; ++i) {
+            float n = dist(localRng); action[i] = std::clamp(action[i] + n, -1.0f, 1.0f); noiseSum += n * n;
         }
-        
-        if (logProb)
-        {
-            *logProb = -0.5f * noiseSum;
-        }
-    }
-    else if (logProb)
-    {
-        *logProb = 0.0f;
-    }
+        if (logProb) *logProb = -0.5f * noiseSum;
+    } else if (logProb) *logProb = 0.0f;
 }
 
 void SpanActorCritic::SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices, bool addNoise)
 {
-    // 1. Update latent dynamics for all environments in batch
     mLatentMemory.StepLatentDynamics(states, batchSize);
-    
-    // 2. Prepare combined input [state | latent]
-    size_t combinedDim = mStateDim + mLatentDim;
-    AlignedVector32<float> combined(batchSize * combinedDim);
-    
-    for (int b = 0; b < batchSize; ++b)
-    {
-        int envIdx = envIndices[b];
-        const float* state = states + b * mStateDim;
-        float* zPos = mLatentMemory.GetMemory().GetPosition(envIdx);
-        
-        std::memcpy(combined.data() + b * combinedDim, state, mStateDim * sizeof(float));
-        std::memcpy(combined.data() + b * combinedDim + mStateDim, zPos, mLatentDim * sizeof(float));
+    size_t combDim = mStateDim + mLatentDim;
+    AlignedVector32<float> combined(batchSize * combDim);
+    for (int b = 0; b < batchSize; ++b) {
+        std::memcpy(combined.data() + b * combDim, states + b * mStateDim, mStateDim * sizeof(float));
+        std::memcpy(combined.data() + b * combDim + mStateDim, mLatentMemory.GetMemory().GetPosition(envIndices[b]), mLatentDim * sizeof(float));
     }
-    
-    // 3. Batch forward through actor
     mActor.ForwardBatch(combined.data(), actions, batchSize);
-    
-    // 4. Post-process actions
     ForwardMoLU_AVX2(actions, batchSize * mActionDim);
-    
-    if (addNoise)
-    {
-        std::normal_distribution<float> noiseDist(0.0f, 0.1f);
-        std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)));
-        for (size_t i = 0; i < batchSize * mActionDim; ++i)
-        {
-            actions[i] = std::clamp(actions[i] + noiseDist(localRng), -1.0f, 1.0f);
-        }
+    if (addNoise) {
+        std::normal_distribution<float> dist(0.0f, 0.1f); std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)));
+        for (size_t i = 0; i < batchSize * mActionDim; ++i) actions[i] = std::clamp(actions[i] + dist(localRng), -1.0f, 1.0f);
     }
 }
 
 void SpanActorCritic::ComputeQValues(const float* state, const float* action, float* qValues)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
-    
+    AlignedVector32<float> zPos(LATENT_DIM); mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i)
-    {
-        mStateActionBuffer[idx++] = state[i];
-    }
-    for (size_t i = 0; i < mActionDim; ++i)
-    {
-        mStateActionBuffer[idx++] = action[i];
-    }
-    for (size_t i = 0; i < mLatentDim; ++i)
-    {
-        mStateActionBuffer[idx++] = zPos[i];
-    }
-    
-    float q1[4], q2[4];
-    mCritic1.Forward(mStateActionBuffer.data(), q1);
-    mCritic2.Forward(mStateActionBuffer.data(), q2);
-    
-    qValues[0] = q1[0];
-    qValues[1] = q1[1];
-    qValues[2] = q1[2];
-    qValues[3] = q1[3];
+    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
+    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
+    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
+    float q1[4], q2[4]; mCritic1.Forward(mStateActionBuffer.data(), q1); mCritic2.Forward(mStateActionBuffer.data(), q2);
+    for (int i = 0; i < 4; ++i) qValues[i] = std::min(q1[i], q2[i]);
 }
 
 void SpanActorCritic::ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize)
 {
-    for (int b = 0; b < batchSize; ++b)
-    {
-        ComputeQValues(states + b * mStateDim, actions + b * mActionDim, qValues + b * 4);
-    }
+    for (int b = 0; b < batchSize; ++b) ComputeQValues(states + b * mStateDim, actions + b * mActionDim, qValues + b * 4);
 }
 
 void SpanActorCritic::ComputeQ1(const float* state, const float* action, float* qValue)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
-    
+    AlignedVector32<float> zPos(LATENT_DIM); mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i)
-    {
-        mStateActionBuffer[idx++] = state[i];
-    }
-    for (size_t i = 0; i < mActionDim; ++i)
-    {
-        mStateActionBuffer[idx++] = action[i];
-    }
-    for (size_t i = 0; i < mLatentDim; ++i)
-    {
-        mStateActionBuffer[idx++] = zPos[i];
-    }
-    
-    float q[4];
-    mCritic1.Forward(mStateActionBuffer.data(), q);
-    *qValue = q[0];
+    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
+    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
+    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
+    float q[4]; mCritic1.Forward(mStateActionBuffer.data(), q); *qValue = q[0];
 }
 
 void SpanActorCritic::ComputeQ2(const float* state, const float* action, float* qValue)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
-    
+    AlignedVector32<float> zPos(LATENT_DIM); mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
     size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i)
-    {
-        mStateActionBuffer[idx++] = state[i];
-    }
-    for (size_t i = 0; i < mActionDim; ++i)
-    {
-        mStateActionBuffer[idx++] = action[i];
-    }
-    for (size_t i = 0; i < mLatentDim; ++i)
-    {
-        mStateActionBuffer[idx++] = zPos[i];
-    }
-    
-    float q[4];
-    mCritic2.Forward(mStateActionBuffer.data(), q);
-    *qValue = q[0];
+    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
+    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
+    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
+    float q[4]; mCritic2.Forward(mStateActionBuffer.data(), q); *qValue = q[0];
 }
 
-void SpanActorCritic::UpdateTargets(float tau)
-{
-    mActorTarget.SoftUpdate(mActor, tau);
-    mCritic1Target.SoftUpdate(mCritic1, tau);
-    mCritic2Target.SoftUpdate(mCritic2, tau);
-}
+void SpanActorCritic::UpdateTargets(float tau) { mActorTarget.SoftUpdate(mActor, tau); mCritic1Target.SoftUpdate(mCritic1, tau); mCritic2Target.SoftUpdate(mCritic2, tau); }

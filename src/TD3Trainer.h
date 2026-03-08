@@ -166,6 +166,12 @@ private:
     float mNetworkTime = 0.0f;
     PerformanceMetrics mPerfMetrics;
     
+    // Persistent buffers for parallel training
+    std::vector<SpanCache> mThreadCaches;
+    std::vector<AlignedVector32<float>> mThreadGrads;
+    std::vector<SpanCache> mActorCaches;
+    std::vector<SpanCache> mCriticCaches;
+    
     // Muon optimizer for gradient-based training
     MuonOptimizer mActorOptimizer;
     MuonOptimizer mCritic1Optimizer;
