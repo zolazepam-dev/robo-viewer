@@ -6,6 +6,10 @@
 #include <cstring>
 #include <immintrin.h>
 
+// Maximum number of parallel environments - increased for high-SPS training
+// Each environment runs 2 robots, so 1024 envs = 2048 robots simulated in parallel
+constexpr size_t NUM_PARALLEL_ENVS = 1024;
+
 constexpr size_t OBS_DIM = 256;  // Expanded to include ALL sensors
 constexpr size_t LATENT_DIM = 64;
 constexpr size_t ACTOR_INPUT_DIM = OBS_DIM + LATENT_DIM;  // 256 + 64 = 320
@@ -16,7 +20,6 @@ constexpr size_t CRITIC_INPUT_DIM = OBS_DIM + ACTION_DIM + LATENT_DIM;  // 256 +
 constexpr size_t CRITIC_HIDDEN_DIM = 1024;
 constexpr size_t CRITIC_LAYERS = 3;
 constexpr size_t REWARD_VECTOR_DIM = 4;
-constexpr size_t NUM_PARALLEL_ENVS = 256;
 
 constexpr size_t AVX2_WIDTH = 8;
 constexpr size_t AVX2_ALIGNMENT = 32;

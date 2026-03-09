@@ -70,19 +70,20 @@ cc_binary(
     ],
     deps = [
         "//src:core",
+        "//modules/common:common",
         "@glfw",
         "@glm",
         "@glew//:glew_static",
-        
+
         "@nlohmann_json//:json",
         "@jolt//:jolt",
         "@imgui//:imgui",
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
     ],
-    linkopts = ["-lGL", "-lpthread"],
+    linkopts = ["-lGL", "-lpthread", "-lgomp"],
     copts = ["-std=c++17", "-mavx2", "-mfma",
-        "-DJPH_DEBUG_RENDERER", "-O3"],
+        "-DJPH_DEBUG_RENDERER", "-O3", "-I/usr/include/eigen3", "-fopenmp"],
 )
 
 cc_binary(
@@ -107,9 +108,9 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
     ],
-    linkopts = ["-lGL", "-lpthread"],
+    linkopts = ["-lGL", "-lpthread", "-lgomp"],
     copts = ["-std=c++17", "-mavx2", "-mfma",
-        "-DJPH_DEBUG_RENDERER", "-O3"],
+        "-DJPH_DEBUG_RENDERER", "-O3", "-I/usr/include/eigen3", "-fopenmp"],
 )
 
 cc_binary(
@@ -124,6 +125,7 @@ cc_binary(
     ],
     deps = [
         "//src:core",
+        "//modules/common:common",
         "@glfw",
         "@glm",
         "@glew//:glew_static",
@@ -147,6 +149,7 @@ cc_binary(
         "-fno-strict-aliasing",
         "-I/usr/include/eigen3",
         "-DEIGEN_ENABLE_AVX2",
+        "-DEIGEN_DONT_PARALLELIZE",
         "-fopenmp",
         "-fassociative-math",
         "-freciprocal-math",
@@ -672,12 +675,61 @@ cc_binary(
         "@jolt//:jolt",
     ],
     copts = [
-        "-std=c++17", 
-        "-mavx2", 
-        "-mfma", 
-        "-O3", 
+        "-std=c++17",
+        "-mavx2",
+        "-mfma",
+        "-O3",
         "-march=native",
         "-I/usr/include/eigen3"
     ],
     linkopts = ["-lgomp", "-lpthread"],
 )
+
+# ============================================================================
+# OPTIMIZED TRAINING VIEWER
+# ============================================================================
+
+cc_binary(
+    name = "train_optimized_viewer",
+    srcs = ["//src:train_optimized_viewer.cpp"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-ffast-math",
+        "-fopenmp",
+        "-I/usr/include/eigen3",
+    ],
+    linkopts = ["-lGL", "-lpthread", "-lgomp"],
+)
+
+cc_binary(
+    name = "replay_benchmark",
+    srcs = ["//src:ReplayBufferBenchmark.cpp"],
+    deps = [
+        "//src:core",
+        "//modules/replay:replay",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-I/usr/include/eigen3",
+    ],
+    linkopts = ["-lpthread"],
+)
+

@@ -2,11 +2,11 @@
 #include <Jolt/Jolt.h>
 #include "VectorizedEnv.h"
 
-#include <iostream>
 #include <algorithm>
 #include <thread>
 #include <chrono>
 #include <omp.h>
+#include <iostream>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 
@@ -23,74 +23,90 @@ VectorizedEnv::VectorizedEnv(int numEnvs, int stepsPerEpisode)
 
 void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
 {
-    std::cerr << "[VectorizedEnv] Init start..." << std::endl;
-    std::cout << "[VectorizedEnv::Init] Start" << std::endl;
+    std::cout << "[VectorizedEnv] Initializing..." << "\n";
     
-    std::cerr << "[VectorizedEnv] Calling PhysicsCore::Init(" << mNumEnvs << ")..." << std::endl;
+    // OPTIMIZATION: Removed verbose logging to reduce stutter
+
     if (!mPhysicsCore.Init(mNumEnvs))
     {
-        std::cerr << "[JOLTrl] FATAL: Global PhysicsCore failed to initialize!" << std::endl;
+        std::cerr << "[VectorizedEnv] PhysicsCore init failed" << "\n";
         return;
     }
-
-    std::cout << "[VectorizedEnv::Init] PhysicsCore initialized" << std::endl;
+    std::cout << "[VectorizedEnv] PhysicsCore initialized" << "\n";
 
     // Create and register the global CombatContactListener
     gCombatContactListener = &CombatContactListener::Get();
+    std::cout << "[VectorizedEnv] Contact listener created" << "\n";
+    
     mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
-
-    std::cout << "[VectorizedEnv::Init] Contact listener registered" << std::endl;
+    std::cout << "[VectorizedEnv] Contact listener registered" << "\n";
 
     // --- BUILD THE SINGLE SOURCE OF TRUTH ARENA (36x36x36) ---
     JPH::BodyInterface& body_interface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
-    
+    std::cout << "[VectorizedEnv] Creating arena..." << "\n";
+
     // Floor: 36x36 meters, 2.0m thick
     JPH::BoxShapeSettings floor_shape(JPH::Vec3(18.0f, 1.0f, 18.0f));
     JPH::RefConst<JPH::Shape> floor = floor_shape.Create().Get();
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] Floor shape created" << "\n";
     
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 1.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] Floor added" << "\n";
+
     // Ceiling
     body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 36.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
-    
+    std::cout << "[VectorizedEnv] Ceiling added" << "\n";
+
     // Walls: 2.0m thick
     JPH::BoxShapeSettings wall_shape(JPH::Vec3(18.0f, 18.0f, 1.0f));
     JPH::RefConst<JPH::Shape> wall = wall_shape.Create().Get();
-    
+    std::cout << "[VectorizedEnv] Wall shape created" << "\n";
+
     // North/South (z = +/- 18.0 + offset)
     body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, -19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, 19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] North wall added" << "\n";
     
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, 19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] South wall added" << "\n";
+
     // East/West (x = +/- 18.0 + offset, rotated)
     JPH::Quat rot90 = JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f));
     body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] East wall added" << "\n";
+    
     body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(-19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    std::cout << "[VectorizedEnv] West wall added" << "\n";
+    std::cout << "[VectorizedEnv] Arena complete" << "\n";
     // -------------------------------------------------
 
-    std::cout << "[VectorizedEnv::Init] Arena built" << std::endl;
-
     if (initRobots) {
-        std::cout << "[VectorizedEnv::Init] Initializing " << mNumEnvs << " environments" << std::endl;
+        std::cout << "[VectorizedEnv] Initializing " << mNumEnvs << " robot environments..." << "\n";
         mEnvs.resize(mNumEnvs);
         for (int i = 0; i < mNumEnvs; ++i)
         {
-            std::cout << "[VectorizedEnv::Init] Initializing environment " << i << std::endl;
-            mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader, robotConfigPath, mStepsPerEpisode);
-            std::cout << "[VectorizedEnv::Init] Environment " << i << " initialized" << std::endl;
+            if (i % 10 == 0) std::cout << "[VectorizedEnv] Init env " << i << "/" << mNumEnvs << "\n";
+            try {
+                mEnvs[i].Init(i, &mPhysicsCore.GetPhysicsSystem(), &mRobotLoader, robotConfigPath, mStepsPerEpisode);
+            } catch (const std::exception& e) {
+                std::cerr << "[VectorizedEnv] Exception at env " << i << ": " << e.what() << "\n";
+                return;
+            }
         }
-
-        std::cout << "[VectorizedEnv::Init] All environments initialized" << std::endl;
+        std::cout << "[VectorizedEnv] All robots initialized" << "\n";
 
         mObservationDim = mEnvs[0].GetObservationDim();
         mActionDim = mEnvs[0].GetRobot1Ref().config.actionsPerRobot;
+        std::cout << "[VectorizedEnv] Obs dim: " << mObservationDim << ", Action dim: " << mActionDim << "\n";
+        
         mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);
         mAllRewards.resize(mNumEnvs * 2, 0.0f);
         mAllDones.resize(mNumEnvs, false);
         mAllVectorRewards.resize(mNumEnvs);
+        std::cout << "[VectorizedEnv] Buffers allocated" << "\n";
     }
 
-    std::cout << "[VectorizedEnv::Init] Optimizing broad phase" << std::endl;
     mPhysicsCore.GetPhysicsSystem().OptimizeBroadPhase();
-    std::cout << "[VectorizedEnv::Init] Complete" << std::endl;
+    std::cout << "[VectorizedEnv] Initialization complete!" << "\n";
 }
 
 void VectorizedEnv::Step(const AlignedVector32<float>& actions)
@@ -98,7 +114,7 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
     const int actionDim = mActionDim;
     const int numEnvs = mNumEnvs;
     
-    // OPTIMIZED: Parallel action queuing using OpenMP
+    // 1. Parallel Action Queuing
     #pragma omp parallel for num_threads(8) schedule(static)
     for (int i = 0; i < numEnvs; ++i)
     {
@@ -109,11 +125,23 @@ void VectorizedEnv::Step(const AlignedVector32<float>& actions)
         );
     }
 
-    // Physics step (single-threaded for Jolt safety)
+    // 2. Physics Step
     mPhysicsCore.Step(1.0f / 60.0f);
 
-    // OPTIMIZED: Parallel state harvesting using OpenMP
-    HarvestStatesParallel();
+    // 3. Parallel State Harvesting (Fused & Zero-copy)
+    #pragma omp parallel for num_threads(8) schedule(static)
+    for (int i = 0; i < numEnvs; ++i)
+    {
+        if (mAllDones[i]) continue;
+
+        float* obs = mAllObservations.data() + (i * mObservationDim * 2);
+        float* rew = mAllRewards.data() + (i * 2);
+        bool done = false;
+
+        mEnvs[i].HarvestStateZeroCopy(obs, obs + mObservationDim, rew, rew + 1, 
+                                       &done, &mAllVectorRewards[i]);
+        mAllDones[i] = done;
+    }
 }
 
 void VectorizedEnv::HarvestStatesParallel()
@@ -185,6 +213,7 @@ void VectorizedEnv::Reset(int envIndex)
 
 void VectorizedEnv::ResetDoneEnvs()
 {
+    #pragma omp parallel for num_threads(8)
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i])
@@ -195,6 +224,14 @@ void VectorizedEnv::ResetDoneEnvs()
     }
 }
 
+void VectorizedEnv::SetDomainRandomization(const DomainRandomization& dr)
+{
+    for (int i = 0; i < mNumEnvs; ++i)
+    {
+        mEnvs[i].SetDomainRandomization(dr);
+    }
+}
+
 VectorizedEnv::~VectorizedEnv()
 {
     Shutdown();
@@ -202,16 +239,15 @@ VectorizedEnv::~VectorizedEnv()
 
 void VectorizedEnv::Shutdown()
 {
-    std::cout << "[VectorizedEnv] Shutdown start..." << std::endl;
+    // OPTIMIZATION: Removed verbose logging
     if (mPhysicsCore.IsInitialized()) {
         try {
             mPhysicsCore.GetPhysicsSystem().SetContactListener(nullptr);
         } catch (...) {}
     }
-    
+
     mEnvs.clear();
     mPhysicsCore.Shutdown();
-    std::cout << "[VectorizedEnv] Shutdown complete." << std::endl;
 }
 
 bool VectorizedEnv::GetRenderState(float* redPos, float* bluePos, float* redSatPos, float* blueSatPos, float* redHealth, float* blueHealth)

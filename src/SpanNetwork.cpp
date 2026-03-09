@@ -5,6 +5,8 @@
 #include <vector>
 #include <random>
 #include <ctime>
+#include <chrono>
+#include <cstdio>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include "AlignedAllocator.h"
@@ -422,18 +424,59 @@ void SpanActorCritic::SelectAction(const float* state, float* action, float* log
 
 void SpanActorCritic::SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices, bool addNoise)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     mLatentMemory.StepLatentDynamics(states, batchSize);
+    auto latent_end = std::chrono::high_resolution_clock::now();
+    
     size_t combDim = mStateDim + mLatentDim;
     AlignedVector32<float> combined(batchSize * combDim);
+    auto alloc_end = std::chrono::high_resolution_clock::now();
+
+    #pragma omp parallel for num_threads(8) schedule(static)
     for (int b = 0; b < batchSize; ++b) {
         std::memcpy(combined.data() + b * combDim, states + b * mStateDim, mStateDim * sizeof(float));
         std::memcpy(combined.data() + b * combDim + mStateDim, mLatentMemory.GetMemory().GetPosition(envIndices[b]), mLatentDim * sizeof(float));
     }
+    auto copy_end = std::chrono::high_resolution_clock::now();
+
     mActor.ForwardBatch(combined.data(), actions, batchSize);
+    auto forward_end = std::chrono::high_resolution_clock::now();
+    
     ForwardMoLU_AVX2(actions, batchSize * mActionDim);
+    auto molu_end = std::chrono::high_resolution_clock::now();
+
     if (addNoise) {
-        std::normal_distribution<float> dist(0.0f, 0.1f); std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)));
-        for (size_t i = 0; i < batchSize * mActionDim; ++i) actions[i] = std::clamp(actions[i] + dist(localRng), -1.0f, 1.0f);
+        #pragma omp parallel num_threads(8)
+        {
+            int tid = omp_get_thread_num();
+            std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)) + tid);
+            std::normal_distribution<float> dist(0.0f, 0.1f);
+
+            #pragma omp for schedule(static)
+            for (int b = 0; b < batchSize; ++b) {
+                float* action = actions + b * mActionDim;
+                for (size_t i = 0; i < mActionDim; ++i) {
+                    action[i] = std::clamp(action[i] + dist(localRng), -1.0f, 1.0f);
+                }
+            }
+        }
+    }
+    auto noise_end = std::chrono::high_resolution_clock::now();
+    
+    // Log timing breakdown
+    static int logCounter = 0;
+    if (++logCounter % 10 == 0) {
+        fflush(stdout);
+        printf("[TIMING] Batch=%d | Latent: %.2fms | Alloc: %.2fms | Copy: %.2fms | Forward: %.2fms | MoLU: %.2fms | Noise: %.2fms | TOTAL: %.2fms\n",
+            batchSize,
+            std::chrono::duration<float, std::milli>(latent_end - start).count(),
+            std::chrono::duration<float, std::milli>(alloc_end - latent_end).count(),
+            std::chrono::duration<float, std::milli>(copy_end - alloc_end).count(),
+            std::chrono::duration<float, std::milli>(forward_end - copy_end).count(),
+            std::chrono::duration<float, std::milli>(molu_end - forward_end).count(),
+            std::chrono::duration<float, std::milli>(noise_end - molu_end).count(),
+            std::chrono::duration<float, std::milli>(noise_end - start).count());
+        fflush(stdout);
     }
 }
 
@@ -450,7 +493,31 @@ void SpanActorCritic::ComputeQValues(const float* state, const float* action, fl
 
 void SpanActorCritic::ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize)
 {
-    for (int b = 0; b < batchSize; ++b) ComputeQValues(states + b * mStateDim, actions + b * mActionDim, qValues + b * 4);
+    #pragma omp parallel num_threads(8)
+    {
+        AlignedVector32<float> localStateActionBuffer(mStateDim + mActionDim + mLatentDim);
+        AlignedVector32<float> localZPos(mLatentDim);
+        float q1[4], q2[4];
+
+        #pragma omp for schedule(static)
+        for (int b = 0; b < batchSize; ++b) {
+            const float* state = states + b * mStateDim;
+            const float* action = actions + b * mActionDim;
+            float* qVal = qValues + b * 4;
+
+            mLatentMemory.GetLatentStates(localZPos.data(), nullptr, 0); 
+            
+            size_t idx = 0;
+            for (size_t i = 0; i < mStateDim; ++i) localStateActionBuffer[idx++] = state[i];
+            for (size_t i = 0; i < mActionDim; ++i) localStateActionBuffer[idx++] = action[i];
+            for (size_t i = 0; i < mLatentDim; ++i) localStateActionBuffer[idx++] = localZPos[i];
+            
+            mCritic1.Forward(localStateActionBuffer.data(), q1); 
+            mCritic2.Forward(localStateActionBuffer.data(), q2);
+            
+            for (int i = 0; i < 4; ++i) qVal[i] = std::min(q1[i], q2[i]);
+        }
+    }
 }
 
 void SpanActorCritic::ComputeQ1(const float* state, const float* action, float* qValue)

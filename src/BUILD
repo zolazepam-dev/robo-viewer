@@ -100,6 +100,13 @@ cc_library(
         "OctopodEnv.h",
         "VectorizedOctopodEnv.h",
         "ShardEnv.h",
+        "RobotLoader_fixed.h",
+        # Optimized training headers
+        "OptimizedBatchOps.h",
+        "ParallelPhysicsStepper.h",
+        "BatchedSpanNetwork.h",
+        "SoAEnvBatch.h",
+        "OptimizedTrainingPipeline.h",
     ],
     deps = [
         "@glfw",
