@@ -1,8 +1,3 @@
-// STRICT REQUIREMENT: Jolt.h must be included first
-#include <Jolt/Jolt.h>
-#include <Jolt/RegisterTypes.h>
-#include <Jolt/Core/Factory.h>
-
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -11,10 +6,21 @@
 #include <string>
 #include <cstdio>
 #include <ctime>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <thread>
+
+// STRICT REQUIREMENT: Jolt.h must be included first
+#include <Jolt/Jolt.h>
+#include <Jolt/RegisterTypes.h>
+#include <Jolt/Core/Factory.h>
 
 #include "VectorizedEnv.h"
 #include "NeuralNetwork.h"
 #include "TD3Trainer.h"
+#include "AlignedAllocator.h"
 
 namespace fs = std::filesystem;
 
@@ -26,9 +32,45 @@ struct TrainingConfig {
     std::string loadCheckpoint = "";
 };
 
+// IO THREAD STATE
+struct IOTask {
+    enum Type { SAVE_MODEL, WRITE_STATE };
+    Type type;
+    std::string path;
+    std::vector<float> data; // For saving model weights or state data
+};
+std::queue<IOTask> gIOQueue;
+std::mutex gIOMutex;
+std::condition_variable gIOCV;
+std::atomic<bool> gIORunning{true};
+
 void EnsureDir(const std::string& path) {
     if (!fs::exists(path)) {
         fs::create_directories(path);
+    }
+}
+
+void IOWorker(TD3Trainer* trainer) {
+    while (gIORunning) {
+        IOTask task;
+        {
+            std::unique_lock<std::mutex> lock(gIOMutex);
+            gIOCV.wait(lock, []{ return !gIOQueue.empty() || !gIORunning; });
+            if (!gIORunning && gIOQueue.empty()) break;
+            task = std::move(gIOQueue.front());
+            gIOQueue.pop();
+        }
+        if (task.type == IOTask::SAVE_MODEL) {
+            trainer->SaveToDisk(task.path, "robots/combat_bot.json", 0, 208); // Assuming default combat bot for headless
+        } else if (task.type == IOTask::WRITE_STATE) {
+            FILE* f = fopen(task.path.c_str(), "w");
+            if (f) {
+                fprintf(f, "{\"step\":%d,\"red\":[%.2f,%.2f,%.2f],\"blue\":[%.2f,%.2f,%.2f],\"red_satellite\":[%.2f,%.2f,%.2f],\"blue_satellite\":[%.2f,%.2f,%.2f],\"red_health\":%.1f,\"blue_health\":%.1f}",
+                    (int)task.data[0], task.data[1], task.data[2], task.data[3], task.data[4], task.data[5], task.data[6],
+                    task.data[7], task.data[8], task.data[9], task.data[10], task.data[11], task.data[12], task.data[13], task.data[14]);
+                fclose(f);
+            }
+        }
     }
 }
 
@@ -53,12 +95,12 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < argc; i++) {
         std::cout << " " << argv[i];
     }
-    std::cout << std::endl;
+    std::cout << "\n";
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        std::cout << "[JOLTrl DEBUG] Parsing arg[" << i << "]: \"" << arg << "\"" << std::endl;
+        std::cout << "[JOLTrl DEBUG] Parsing arg[" << i << "]: \"" << arg << "\"" << "\n";
         
         // Handle --arg=value syntax
         size_t equalsPos = arg.find('=');
@@ -68,7 +110,7 @@ int main(int argc, char* argv[]) {
             
             if (key == "--envs") {
                 config.numParallelEnvs = std::stoi(value);
-                std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << std::endl;
+                std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << "\n";
             } else if (key == "--checkpoint-interval") {
                 config.checkpointInterval = std::stoi(value);
             } else if (key == "--max-steps") {
@@ -82,7 +124,7 @@ int main(int argc, char* argv[]) {
         // Handle --arg value syntax
         if (arg == "--envs" && i + 1 < argc) {
             config.numParallelEnvs = std::stoi(argv[++i]);
-            std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << std::endl;
+            std::cout << "[JOLTrl] Command line: numParallelEnvs = " << config.numParallelEnvs << "\n";
         } else if (arg == "--checkpoint-interval" && i + 1 < argc) {
             config.checkpointInterval = std::stoi(argv[++i]);
         } else if (arg == "--max-steps" && i + 1 < argc) {
@@ -96,7 +138,7 @@ int main(int argc, char* argv[]) {
     EnsureDir("saved_models");
     
     // Initialize Training Environment (Headless)
-    std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << std::endl;
+    std::cout << "[JOLTrl] Initializing headless training with " << config.numParallelEnvs << " parallel environments..." << "\n";
     VectorizedEnv vecEnv(config.numParallelEnvs, 7200); // Default 7200 steps per episode
     vecEnv.Init("robots/combat_bot.json");
     
@@ -108,7 +150,7 @@ int main(int argc, char* argv[]) {
     config.checkpointDir = GenerateCheckpointDir(config, stateDim, actionDim);
     EnsureDir(config.checkpointDir);
     EnsureDir(config.checkpointDir + "/replay");
-    std::cout << "[JOLTrl] Checkpoints will be saved to: " << config.checkpointDir << std::endl;
+    std::cout << "[JOLTrl] Checkpoints will be saved to: " << config.checkpointDir << "\n";
     
     TD3Config td3cfg;
     td3cfg.hiddenDim = 256;
@@ -136,8 +178,11 @@ int main(int argc, char* argv[]) {
     int lastSteps = 0;
     float sps = 0.0f;
 
-    std::cout << "[JOLTrl] Headless Training Matrix Online. Starting training loop..." << std::endl;
-    std::cout << "[JOLTrl] actionDim=" << actionDim << " totalActionDim=" << totalActionDim << " stateDim=" << stateDim << std::endl;
+    // Start IO worker thread
+    std::thread ioThread(IOWorker, &trainer);
+
+    std::cout << "[JOLTrl] Headless Training Matrix Online. Starting training loop..." << "\n";
+    std::cout << "[JOLTrl] actionDim=" << actionDim << " totalActionDim=" << totalActionDim << " stateDim=" << stateDim << "\n";
 
     const std::string stateFile = "/tmp/jolt_training_state.json";
     
@@ -217,7 +262,7 @@ int main(int argc, char* argv[]) {
                       << " | Loop: " << loopTime << "us" 
                       << " | Action: " << actionTime << "us"
                       << " | Step: " << stepTime << "us"
-                      << " | Train: " << trainTime << "us" << std::endl;
+                      << " | Train: " << trainTime << "us" << "\n";
         }
         
         auto currentTime = std::chrono::high_resolution_clock::now();
@@ -240,7 +285,7 @@ int main(int argc, char* argv[]) {
                 std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
                           << " | SPS: " << (int)sps 
                           << " | Episodes: " << episodes 
-                          << " | Avg Reward: " << currentAvg << std::endl;
+                          << " | Avg Reward: " << currentAvg << "\n";
             }
         }
         
@@ -262,34 +307,51 @@ int main(int argc, char* argv[]) {
                 std::cout << "[JOLTrl] Steps: " << totalSteps << "/" << config.maxSteps 
                           << " | SPS: " << (int)sps 
                           << " | Episodes: " << episodes 
-                          << " | Avg Reward: " << currentAvg << std::endl;
+                          << " | Avg Reward: " << currentAvg << "\n";
             }
             
-            // Write state for viewer (every 10 steps to avoid I/O bottleneck)
-            if (totalSteps % 10 == 0) {
+            // Write state for viewer (every 100 steps to avoid I/O bottleneck)
+            if (totalSteps % 100 == 0) {
                 float redPos[3], bluePos[3], redSat[3], blueSat[3];
                 float redH = 100, blueH = 100;
                 if (vecEnv.GetRenderState(redPos, bluePos, redSat, blueSat, &redH, &blueH)) {
-                    FILE* f = fopen(stateFile.c_str(), "w");
-                    if (f) {
-                        fprintf(f, "{\"step\":%d,\"red\":[%.2f,%.2f,%.2f],\"blue\":[%.2f,%.2f,%.2f],\"red_satellite\":[%.2f,%.2f,%.2f],\"blue_satellite\":[%.2f,%.2f,%.2f],\"red_health\":%.1f,\"blue_health\":%.1f}",
-                            totalSteps, redPos[0],redPos[1],redPos[2], bluePos[0],bluePos[1],bluePos[2],
-                            redSat[0],redSat[1],redSat[2], blueSat[0],blueSat[1],blueSat[2], redH, blueH);
-                        fclose(f);
+                    // Queue IO task instead of blocking
+                    {
+                        std::lock_guard<std::mutex> lock(gIOMutex);
+                        IOTask task;
+                        task.type = IOTask::WRITE_STATE;
+                        task.path = stateFile;
+                        task.data = {(float)totalSteps, redPos[0], redPos[1], redPos[2], bluePos[0], bluePos[1], bluePos[2],
+                                      redSat[0], redSat[1], redSat[2], blueSat[0], blueSat[1], blueSat[2], redH, blueH};
+                        gIOQueue.push(std::move(task));
                     }
+                    gIOCV.notify_one();
                 }
             }
         }
         
         if (totalSteps % config.checkpointInterval == 0) {
             std::string checkpointPath = config.checkpointDir + "/model_" + std::to_string(totalSteps) + ".bin";
-            trainer.Save(checkpointPath);
-            std::cout << "[JOLTrl] Checkpoint saved: " << checkpointPath << std::endl;
+            // Queue IO task instead of blocking
+            {
+                std::lock_guard<std::mutex> lock(gIOMutex);
+                IOTask task;
+                task.type = IOTask::SAVE_MODEL;
+                task.path = checkpointPath;
+                gIOQueue.push(std::move(task));
+            }
+            gIOCV.notify_one();
+            std::cout << "[JOLTrl] Checkpoint queued for save: " << checkpointPath << "\n";
         }
     }
     
     trainer.Save("saved_models/model_final.bin");
-    std::cout << "[JOLTrl] Training completed. Final model saved." << std::endl;
+    std::cout << "[JOLTrl] Training completed. Final model saved." << "\n";
+    
+    // Shutdown IO thread
+    gIORunning = false;
+    gIOCV.notify_all();
+    ioThread.join();
     
     return 0;
 }

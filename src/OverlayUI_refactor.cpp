@@ -75,14 +75,14 @@ void OverlayUIRefactored::UItoCentral(CentralConfig& cfg)
     cfg.physics.allowSleep = mPhysics.allowSleep;
     cfg.physics.timeScale = mTimeScale;
     cfg.physics.stepsPerEpisode = mStepsPerEpisode;
-
-    cfg.robot.enginePower = mRobotTune.enginePower;
-    cfg.robot.reactionWheelPower = mRobotTune.reactionWheelPower;
-    cfg.robot.shellRadius = mRobotTune.shellRadius;
-    cfg.robot.shellThickness = mRobotTune.shellThickness;
-    cfg.robot.shellMass = mRobotTune.shellMass;
-    cfg.robot.motorSpeed = mRobotTune.motorSpeed;
-    cfg.robot.motorTorque = mRobotTune.motorTorque;
+    
+    cfg.physics.friction = mPhysics.friction;
+    cfg.physics.restitution = mPhysics.restitution;
+    cfg.physics.linearDamping = mPhysics.linearDamping;
+    cfg.physics.angularDamping = mPhysics.angularDamping;
+    cfg.physics.maxPenetrationVelocity = mPhysics.maxPenetrationVelocity;
+    cfg.physics.numSubSteps = mPhysics.numSubSteps;
+    cfg.physics.warmStarting = mPhysics.warmStarting;
 
     cfg.graphics.showCollisionShapes = mGraphics.showCollisionShapes;
     cfg.graphics.showAABBs = mGraphics.showAABBs;
@@ -112,14 +112,14 @@ void OverlayUIRefactored::CentraltoUI(const CentralConfig& cfg)
     mPhysics.allowSleep = cfg.physics.allowSleep;
     mTimeScale = cfg.physics.timeScale;
     mStepsPerEpisode = cfg.physics.stepsPerEpisode;
-
-    mRobotTune.enginePower = cfg.robot.enginePower;
-    mRobotTune.reactionWheelPower = cfg.robot.reactionWheelPower;
-    mRobotTune.shellRadius = cfg.robot.shellRadius;
-    mRobotTune.shellThickness = cfg.robot.shellThickness;
-    mRobotTune.shellMass = cfg.robot.shellMass;
-    mRobotTune.motorSpeed = cfg.robot.motorSpeed;
-    mRobotTune.motorTorque = cfg.robot.motorTorque;
+    
+    mPhysics.friction = cfg.physics.friction;
+    mPhysics.restitution = cfg.physics.restitution;
+    mPhysics.linearDamping = cfg.physics.linearDamping;
+    mPhysics.angularDamping = cfg.physics.angularDamping;
+    mPhysics.maxPenetrationVelocity = cfg.physics.maxPenetrationVelocity;
+    mPhysics.numSubSteps = cfg.physics.numSubSteps;
+    mPhysics.warmStarting = cfg.physics.warmStarting;
 
     mGraphics.showCollisionShapes = cfg.graphics.showCollisionShapes;
     mGraphics.showAABBs = cfg.graphics.showAABBs;
@@ -138,11 +138,7 @@ void OverlayUIRefactored::CentraltoUI(const CentralConfig& cfg)
     
     mRobotSelection.availableRobots.clear();
     for (const auto& def : cfg.robotDefinitions) {
-        mRobotSelection.availableRobots.push_back({
-            def.name, def.configPath, def.enginePower, def.reactionWheelPower,
-            def.shellRadius, def.shellThickness, def.shellMass,
-            def.motorSpeed, def.motorTorque
-        });
+        mRobotSelection.availableRobots.push_back({ def.name, def.configPath });
     }
 }
 
@@ -194,11 +190,6 @@ void OverlayUIRefactored::DrawCyberpunkStyle()
     colors[ImGuiCol_Button] = ImVec4(0.0f, 1.0f, 0.85f, 0.2f);
 }
 
-void OverlayUIRefactored::PlotLine(const char* label, const std::vector<float>& data, float scale_min, float scale_max)
-{
-    if (!data.empty()) ImGui::PlotLines(label, data.data(), (int)data.size(), 0, nullptr, scale_min, scale_max, ImVec2(0, 50));
-}
-
 void OverlayUIRefactored::DrawTabBar()
 {
     if (ImGui::BeginTabBar("MainTabBar")) {
@@ -213,15 +204,23 @@ void OverlayUIRefactored::DrawTabBar()
 void OverlayUIRefactored::DrawTrainingTab()
 {
     ImGui::TextColored(mColorAccent, "TRAINING CONTROLS");
-    ImGui::SliderInt("Num Envs", &mConfig.numEnvs, 1, 256);
+    ImGui::SliderInt("Num Envs", &mConfig.numEnvs, 1, 2048);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of parallel physics environments. Increase to push CPU usage.");
+    
     if (ImGui::Button(mPaused ? "RESUME" : "PAUSE", ImVec2(120, 30))) mPaused = !mPaused;
     ImGui::SameLine();
     if (ImGui::Button("SAVE CONFIG", ImVec2(120, 30))) SaveSettings();
     
     ImGui::Separator();
     ImGui::SliderInt("Watch Env", &mRenderEnvIdx, 0, std::max(0, mNumEnvs - 1));
-    ImGui::SliderFloat("Time Scale", &mTimeScale, 0.1f, 4.0f, "%.2f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Select which environment to visualize.");
+    
+    ImGui::SliderFloat("Time Scale", &mTimeScale, 0.1f, 10.0f, "%.2f");
+    ImGui::SliderInt("Steps/Episode", &mStepsPerEpisode, 100, 20000);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Max steps before environment reset.");
+    
     ImGui::Checkbox("Restart Sim", &mRestartRequested);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Apply 'Num Envs' or 'Steps/Episode' changes by restarting simulation.");
 
     ImGui::Separator();
     ImGui::TextColored(mColorAccent, "STATISTICS");
@@ -239,40 +238,112 @@ void OverlayUIRefactored::DrawTrainingTab()
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "HEALTH");
     ImGui::Text("A1: %.1f | A2: %.1f", mAgent1HP, mAgent2HP);
 }
-
 void OverlayUIRefactored::DrawPhysicsTab()
 {
-    ImGui::TextColored(mColorAccent, "PHYSICS");
+    ImGui::TextColored(mColorAccent, "SOLVER SETTINGS");
     ImGui::SliderFloat("Gravity", &mPhysics.gravityY, -20.0f, 0.0f);
-    ImGui::SliderFloat("Timestep", &mPhysics.timestep, 0.001f, 0.02f, "%.4f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Global gravity force. Standard is -9.81.");
+
+    ImGui::SliderFloat("Timestep", &mPhysics.timestep, 0.001f, 0.033f, "%.4f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Time step for each physics update. 0.0083 is 120Hz.");
+
+    ImGui::SliderInt("Sub Steps", &mPhysics.numSubSteps, 1, 16);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Internal physics iterations per timestep for stability.");
+
+    ImGui::SliderInt("Vel Steps", &mPhysics.velocitySteps, 1, 32);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of velocity constraint solver iterations.");
+
+    ImGui::SliderInt("Pos Steps", &mPhysics.positionSteps, 1, 16);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of position constraint solver iterations.");
+
+    ImGui::SliderFloat("Baumgarte", &mPhysics.Baumgarte, 0.01f, 1.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Percentage of error correction per step (0.1-0.3 recommended).");
+
+    ImGui::Checkbox("Warm Starting", &mPhysics.warmStarting);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reuse solver results from previous frame for faster convergence.");
+
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "COLLISION & DYNAMICS");
+    ImGui::SliderFloat("Friction", &mPhysics.friction, 0.0f, 2.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Surface friction coefficient.");
+
+    ImGui::SliderFloat("Restitution", &mPhysics.restitution, 0.0f, 1.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Bounciness. 0.0 = no bounce, 1.0 = perfect elastic.");
+
+    ImGui::SliderFloat("Lin Damping", &mPhysics.linearDamping, 0.0f, 1.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Linear air resistance/drag.");
+
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "DOMAIN RANDOMIZATION");
+    ImGui::Checkbox("Enable DR", &mConfig.dr.enabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Randomizes physics settings per-reset to improve generalization.");
+
+    if (mConfig.dr.enabled) {
+        ImGui::SliderFloat("Grav Range", &mConfig.dr.gravityRange, 0.0f, 5.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Gravity +/- range during randomization.");
+
+        ImGui::SliderFloat("Frict Range", &mConfig.dr.frictionRange, 0.0f, 0.5f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Friction +/- range during randomization.");
+
+        ImGui::SliderFloat("Rest Range", &mConfig.dr.restitutionRange, 0.0f, 0.5f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restitution +/- range during randomization.");
+    }
+
+    ImGui::SliderFloat("Ang Damping", &mPhysics.angularDamping, 0.0f, 1.0f);
+    ImGui::SliderFloat("Max Pen Vel", &mPhysics.maxPenetrationVelocity, 0.1f, 20.0f);
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "ADVANCED");
+    ImGui::SliderFloat("Slop", &mPhysics.penetrationSlop, 0.0f, 0.1f, "%.4f");
+    ImGui::SliderFloat("Spec Dist", &mPhysics.speculativeContactDistance, 0.0f, 0.1f, "%.4f");
+    ImGui::Checkbox("Allow Sleep", &mPhysics.allowSleep);
 }
 
 void OverlayUIRefactored::DrawRobotsTab()
 {
-    ImGui::TextColored(mColorAccent, "MASTER CONFIGURATION");
+    ImGui::TextColored(mColorAccent, "ROBOT SELECTION");
+    if (ImGui::BeginCombo("Select Robot", mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name.c_str())) {
+        for (int i = 0; i < (int)mRobotSelection.availableRobots.size(); i++) {
+            bool selected = (i == mRobotSelection.selectedRobotIndex);
+            if (ImGui::Selectable(mRobotSelection.availableRobots[i].name.c_str(), selected)) {
+                mRobotSelection.selectedRobotIndex = i;
+                mConfig.robotConfigPath = mRobotSelection.availableRobots[i].configFile;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    
     ImGui::Separator();
-    ImGui::TextWrapped("Robot settings are managed via viewer_config.json.");
-    if (ImGui::Button("RELOAD CONFIG", ImVec2(200, 30))) {
-        LoadSettings();
+    ImGui::TextWrapped("Robot-specific parameters (mass, power, sensors) are defined in the robot's JSON configuration file.");
+    ImGui::TextColored(mColorDim, "Path: %s", mConfig.robotConfigPath.c_str());
+
+    ImGui::Separator();
+    if (ImGui::Button("APPLY & RESTART", ImVec2(200, 30))) {
+        SaveSettings();
         mRestartRequested = true;
     }
 }
 
 void OverlayUIRefactored::DrawGraphicsTab()
 {
-    ImGui::TextColored(mColorAccent, "VISUALS");
+    ImGui::TextColored(mColorAccent, "VISUALIZATION");
     ImGui::Checkbox("Collision Shapes", &mGraphics.showCollisionShapes);
-    ImGui::SliderFloat("Cam Dist", &mGraphics.cameraDistance, 5.0f, 100.0f);
-    ImGui::SliderFloat("Azimuth", &mGraphics.cameraAzimuth, 0.0f, 360.0f);
+    ImGui::Checkbox("AABBs", &mGraphics.showAABBs);
+    ImGui::Checkbox("Contact Points", &mGraphics.showContactPoints);
+    ImGui::Checkbox("Internal Engines", &mGraphics.showInternalEngines);
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "VISIBILITY");
+    ImGui::Checkbox("Show Robot 1", &mGraphics.showRobot1);
+    ImGui::Checkbox("Show Robot 2", &mGraphics.showRobot2);
+    
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "CAMERA");
+    ImGui::SliderFloat("Dist", &mGraphics.cameraDistance, 5.0f, 200.0f);
+    ImGui::SliderFloat("Yaw", &mGraphics.cameraAzimuth, 0.0f, 360.0f);
+    ImGui::SliderFloat("Pitch", &mGraphics.cameraElevation, -89.0f, 89.0f);
 }
 
 bool OverlayUIRefactored::GetAndClearSaveRequest(std::string& n) { if (mConfig.saveRequested) { n = mConfig.policySaveName; mConfig.saveRequested = false; return true; } return false; }
 bool OverlayUIRefactored::GetAndClearLoadRequest(std::string& n) { if (mConfig.loadRequested) { n = mConfig.checkpointLoadName; mConfig.loadRequested = false; return true; } return false; }
 bool OverlayUIRefactored::GetAndClearGraphRequest() { bool r = mLaunchGraphRequested; mLaunchGraphRequested = false; return r; }
-bool OverlayUIRefactored::GetSpawnRequest(SpawnRequest& r) { if (mSpawnRequest.valid) { r = mSpawnRequest; mSpawnRequest.valid = false; return true; } return false; }
-void OverlayUIRefactored::SetSpawnClickPosition(const JPH::Vec3& p) { mPendingSpawnPos = p; }
-bool OverlayUIRefactored::GetAndClearLoadConfigRequest() { bool r = mRobotSelection.loadConfigRequested; mRobotSelection.loadConfigRequested = false; return r; }
-bool OverlayUIRefactored::GetAndClearCreateCheckpointFolderRequest(std::string& n) { if (mRobotSelection.createCheckpointFolderRequested) { n = mRobotSelection.newCheckpointFolderName; mRobotSelection.createCheckpointFolderRequested = false; return true; } return false; }
-const std::string& OverlayUIRefactored::GetSelectedRobotType() const { return mRobotSelection.availableRobots[mRobotSelection.selectedRobotIndex].name; }
-// Inline methods moved to header
-

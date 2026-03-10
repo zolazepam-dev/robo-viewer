@@ -11,6 +11,7 @@ OpponentPool::OpponentPool(int maxPoolSize)
 void OpponentPool::Snapshot(const std::vector<float>& weights, const std::vector<float>& biases, 
                              int64_t stepCount)
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     mPool[mIndex].actorWeights = weights;
     mPool[mIndex].actorBiases = biases;
     mPool[mIndex].stepCount = stepCount;
@@ -24,6 +25,7 @@ void OpponentPool::Snapshot(const std::vector<float>& weights, const std::vector
 void OpponentPool::SnapshotWithStats(const std::vector<float>& weights, const std::vector<float>& biases,
                                       int64_t stepCount, float winRate)
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     mPool[mIndex].actorWeights = weights;
     mPool[mIndex].actorBiases = biases;
     mPool[mIndex].stepCount = stepCount;
@@ -37,6 +39,7 @@ void OpponentPool::SnapshotWithStats(const std::vector<float>& weights, const st
 bool OpponentPool::SampleOpponent(std::vector<float>& weights, std::vector<float>& biases, 
                                    std::mt19937& rng)
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mSize == 0) return false;
     
     std::uniform_int_distribution<int> dist(0, mSize - 1);
@@ -51,6 +54,7 @@ bool OpponentPool::SampleOpponent(std::vector<float>& weights, std::vector<float
 bool OpponentPool::SampleOpponentRecent(std::vector<float>& weights, std::vector<float>& biases,
                                          std::mt19937& rng, int recentN)
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mSize == 0) return false;
     
     int effectiveRecent = std::min(recentN, mSize);
@@ -78,6 +82,7 @@ bool OpponentPool::SampleOpponentRecent(std::vector<float>& weights, std::vector
 
 void OpponentPool::Clear()
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     mSize = 0;
     mIndex = 0;
     mSnapshotCounter = 0;
@@ -93,18 +98,21 @@ void OpponentPool::Clear()
 
 const OpponentSnapshot* OpponentPool::GetSnapshot(int idx) const
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (idx < 0 || idx >= mSize) return nullptr;
     return &mPool[idx];
 }
 
 OpponentSnapshot* OpponentPool::GetSnapshot(int idx)
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (idx < 0 || idx >= mSize) return nullptr;
     return &mPool[idx];
 }
 
 int64_t OpponentPool::GetLatestStepCount() const
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mSize == 0) return 0;
     int latestIdx = (mIndex - 1 + mMaxPoolSize) % mMaxPoolSize;
     return mPool[latestIdx].stepCount;
@@ -112,6 +120,7 @@ int64_t OpponentPool::GetLatestStepCount() const
 
 int64_t OpponentPool::GetOldestStepCount() const
 {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mSize == 0) return 0;
     int oldestIdx = (mIndex - mSize + mMaxPoolSize) % mMaxPoolSize;
     return mPool[oldestIdx].stepCount;

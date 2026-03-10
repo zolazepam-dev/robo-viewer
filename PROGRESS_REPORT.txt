@@ -1,0 +1,85 @@
+JOLTrl RFF+ODE Hybrid Architecture Progress Report
+Date: March 9, 2026
+
+OVERVIEW
+--------------------------------------------------------------------------------
+The project has been transitioned from a B-spline based neural network architecture
+to a hybrid architecture combining Random Fourier Features (RFF) and Second-Order 
+ODE Latent Memory. This implementation prioritization inference speed, thread-safe 
+gradient updates, and robust memory management.
+
+CORE IMPLEMENTATION CODE
+--------------------------------------------------------------------------------
+
+[src/RFFLayer.cpp - Thread-Safe Backward Pass with Null Checks]
+void RFFLayer::Backward(const float* input, const float* output_grad, float* input_grad,
+                        float* weights_grad, float* bias_grad,
+                        const float* featureBuffer, const float* sinFeatureBuffer, float* featureGradBuffer)
+{
+    // SAFETY: weights_grad can be nullptr when backpropagating through critic to actor
+    if (weights_grad) {
+        for (size_t i = 0; i < mOutputDim; ++i) {
+            float grad = output_grad[i];
+            float* w_grad = weights_grad + i * mNumFeatures;
+            for (int j = 0; j < mNumFeatures; ++j) {
+                w_grad[j] += grad * featureBuffer[j];
+            }
+        }
+    }
+    
+    if (bias_grad) {
+        for (size_t i = 0; i < mOutputDim; ++i) {
+            bias_grad[i] += output_grad[i];
+        }
+    }
+    
+    if (input_grad != nullptr) {
+        // ... (Gradient w.r.t. input computation) ...
+    }
+}
+
+[src/RFFNetwork.cpp - Isolated Backward Pass]
+void RFFNetwork::Backward(const float* input, const float* output_grad, float* input_grad,
+                          float* weights_grad, SpanCache& cache)
+{
+    // ... (Ping-pong through layers in reverse order) ...
+    for (int i = static_cast<int>(mLayers.size()) - 1; i >= 0; --i) {
+        // Calculate offsets into contiguous weights_grad buffer
+        size_t gradOffset = 0;
+        for (int j = 0; j < i; ++j) gradOffset += mLayers[j].GetNumParams();
+        
+        float* layerWeightsGrad = weights_grad ? (weights_grad + gradOffset) : nullptr;
+        float* layerBiasGrad = weights_grad ? (layerWeightsGrad + layer.GetTrainableWeights().size()) : nullptr;
+
+        layer.Backward(layerInput, currentGrad.data(), layerInputGrad,
+                       layerWeightsGrad, layerBiasGrad,
+                       cache.layerFeatures[i].data(), cache.layerSinFeatures[i].data(), 
+                       cache.layerFeatureGrads[i].data());
+        // ...
+    }
+}
+
+IDENTIFIED BUGS & RECENT FIXES
+--------------------------------------------------------------------------------
+1. FIXED: Segmentation Fault in ComputeActorGradient. The code was calling 
+   critic.Backward with weights_grad=nullptr, which was accessed directly in RFFLayer.
+   Added robust null checks to RFFLayer::Backward.
+2. FIXED: AVX2 Alignment crashes. Padded all parameter counts to multiples of 8 
+   (32-byte boundary) to ensure safety in contiguous gradient buffers used by TD3Trainer.
+3. FIXED: Memory corruption in NeuralNetwork::InitODE2VAE. Undersized allocation 
+   (1024 envs instead of 2048 robots) caused out-of-bounds corruption during inference.
+4. FIXED: Shared buffer race condition. Refactored RFFNetwork and RFFActorCritic to 
+   eliminate shared member buffers, using per-call local storage instead.
+
+CURRENT STATUS
+--------------------------------------------------------------------------------
+- All identified crash sites have been addressed with targeted memory safety fixes.
+- The system supports 1024 parallel environments (2048 robots) with full RFF+ODE 
+  inference and gradient-based training.
+- Build verified with AVX2/FMA optimizations.
+
+NEXT STEPS
+--------------------------------------------------------------------------------
+1. Conduct a full end-to-end stress test through 1,000,000 steps.
+2. Monitor MuonOptimizer convergence with the new RFF dynamics.
+3. Validate checkpoint save/load integrity with the updated RFF architecture.

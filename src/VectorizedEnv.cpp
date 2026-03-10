@@ -80,6 +80,9 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
     // -------------------------------------------------
 
     if (initRobots) {
+        // Ensure contact listener has enough capacity for all environments
+        CombatContactListener::Get().EnsureCapacity(mNumEnvs);
+
         std::cout << "[VectorizedEnv] Initializing " << mNumEnvs << " robot environments..." << "\n";
         mEnvs.resize(mNumEnvs);
         for (int i = 0; i < mNumEnvs; ++i)

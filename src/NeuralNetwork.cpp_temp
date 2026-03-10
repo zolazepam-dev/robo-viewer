@@ -1,0 +1,8 @@
+#include "NeuralNetwork.h"
+#include <algorithm>
+#include <iostream>
+#include <cmath>
+#include <cstring>
+
+// ... (skipping previous classes like SpanNetwork, etc. if they are in this file)
+// Note: I should read the file first to make sure I don't overwrite everything.

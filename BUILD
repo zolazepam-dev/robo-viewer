@@ -733,3 +733,28 @@ cc_binary(
     linkopts = ["-lpthread"],
 )
 
+
+cc_binary(
+    name = "spider_viewer",
+    srcs = ["//src:spider_viewer.cpp"],
+    deps = [
+        "//src:core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+    ],
+    linkopts = ["-lGL", "-lpthread"],
+    copts = [
+        "-std=c++17",
+        "-mavx2", 
+        "-mfma",
+        "-DJPH_DEBUG_RENDERER",
+        "-O3",
+        "-march=native"
+    ],
+)

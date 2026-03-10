@@ -9,16 +9,19 @@
 
 void RFFLayer::Init(size_t inputDim, size_t outputDim, const RFFConfig& config, std::mt19937& rng)
 {
+    fprintf(stderr, "[RFFLayer::Init] %zu -> %zu, features=%d, sigma=%.2f\n",
+            inputDim, outputDim, config.num_features, config.sigma);
+    fflush(stderr);
+
     mInputDim = inputDim;
     mOutputDim = outputDim;
     mNumFeatures = config.num_features;
     mSigma = config.sigma;
 
     // Initialize FIXED weights from N(0, 1/sigma^2)
-    // Variance = 1/sigma^2, so std = 1/sigma
     float fixedWeightStd = 1.0f / mSigma;
     std::normal_distribution<float> fixedDist(0.0f, fixedWeightStd);
-    
+
     size_t fixedWeightsSize = static_cast<size_t>(mNumFeatures) * mInputDim;
     mFixedWeights.resize(fixedWeightsSize);
     for (size_t i = 0; i < fixedWeightsSize; ++i) {
@@ -32,31 +35,28 @@ void RFFLayer::Init(size_t inputDim, size_t outputDim, const RFFConfig& config, 
         mFixedBiases[i] = biasDist(rng);
     }
 
-    // Initialize TRAINABLE weights with small values
-    std::normal_distribution<float> trainDist(0.0f, 0.1f);
+    // Initialize TRAINABLE parameters (Xavier/He initialization)
     size_t trainWeightsSize = mOutputDim * static_cast<size_t>(mNumFeatures);
     mTrainableWeights.resize(trainWeightsSize);
-    for (size_t i = 0; i < trainWeightsSize; ++i) {
-        mTrainableWeights[i] = trainDist(rng);
-    }
-
-    // Initialize trainable bias to zero
-    mTrainableBias.resize(mOutputDim, 0.0f);
+    
+    // Padded bias for AVX2 alignment
+    size_t paddedOutputDim = GetAVX2PaddedSize(mOutputDim);
+    mTrainableBias.resize(paddedOutputDim, 0.0f);
+    
+    float limit = std::sqrt(6.0f / (static_cast<float>(mNumFeatures) + static_cast<float>(mOutputDim)));
+    std::uniform_real_distribution<float> weightDist(-limit, limit);
+    for (auto& w : mTrainableWeights) w = weightDist(rng);
 
     // Initialize gradients to zero
     mWeightsGradient.resize(trainWeightsSize, 0.0f);
-    mBiasGradient.resize(mOutputDim, 0.0f);
+    mBiasGradient.resize(paddedOutputDim, 0.0f);
 
-    // Allocate temporary buffers
-    mFeatureBuffer.resize(mNumFeatures);
-    mFeatureGradBuffer.resize(mNumFeatures);
+    fprintf(stderr, "[RFFLayer::Init] Complete. Bias size: %zu (padded from %zu)\n", paddedOutputDim, mOutputDim);
+    fflush(stderr);
 }
 
-void RFFLayer::ComputeFeatures(const float* input, float* features)
+void RFFLayer::ComputeFeatures(const float* input, float* features, float* sin_features)
 {
-    // Compute z(x) = cos(W_fixed * x + b_fixed)
-    // For each feature i: z_i = cos(sum_j(W_ij * x_j) + b_i)
-    
     const size_t simdWidth = 8;
     
     for (int i = 0; i < mNumFeatures; ++i) {
@@ -64,155 +64,127 @@ void RFFLayer::ComputeFeatures(const float* input, float* features)
         const float* weights = mFixedWeights.data() + i * mInputDim;
         
         size_t j = 0;
-        // Vectorized dot product
+        __m256 sum_vec = _mm256_setzero_ps();
         for (; j + simdWidth <= mInputDim; j += simdWidth) {
             __m256 w = _mm256_loadu_ps(weights + j);
             __m256 x = _mm256_loadu_ps(input + j);
-            __m256 prod = _mm256_mul_ps(w, x);
-            
-            // Horizontal sum
-            alignas(32) float temp[8];
-            _mm256_store_ps(temp, prod);
-            for (int k = 0; k < 8; ++k) {
-                dotProduct += temp[k];
-            }
+            sum_vec = _mm256_add_ps(sum_vec, _mm256_mul_ps(w, x));
         }
         
-        // Remainder
-        for (; j < mInputDim; ++j) {
-            dotProduct += weights[j] * input[j];
-        }
+        alignas(32) float temp[8];
+        _mm256_store_ps(temp, sum_vec);
+        for (int k = 0; k < 8; ++k) dotProduct += temp[k];
+        
+        for (; j < mInputDim; ++j) dotProduct += weights[j] * input[j];
         
         features[i] = std::cos(dotProduct);
+        if (sin_features) sin_features[i] = std::sin(dotProduct);
     }
 }
 
-void RFFLayer::Forward(const float* input, float* output)
+void RFFLayer::Forward(const float* input, float* output, float* featureBuffer)
 {
-    // Step 1: Compute RFF features
-    ComputeFeatures(input, mFeatureBuffer.data());
-    
-    // Step 2: Compute output = W_train * features + bias
-    // output[i] = sum_j(W_train[i,j] * features[j]) + bias[i]
+    ComputeFeatures(input, featureBuffer);
     
     const size_t simdWidth = 8;
-    
     for (size_t i = 0; i < mOutputDim; ++i) {
         float val = mTrainableBias[i];
         const float* weights = mTrainableWeights.data() + i * mNumFeatures;
         
         size_t j = 0;
+        __m256 sum_vec = _mm256_setzero_ps();
         for (; j + simdWidth <= static_cast<size_t>(mNumFeatures); j += simdWidth) {
             __m256 w = _mm256_loadu_ps(weights + j);
-            __m256 f = _mm256_loadu_ps(mFeatureBuffer.data() + j);
-            __m256 prod = _mm256_mul_ps(w, f);
-            
-            alignas(32) float temp[8];
-            _mm256_store_ps(temp, prod);
-            for (int k = 0; k < 8; ++k) {
-                val += temp[k];
-            }
+            __m256 f = _mm256_loadu_ps(featureBuffer + j);
+            sum_vec = _mm256_add_ps(sum_vec, _mm256_mul_ps(w, f));
         }
         
-        for (; j < static_cast<size_t>(mNumFeatures); ++j) {
-            val += weights[j] * mFeatureBuffer.data()[j];
-        }
+        alignas(32) float temp[8];
+        _mm256_store_ps(temp, sum_vec);
+        for (int k = 0; k < 8; ++k) val += temp[k];
+        
+        for (; j < static_cast<size_t>(mNumFeatures); ++j) val += weights[j] * featureBuffer[j];
         
         output[i] = val;
     }
 }
 
-void RFFLayer::ForwardBatch(const float* input, float* output, int batchSize)
+void RFFLayer::ForwardBatch(const float* input, float* output, int batchSize, float* featureBuffer)
 {
-    // Use Eigen-optimized batch implementation
-    ForwardBatchEigen(input, output, batchSize);
+    ForwardBatchEigen(input, output, batchSize, featureBuffer);
 }
 
-void RFFLayer::ForwardBatchEigen(const float* input, float* output, int batchSize)
+void RFFLayer::ForwardBatchEigen(const float* input, float* output, int batchSize, float* featureBuffer)
 {
-    // Use Eigen for batched matrix multiplication
-    // features = cos(input * W_fixed^T + b_fixed)
-    // output = features * W_train^T + bias
+    typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrixXf;
     
-    Eigen::Map<const Eigen::MatrixXf> inputMap(input, batchSize, mInputDim);
+    Eigen::Map<const RowMajorMatrixXf> inputMap(input, batchSize, mInputDim);
     Eigen::Map<const Eigen::MatrixXf> W_fixedMap(mFixedWeights.data(), mNumFeatures, mInputDim);
     Eigen::Map<const Eigen::VectorXf> b_fixedMap(mFixedBiases.data(), mNumFeatures);
     
-    // Compute features: (batchSize x numFeatures)
     Eigen::MatrixXf features = (inputMap * W_fixedMap.transpose()).rowwise() + b_fixedMap.transpose();
     features = features.array().cos();
     
-    // Compute output: (batchSize x outputDim)
+    if (featureBuffer) {
+        std::memcpy(featureBuffer, features.data(), batchSize * mNumFeatures * sizeof(float));
+    }
+    
     Eigen::Map<const Eigen::MatrixXf> W_trainMap(mTrainableWeights.data(), mOutputDim, mNumFeatures);
     Eigen::Map<const Eigen::VectorXf> biasMap(mTrainableBias.data(), mOutputDim);
     
-    Eigen::MatrixXf outputMap = (features * W_trainMap.transpose()).rowwise() + biasMap.transpose();
-    
-    // Copy back
+    RowMajorMatrixXf outputMap = (features * W_trainMap.transpose()).rowwise() + biasMap.transpose();
     std::memcpy(output, outputMap.data(), batchSize * mOutputDim * sizeof(float));
 }
 
-Eigen::MatrixXf RFFLayer::ForwardEigen(const Eigen::MatrixXf& input)
+Eigen::MatrixXf RFFLayer::ForwardEigen(const Eigen::MatrixXf& input) const
 {
-    // Map fixed weights to Eigen
+    int batchSize = static_cast<int>(input.rows());
     Eigen::Map<const Eigen::MatrixXf> W_fixedMap(mFixedWeights.data(), mNumFeatures, mInputDim);
     Eigen::Map<const Eigen::VectorXf> b_fixedMap(mFixedBiases.data(), mNumFeatures);
     
-    // Compute features: cos(input * W_fixed^T + b_fixed)
     Eigen::MatrixXf features = (input * W_fixedMap.transpose()).rowwise() + b_fixedMap.transpose();
     features = features.array().cos();
     
-    // Map trainable weights to Eigen
     Eigen::Map<const Eigen::MatrixXf> W_trainMap(mTrainableWeights.data(), mOutputDim, mNumFeatures);
     Eigen::Map<const Eigen::VectorXf> biasMap(mTrainableBias.data(), mOutputDim);
     
-    // Compute output: features * W_train^T + bias
-    Eigen::MatrixXf output = (features * W_trainMap.transpose()).rowwise() + biasMap.transpose();
-    
-    return output;
+    return (features * W_trainMap.transpose()).rowwise() + biasMap.transpose();
 }
 
 void RFFLayer::Backward(const float* input, const float* output_grad, float* input_grad,
-                        float* weights_grad, float* bias_grad)
+                        float* weights_grad, float* bias_grad,
+                        const float* featureBuffer, const float* sinFeatureBuffer, float* featureGradBuffer)
 {
-    // Recompute features (needed for gradient computation)
-    ComputeFeatures(input, mFeatureBuffer.data());
-    
-    // Gradient w.r.t. trainable weights: dL/dW_train = output_grad^T * features
-    // For each output dim i and feature j: dL/dW[i,j] = output_grad[i] * features[j]
-    for (size_t i = 0; i < mOutputDim; ++i) {
-        float grad = output_grad[i];
-        float* w_grad = weights_grad + i * mNumFeatures;
-        for (int j = 0; j < mNumFeatures; ++j) {
-            w_grad[j] += grad * mFeatureBuffer.data()[j];
+    // SAFETY: weights_grad can be nullptr when backpropagating through critic to actor
+    if (weights_grad) {
+        for (size_t i = 0; i < mOutputDim; ++i) {
+            float grad = output_grad[i];
+            float* w_grad = weights_grad + i * mNumFeatures;
+            for (int j = 0; j < mNumFeatures; ++j) {
+                w_grad[j] += grad * featureBuffer[j];
+            }
         }
     }
     
-    // Gradient w.r.t. trainable bias: dL/dbias = output_grad
-    for (size_t i = 0; i < mOutputDim; ++i) {
-        bias_grad[i] += output_grad[i];
+    if (bias_grad) {
+        for (size_t i = 0; i < mOutputDim; ++i) {
+            bias_grad[i] += output_grad[i];
+        }
     }
     
-    // Gradient w.r.t. input (if needed)
-    // dL/dx = sum_i(output_grad[i] * sum_j(W_train[i,j] * d(features[j])/dx))
-    // d(features[j])/dx = -sin(W_fixed[j] * x + b_fixed[j]) * W_fixed[j]
     if (input_grad != nullptr) {
-        // Compute feature gradients: dL/d(features[j]) = sum_i(output_grad[i] * W_train[i,j])
-        std::fill(mFeatureGradBuffer.begin(), mFeatureGradBuffer.end(), 0.0f);
+        std::fill(featureGradBuffer, featureGradBuffer + mNumFeatures, 0.0f);
         for (int j = 0; j < mNumFeatures; ++j) {
             for (size_t i = 0; i < mOutputDim; ++i) {
-                mFeatureGradBuffer.data()[j] += output_grad[i] * mTrainableWeights.data()[i * mNumFeatures + j];
+                featureGradBuffer[j] += output_grad[i] * mTrainableWeights.data()[i * mNumFeatures + j];
             }
         }
         
-        // Compute input gradient
         std::fill(input_grad, input_grad + mInputDim, 0.0f);
         for (int j = 0; j < mNumFeatures; ++j) {
-            // d(features[j])/dx = -sin(dot_j) * W_fixed[j]
-            float sinVal = std::sin(mFeatureBuffer.data()[j]);  // sin(W_fixed[j] * x + b_fixed[j])
+            float sinVal = sinFeatureBuffer[j];
             const float* w_fixed = mFixedWeights.data() + j * mInputDim;
-            float featureGrad = mFeatureGradBuffer.data()[j];
-            
+            float featureGrad = featureGradBuffer[j];
             for (size_t k = 0; k < mInputDim; ++k) {
                 input_grad[k] -= featureGrad * sinVal * w_fixed[k];
             }

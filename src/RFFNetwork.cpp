@@ -12,39 +12,49 @@
 #include "AlignedAllocator.h"
 #include "src/EigenUtils.h"
 
-void RFFNetwork::Init(const std::vector<RFFLayerConfig>& layerConfigs, std::mt19937& rng)
+void RFFNetwork::Init(const std::vector<RFFLayerConfig>& configs, std::mt19937& rng)
 {
-    mLayers.resize(layerConfigs.size());
-    mLayerInputDims.resize(layerConfigs.size());
-    mLayerOutputDims.resize(layerConfigs.size());
+    mLayers.clear();
+    mLayerInputDims.clear();
+    mLayerOutputDims.clear();
     
-    size_t maxDim = 0;
-    for (size_t i = 0; i < layerConfigs.size(); ++i) {
-        mLayerInputDims[i] = layerConfigs[i].inputDim;
-        mLayerOutputDims[i] = layerConfigs[i].outputDim;
-        mLayers[i].Init(layerConfigs[i].inputDim, layerConfigs[i].outputDim, 
-                        layerConfigs[i].rffConfig, rng);
-        maxDim = std::max(maxDim, std::max(layerConfigs[i].inputDim, layerConfigs[i].outputDim));
+    mInputDim = configs[0].inputDim;
+    mOutputDim = configs.back().outputDim;
+    
+    for (const auto& cfg : configs) {
+        RFFLayer layer;
+        layer.Init(cfg.inputDim, cfg.outputDim, cfg.rffConfig, rng);
+        mLayers.push_back(std::move(layer));
+        
+        mLayerInputDims.push_back(cfg.inputDim);
+        mLayerOutputDims.push_back(cfg.outputDim);
     }
     
-    if (!layerConfigs.empty()) {
-        mInputDim = layerConfigs.front().inputDim;
-        mOutputDim = layerConfigs.back().outputDim;
-    }
-    
-    mActivationBuffer.resize(maxDim * 2);
+    fprintf(stderr, "[RFFNetwork::Init] Complete. %zu layers.\n", mLayers.size());
+    fflush(stderr);
 }
 
 void RFFNetwork::Forward(const float* input, float* output)
 {
     if (mLayers.empty()) return;
     
-    const float* curIn = input;
-    float* curOut = mActivationBuffer.data();
-    float* nextOut = mActivationBuffer.data() + mActivationBuffer.size() / 2;
+    // Determine maximum activation dimension for local ping-pong buffers
+    size_t maxDim = mInputDim;
+    for (size_t d : mLayerOutputDims) if (d > maxDim) maxDim = d;
     
+    // Allocate local buffers to ensure thread safety (no shared member buffers)
+    AlignedVector32<float> buffer1(maxDim);
+    AlignedVector32<float> buffer2(maxDim);
+    
+    const float* curIn = input;
+    float* curOut = buffer1.data();
+    float* nextOut = buffer2.data();
+    
+    AlignedVector32<float> layerFeatureBuffer;
+
     for (size_t i = 0; i < mLayers.size(); ++i) {
-        mLayers[i].Forward(curIn, curOut);
+        layerFeatureBuffer.resize(mLayers[i].GetNumFeatures());
+        mLayers[i].Forward(curIn, curOut, layerFeatureBuffer.data());
         
         // Apply MoLU activation between layers (not on final layer)
         if (i < mLayers.size() - 1) {
@@ -52,17 +62,18 @@ void RFFNetwork::Forward(const float* input, float* output)
         }
         
         curIn = curOut;
-        curOut = (curOut == mActivationBuffer.data()) ? nextOut : mActivationBuffer.data();
+        // Swap pointers for ping-pong
+        float* tmp = curOut;
+        curOut = nextOut;
+        nextOut = tmp;
     }
     
+    // Final result is in the buffer pointed to by curIn
     std::memcpy(output, curIn, mOutputDim * sizeof(float));
 }
 
 void RFFNetwork::ForwardBatch(const float* input, float* output, int batchSize)
 {
-    if (mLayers.empty()) return;
-    
-    // Use Eigen-optimized implementation
     ForwardBatchEigen(input, output, batchSize);
 }
 
@@ -70,25 +81,24 @@ void RFFNetwork::ForwardBatchEigen(const float* input, float* output, int batchS
 {
     if (mLayers.empty()) return;
 
-    // Map input: [batch_size × input_dim]
-    Eigen::Map<const Eigen::MatrixXf> inputMap(input, batchSize, mInputDim);
+    typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrixXf;
+    Eigen::Map<const RowMajorMatrixXf> inputMap(input, batchSize, mInputDim);
     
-    // Process through layers
     Eigen::MatrixXf current = inputMap;
     
     for (size_t i = 0; i < mLayers.size(); ++i) {
         current = mLayers[i].ForwardEigen(current);
         
-        // Apply MoLU activation between layers (not on final layer)
         if (i < mLayers.size() - 1) {
             current = current.unaryExpr([](float x) {
-                return 0.5f * x * (1.0f + std::tanh(x));
+                float xc = std::clamp(x, -10.0f, 10.0f);
+                return 0.5f * x * (1.0f + std::tanh(xc));
             });
         }
     }
     
-    // Copy output
-    std::memcpy(output, current.data(), batchSize * mOutputDim * sizeof(float));
+    RowMajorMatrixXf outputMap = current;
+    std::memcpy(output, outputMap.data(), batchSize * mOutputDim * sizeof(float));
 }
 
 void RFFNetwork::ForwardWithLatent(const float* input, float* output, 
@@ -96,9 +106,9 @@ void RFFNetwork::ForwardWithLatent(const float* input, float* output,
 {
     float* zPos = latent.GetPosition(envIdx);
     
-    AlignedVector32<float> combined(mInputDim + latent.latentDim);
+    AlignedVector32<float> combined(mInputDim + latent.mLatentDim);
     std::copy(input, input + mInputDim, combined.begin());
-    std::copy(zPos, zPos + latent.latentDim, combined.begin() + mInputDim);
+    std::copy(zPos, zPos + latent.mLatentDim, combined.begin() + mInputDim);
     
     Forward(combined.data(), output);
 }
@@ -114,21 +124,15 @@ void RFFNetwork::ForwardWithCache(const float* input, float* output, SpanCache& 
     const float* curIn = input;
     
     for (size_t i = 0; i < mLayers.size(); ++i) {
-        // Store input
         cache.layerInputs[i].resize(mLayerInputDims[i]);
         std::memcpy(cache.layerInputs[i].data(), curIn, mLayerInputDims[i] * sizeof(float));
         
-        // Forward through RFF layer
         auto& layer = mLayers[i];
+        cache.layerFeatures[i].resize(layer.GetNumFeatures());
         
-        // Compute and store RFF features
-        layer.ComputeFeatures(curIn, cache.layerFeatures[i].data());
-        
-        // Compute output
         cache.layerOutputs[i].resize(mLayerOutputDims[i]);
-        layer.Forward(curIn, cache.layerOutputs[i].data());
+        layer.Forward(curIn, cache.layerOutputs[i].data(), cache.layerFeatures[i].data());
         
-        // Apply MoLU activation between layers (not on final layer)
         if (i < mLayers.size() - 1) {
             ForwardMoLU_AVX2(cache.layerOutputs[i].data(), mLayerOutputDims[i]);
         }
@@ -139,76 +143,72 @@ void RFFNetwork::ForwardWithCache(const float* input, float* output, SpanCache& 
     std::memcpy(output, curIn, mOutputDim * sizeof(float));
 }
 
-void RFFNetwork::ForwardWithCache(const float* input, float* output)
-{
-    static thread_local SpanCache internalCache;
-    ForwardWithCache(input, output, internalCache);
-}
-
 void RFFNetwork::Backward(const float* input, const float* output_grad, float* input_grad,
                           float* weights_grad, SpanCache& cache)
 {
     if (mLayers.empty()) return;
     
+    cache.layerSinFeatures.resize(mLayers.size());
+    cache.layerFeatureGrads.resize(mLayers.size());
+
     // Backpropagate through layers in reverse order
-    AlignedVector32<float> currentGrad(mOutputDim);
-    std::memcpy(currentGrad.data(), output_grad, mOutputDim * sizeof(float));
+    AlignedVector32<float> currentGrad(mLayerOutputDims.back());
+    std::memcpy(currentGrad.data(), output_grad, mLayerOutputDims.back() * sizeof(float));
     
-    size_t gradOffset = 0;
-    
+    // Find maximum dimension among all layers for temporary gradient buffer
+    size_t maxDim = mInputDim;
+    for (size_t d : mLayerInputDims) if (d > maxDim) maxDim = d;
+    for (size_t d : mLayerOutputDims) if (d > maxDim) maxDim = d;
+    AlignedVector32<float> tempGradBuffer(maxDim);
+
+    // Calculate initial parameter offset
+    size_t totalParams = 0;
+    for (const auto& layer : mLayers) totalParams += layer.GetNumParams();
+    size_t currentOffset = totalParams;
+
     for (int i = static_cast<int>(mLayers.size()) - 1; i >= 0; --i) {
         auto& layer = mLayers[i];
+        currentOffset -= layer.GetNumParams();
         
-        // Get cached values
-        const float* layerInput = cache.layerInputs[i].data();
-        (void)layerInput;  // Used by layer.Backward
+        const float* layerInput = (i == 0) ? input : cache.layerOutputs[i-1].data();
+        float* layerInputGrad = (i == 0) ? input_grad : tempGradBuffer.data();
+
+        cache.layerSinFeatures[i].resize(layer.GetNumFeatures());
+        cache.layerFeatureGrads[i].resize(layer.GetNumFeatures());
         
-        AlignedVector32<float> nextGrad(mLayerInputDims[i]);
+        float* layerWeightsGrad = weights_grad ? (weights_grad + currentOffset) : nullptr;
+        float* layerBiasGrad = weights_grad ? (layerWeightsGrad + layer.GetTrainableWeights().size()) : nullptr;
+
+        layer.Backward(layerInput, currentGrad.data(), layerInputGrad,
+                       layerWeightsGrad, 
+                       layerBiasGrad,
+                       cache.layerFeatures[i].data(), 
+                       cache.layerSinFeatures[i].data(), 
+                       cache.layerFeatureGrads[i].data());
         
-        // Compute gradients for this layer
-        float* layerWeightsGrad = weights_grad ? (weights_grad + gradOffset) : nullptr;
-        float* layerBiasGrad = weights_grad ? (weights_grad + gradOffset + layer.GetTrainableWeights().size()) : nullptr;
-        
-        // Backward through RFF layer
-        layer.Backward(layerInput, currentGrad.data(), nextGrad.data(), layerWeightsGrad, layerBiasGrad);
-        
-        // Apply MoLU backward gradient if not first layer
         if (i > 0) {
-            for (size_t j = 0; j < mLayerOutputDims[i-1]; ++j) {
-                float x = cache.layerOutputs[i-1][j];
-                float th = tanhf(std::clamp(x, -10.0f, 10.0f));
-                nextGrad[j] *= (0.5f * (1.0f + th) + 0.5f * x * (1.0f - th * th));
-            }
+            BackwardMoLU_AVX2(cache.layerOutputs[i-1].data(), layerInputGrad, mLayerInputDims[i]);
+            currentGrad.resize(mLayerInputDims[i]);
+            std::memcpy(currentGrad.data(), layerInputGrad, mLayerInputDims[i] * sizeof(float));
         }
-        
-        currentGrad = nextGrad;
-        
-        // Update gradient offset for next layer
-        gradOffset += layer.GetNumParams();
-    }
-    
-    if (input_grad) {
-        std::memcpy(input_grad, currentGrad.data(), mInputDim * sizeof(float));
     }
 }
 
 void RFFNetwork::Backward(const float* input, const float* output_grad, float* input_grad, bool accumulate_grads)
 {
-    static thread_local SpanCache internalCache;
+    // Use local cache to ensure complete thread safety
+    SpanCache cache;
     
-    // Create a temporary output buffer for the forward pass
     AlignedVector32<float> tempOutput(mOutputDim);
-    ForwardWithCache(input, tempOutput.data(), internalCache);
+    ForwardWithCache(input, tempOutput.data(), cache);
     
     if (!accumulate_grads) ZeroGradients();
     
-    // Collect all gradients into a single buffer
     size_t totalParams = GetNumWeights();
     AlignedVector32<float> allGrads(totalParams, 0.0f);
     
-    Backward(input, output_grad, input_grad, allGrads.data(), internalCache);
+    Backward(input, output_grad, input_grad, allGrads.data(), cache);
     
-    // Distribute gradients to layers
     size_t gradOffset = 0;
     for (size_t i = 0; i < mLayers.size(); ++i) {
         auto& layer = mLayers[i];
@@ -226,6 +226,7 @@ void RFFNetwork::Backward(const float* input, const float* output_grad, float* i
 std::vector<float> RFFNetwork::GetAllWeights() const
 {
     std::vector<float> w;
+    w.reserve(GetNumWeights());
     for (const auto& layer : mLayers) {
         const auto& weights = layer.GetTrainableWeights();
         const auto& bias = layer.GetTrainableBias();
@@ -242,6 +243,8 @@ void RFFNetwork::SetAllWeights(const std::vector<float>& weights)
         auto& w = layer.GetTrainableWeights();
         auto& b = layer.GetTrainableBias();
         
+        if (offset + w.size() + b.size() > weights.size()) break;
+        
         std::copy(weights.begin() + offset, weights.begin() + offset + w.size(), w.begin());
         offset += w.size();
         
@@ -253,20 +256,19 @@ void RFFNetwork::SetAllWeights(const std::vector<float>& weights)
 size_t RFFNetwork::GetNumWeights() const
 {
     size_t total = 0;
-    for (const auto& layer : mLayers) {
-        total += layer.GetNumParams();
-    }
+    for (const auto& layer : mLayers) total += layer.GetNumParams();
     return total;
 }
 
 std::vector<float> RFFNetwork::GetAllGradients() const
 {
     std::vector<float> g;
+    g.reserve(GetNumWeights());
     for (const auto& layer : mLayers) {
-        const auto& wGrad = layer.GetWeightsGradient();
-        const auto& bGrad = layer.GetBiasGradient();
-        g.insert(g.end(), wGrad.begin(), wGrad.end());
-        g.insert(g.end(), bGrad.begin(), bGrad.end());
+        const auto& weightsGrad = layer.GetWeightsGradient();
+        const auto& biasGrad = layer.GetBiasGradient();
+        g.insert(g.end(), weightsGrad.begin(), weightsGrad.end());
+        g.insert(g.end(), biasGrad.begin(), biasGrad.end());
     }
     return g;
 }
@@ -275,96 +277,56 @@ void RFFNetwork::SetAllGradients(const std::vector<float>& grads)
 {
     size_t offset = 0;
     for (auto& layer : mLayers) {
-        auto& wGrad = layer.GetWeightsGradient();
-        auto& bGrad = layer.GetBiasGradient();
+        auto& wg = layer.GetWeightsGradient();
+        auto& bg = layer.GetBiasGradient();
         
-        std::copy(grads.begin() + offset, grads.begin() + offset + wGrad.size(), wGrad.begin());
-        offset += wGrad.size();
+        if (offset + wg.size() + bg.size() > grads.size()) break;
         
-        std::copy(grads.begin() + offset, grads.begin() + offset + bGrad.size(), bGrad.begin());
-        offset += bGrad.size();
+        std::copy(grads.begin() + offset, grads.begin() + offset + wg.size(), wg.begin());
+        offset += wg.size();
+        
+        std::copy(grads.begin() + offset, grads.begin() + offset + bg.size(), bg.begin());
+        offset += bg.size();
     }
 }
 
 void RFFNetwork::ZeroGradients()
 {
-    for (auto& layer : mLayers) {
-        layer.ZeroGradients();
-    }
+    for (auto& layer : mLayers) layer.ZeroGradients();
 }
 
 void RFFNetwork::ScaleGradients(float scale)
 {
-    for (auto& layer : mLayers) {
-        layer.ScaleGradients(scale);
-    }
-}
-
-void RFFNetwork::ComputeGradients(const float* input, const float* output, 
-                                   const float* target, int batchSize, int sampleRate)
-{
-    ZeroGradients();
-    
-    const float eps = 1e-4f;
-    auto weights = GetAllWeights();
-    auto grads = GetAllGradients();
-    
-    AlignedVector32<float> perturbed(batchSize * GetOutputDim());
-    
-    for (size_t i = 0; i < weights.size(); i += sampleRate) {
-        float oldW = weights[i];
-        weights[i] += eps;
-        SetAllWeights(weights);
-        
-        ForwardBatch(input, perturbed.data(), batchSize);
-        
-        float lossGrad = 0.0f;
-        for (int b = 0; b < batchSize; ++b) {
-            for (size_t d = 0; d < GetOutputDim(); ++d) {
-                float diff = (perturbed[b * GetOutputDim() + d] - output[b * GetOutputDim() + d]) / eps;
-                lossGrad += 2.0f * diff * (output[b * GetOutputDim() + d] - target[b * GetOutputDim() + d]);
-            }
-        }
-        
-        grads[i] = (lossGrad / (batchSize * GetOutputDim())) * static_cast<float>(sampleRate);
-        weights[i] = oldW;
-    }
-    
-    SetAllWeights(weights);
-    SetAllGradients(grads);
+    for (auto& layer : mLayers) layer.ScaleGradients(scale);
 }
 
 void RFFNetwork::SoftUpdate(const RFFNetwork& other, float tau)
 {
+    if (mLayers.size() != other.mLayers.size()) return;
+    
     for (size_t i = 0; i < mLayers.size(); ++i) {
-        auto& w = mLayers[i].GetTrainableWeights();
-        auto& b = mLayers[i].GetTrainableBias();
-        const auto& ow = other.mLayers[i].GetTrainableWeights();
-        const auto& ob = other.mLayers[i].GetTrainableBias();
+        auto& targetWeights = mLayers[i].GetTrainableWeights();
+        auto& targetBias = mLayers[i].GetTrainableBias();
+        const auto& sourceWeights = other.mLayers[i].GetTrainableWeights();
+        const auto& sourceBias = other.mLayers[i].GetTrainableBias();
         
-        for (size_t j = 0; j < w.size(); ++j) {
-            w[j] = (1.0f - tau) * w[j] + tau * ow[j];
+        for (size_t j = 0; j < targetWeights.size(); ++j) {
+            targetWeights[j] = (1.0f - tau) * targetWeights[j] + tau * sourceWeights[j];
         }
-        for (size_t j = 0; j < b.size(); ++j) {
-            b[j] = (1.0f - tau) * b[j] + tau * ob[j];
+        for (size_t j = 0; j < targetBias.size(); ++j) {
+            targetBias[j] = (1.0f - tau) * targetBias[j] + tau * sourceBias[j];
         }
     }
 }
 
-void RFFActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim, 
-                          size_t latentDim, std::mt19937& rng)
+void RFFActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim,
+                          size_t latentDim, const RFFConfig& rffConfig, std::mt19937& rng)
 {
     mStateDim = stateDim;
     mActionDim = actionDim;
     mHiddenDim = hiddenDim;
     mLatentDim = latentDim;
-    
-    // Create RFF config
-    RFFConfig rffConfig;
-    rffConfig.num_features = 256;  // Reduced for speed
-    rffConfig.sigma = 1.0f;
-    rffConfig.seed = 42;
-    
+
     // Actor network: state + latent -> hidden -> hidden -> action
     std::vector<RFFLayerConfig> actorCfg = {
         {stateDim + latentDim, hiddenDim * 2, rffConfig},
@@ -373,7 +335,7 @@ void RFFActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim,
     };
     mActor.Init(actorCfg, rng);
     mActorTarget.Init(actorCfg, rng);
-    
+
     // Critic network: state + action + latent -> hidden -> hidden -> 4 (Q ensemble)
     std::vector<RFFLayerConfig> criticCfg = {
         {stateDim + actionDim + latentDim, hiddenDim * 2, rffConfig},
@@ -384,20 +346,18 @@ void RFFActorCritic::Init(size_t stateDim, size_t actionDim, size_t hiddenDim,
     mCritic2.Init(criticCfg, rng);
     mCritic1Target.Init(criticCfg, rng);
     mCritic2Target.Init(criticCfg, rng);
-    
-    // Initialize latent memory
-    mLatentMemory.Init(stateDim, latentDim, rng);
-    
-    // Allocate buffers
-    mStateActionBuffer.resize(stateDim + actionDim + latentDim);
+
+    // Initialize latent memory with the same RFF config for dynamics
+    mLatentMemory.Init(stateDim, latentDim, rffConfig, rng);
 }
 
 void RFFActorCritic::SelectAction(const float* state, float* action, float* logProb, 
                                    bool addNoise, int envIdx)
 {
-    mLatentMemory.StepLatentDynamics(state, 1);
+    std::vector<int> indices = {envIdx};
+    mLatentMemory.StepLatentDynamics(state, indices);
     
-    AlignedVector32<float> zPos(LATENT_DIM);
+    AlignedVector32<float> zPos(mLatentDim);
     mLatentMemory.GetLatentStates(zPos.data(), nullptr, envIdx);
     
     AlignedVector32<float> combined(mStateDim + mLatentDim);
@@ -409,7 +369,7 @@ void RFFActorCritic::SelectAction(const float* state, float* action, float* logP
     
     if (addNoise) {
         std::normal_distribution<float> dist(0.0f, 0.1f);
-        std::mt19937 localRng(0);
+        std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)));
         float noiseSum = 0.0f;
         for (size_t i = 0; i < mActionDim; ++i) {
             float n = dist(localRng);
@@ -422,46 +382,41 @@ void RFFActorCritic::SelectAction(const float* state, float* action, float* logP
     }
 }
 
-void RFFActorCritic::SelectActionBatchWithLatent(const float* states, float* actions, 
-                                                  int batchSize, const std::vector<int>& envIndices, 
+void RFFActorCritic::SelectActionBatchWithLatent(const float* states, float* actions,
+                                                  int batchSize, const std::vector<int>& envIndices,
                                                   bool addNoise)
 {
     auto start = std::chrono::high_resolution_clock::now();
-    
-    // Step latent dynamics
-    mLatentMemory.StepLatentDynamics(states, batchSize);
+
+    mLatentMemory.StepLatentDynamics(states, envIndices);
     auto latent_end = std::chrono::high_resolution_clock::now();
-    
-    // Prepare combined input
+
     size_t combDim = mStateDim + mLatentDim;
     AlignedVector32<float> combined(batchSize * combDim);
     auto alloc_end = std::chrono::high_resolution_clock::now();
-    
+
     #pragma omp parallel for num_threads(8) schedule(static)
     for (int b = 0; b < batchSize; ++b) {
         std::memcpy(combined.data() + b * combDim, states + b * mStateDim, mStateDim * sizeof(float));
-        std::memcpy(combined.data() + b * combDim + mStateDim, 
-                    mLatentMemory.GetMemory().GetPosition(envIndices[b]), 
+        std::memcpy(combined.data() + b * combDim + mStateDim,
+                    mLatentMemory.GetMemory().GetPosition(envIndices[b]),
                     mLatentDim * sizeof(float));
     }
     auto copy_end = std::chrono::high_resolution_clock::now();
-    
-    // Forward pass through actor
+
     mActor.ForwardBatch(combined.data(), actions, batchSize);
     auto forward_end = std::chrono::high_resolution_clock::now();
-    
-    // Apply MoLU activation
+
     ForwardMoLU_AVX2(actions, batchSize * mActionDim);
     auto molu_end = std::chrono::high_resolution_clock::now();
-    
-    // Add exploration noise
+
     if (addNoise) {
         #pragma omp parallel num_threads(8)
         {
             int tid = omp_get_thread_num();
             std::mt19937 localRng(static_cast<unsigned int>(std::time(nullptr)) + tid);
             std::normal_distribution<float> dist(0.0f, 0.1f);
-            
+
             #pragma omp for schedule(static)
             for (int b = 0; b < batchSize; ++b) {
                 float* action = actions + b * mActionDim;
@@ -472,19 +427,13 @@ void RFFActorCritic::SelectActionBatchWithLatent(const float* states, float* act
         }
     }
     auto noise_end = std::chrono::high_resolution_clock::now();
-    
-    // Log timing breakdown periodically
+
     static int logCounter = 0;
-    if (++logCounter % 10 == 0) {
-        printf("[TIMING] Batch=%d | Latent: %.2fms | Alloc: %.2fms | Copy: %.2fms | "
-               "Forward: %.2fms | MoLU: %.2fms | Noise: %.2fms | TOTAL: %.2fms\n",
+    if (++logCounter % 100 == 0) {
+        printf("[TIMING] Batch=%d | Latent: %.2fms | Forward: %.2fms | TOTAL: %.2fms\n",
             batchSize,
             std::chrono::duration<float, std::milli>(latent_end - start).count(),
-            std::chrono::duration<float, std::milli>(alloc_end - latent_end).count(),
-            std::chrono::duration<float, std::milli>(copy_end - alloc_end).count(),
             std::chrono::duration<float, std::milli>(forward_end - copy_end).count(),
-            std::chrono::duration<float, std::milli>(molu_end - forward_end).count(),
-            std::chrono::duration<float, std::milli>(noise_end - molu_end).count(),
             std::chrono::duration<float, std::milli>(noise_end - start).count());
     }
 }
@@ -494,90 +443,79 @@ void RFFActorCritic::SelectActionBatch(const float* states, float* actions, floa
 {
     std::vector<int> envIndices(batchSize, 0);
     SelectActionBatchWithLatent(states, actions, batchSize, envIndices, addNoise);
-    
-    if (logProbs) {
-        std::fill(logProbs, logProbs + batchSize, 0.0f);
-    }
 }
 
-void RFFActorCritic::ComputeQValues(const float* state, const float* action, float* qValues)
+void RFFActorCritic::ComputeQValue(const float* state, const float* action, float* qValue)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
+    float q[4];
+    ComputeQValues(state, action, q, 0);
+    *qValue = q[0];
+}
+
+void RFFActorCritic::ComputeQValues(const float* state, const float* action, float* qValues, int envIdx)
+{
+    AlignedVector32<float> zPos(mLatentDim);
+    mLatentMemory.GetLatentStates(zPos.data(), nullptr, envIdx);
     
+    AlignedVector32<float> combined(mStateDim + mActionDim + mLatentDim);
     size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
-    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
-    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
+    for (size_t i = 0; i < mStateDim; ++i) combined[idx++] = state[i];
+    for (size_t i = 0; i < mActionDim; ++i) combined[idx++] = action[i];
+    for (size_t i = 0; i < mLatentDim; ++i) combined[idx++] = zPos[i];
     
-    float q1[4], q2[4];
-    mCritic1.Forward(mStateActionBuffer.data(), q1);
-    mCritic2.Forward(mStateActionBuffer.data(), q2);
-    
-    for (int i = 0; i < 4; ++i) {
-        qValues[i] = std::min(q1[i], q2[i]);
-    }
+    mCritic1.Forward(combined.data(), qValues);
 }
 
 void RFFActorCritic::ComputeQValuesBatch(const float* states, const float* actions, 
-                                          float* qValues, int batchSize)
+                                          float* qValues, int batchSize,
+                                          const std::vector<int>* envIndices)
 {
     #pragma omp parallel num_threads(8)
     {
+        int tid = omp_get_thread_num();
         AlignedVector32<float> localStateActionBuffer(mStateDim + mActionDim + mLatentDim);
         AlignedVector32<float> localZPos(mLatentDim);
         float q1[4], q2[4];
         
         #pragma omp for schedule(static)
         for (int b = 0; b < batchSize; ++b) {
-            const float* state = states + b * mStateDim;
-            const float* action = actions + b * mActionDim;
-            float* qVal = qValues + b * 4;
-            
-            mLatentMemory.GetLatentStates(localZPos.data(), nullptr, 0);
+            int envIdx = envIndices ? (*envIndices)[b] : 0;
+            mLatentMemory.GetLatentStates(localZPos.data(), nullptr, envIdx);
             
             size_t idx = 0;
-            for (size_t i = 0; i < mStateDim; ++i) localStateActionBuffer[idx++] = state[i];
-            for (size_t i = 0; i < mActionDim; ++i) localStateActionBuffer[idx++] = action[i];
+            for (size_t i = 0; i < mStateDim; ++i) localStateActionBuffer[idx++] = states[b * mStateDim + i];
+            for (size_t i = 0; i < mActionDim; ++i) localStateActionBuffer[idx++] = actions[b * mActionDim + i];
             for (size_t i = 0; i < mLatentDim; ++i) localStateActionBuffer[idx++] = localZPos[i];
             
             mCritic1.Forward(localStateActionBuffer.data(), q1);
             mCritic2.Forward(localStateActionBuffer.data(), q2);
             
-            for (int i = 0; i < 4; ++i) {
-                qVal[i] = std::min(q1[i], q2[i]);
-            }
+            qValues[b * 2] = q1[0];
+            qValues[b * 2 + 1] = q2[0];
         }
     }
 }
 
-void RFFActorCritic::ComputeQ1(const float* state, const float* action, float* qValue)
+void RFFActorCritic::ComputeQ1(const float* state, const float* action, float* qValue, int envIdx)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
-    
-    size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
-    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
-    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
-    
     float q[4];
-    mCritic1.Forward(mStateActionBuffer.data(), q);
+    ComputeQValues(state, action, q, envIdx);
     *qValue = q[0];
 }
 
-void RFFActorCritic::ComputeQ2(const float* state, const float* action, float* qValue)
+void RFFActorCritic::ComputeQ2(const float* state, const float* action, float* qValue, int envIdx)
 {
-    AlignedVector32<float> zPos(LATENT_DIM);
-    mLatentMemory.GetLatentStates(zPos.data(), nullptr, 0);
+    AlignedVector32<float> zPos(mLatentDim);
+    mLatentMemory.GetLatentStates(zPos.data(), nullptr, envIdx);
     
+    AlignedVector32<float> combined(mStateDim + mActionDim + mLatentDim);
     size_t idx = 0;
-    for (size_t i = 0; i < mStateDim; ++i) mStateActionBuffer[idx++] = state[i];
-    for (size_t i = 0; i < mActionDim; ++i) mStateActionBuffer[idx++] = action[i];
-    for (size_t i = 0; i < mLatentDim; ++i) mStateActionBuffer[idx++] = zPos[i];
+    for (size_t i = 0; i < mStateDim; ++i) combined[idx++] = state[i];
+    for (size_t i = 0; i < mActionDim; ++i) combined[idx++] = action[i];
+    for (size_t i = 0; i < mLatentDim; ++i) combined[idx++] = zPos[i];
     
     float q[4];
-    mCritic2.Forward(mStateActionBuffer.data(), q);
+    mCritic2.Forward(combined.data(), q);
     *qValue = q[0];
 }
 

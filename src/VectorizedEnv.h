@@ -15,6 +15,7 @@ public:
     VectorizedEnv& operator=(const VectorizedEnv& other) = delete;
 
     void Init(const std::string& robotConfigPath, bool initRobots = true);
+    void SetDomainRandomization(const DomainRandomization& dr);
     void Shutdown();
     void Step(const AlignedVector32<float>& actions);
     void HarvestStates();

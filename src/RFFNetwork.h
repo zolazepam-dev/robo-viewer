@@ -20,7 +20,9 @@ struct RFFLayerConfig
 struct SpanCache {
     std::vector<AlignedVector32<float>> layerInputs;
     std::vector<AlignedVector32<float>> layerOutputs;
-    std::vector<AlignedVector32<float>> layerFeatures;  // RFF features for each layer
+    std::vector<AlignedVector32<float>> layerFeatures;  // RFF features (cos) for each layer
+    std::vector<AlignedVector32<float>> layerSinFeatures; // RFF features (sin) for each layer
+    std::vector<AlignedVector32<float>> layerFeatureGrads; // RFF feature gradients for each layer
 };
 
 /**
@@ -152,6 +154,13 @@ public:
     void ScaleGradients(float scale);
 
     /**
+     * Soft update parameters from another network
+     * @param other Source network
+     * @param tau Interpolation factor
+     */
+    void SoftUpdate(const RFFNetwork& other, float tau);
+
+    /**
      * Compute gradients via finite differences (for compatibility)
      * @param input Input batch
      * @param output Target output
@@ -179,21 +188,12 @@ public:
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
 
-    /**
-     * Soft update from another network (for target networks)
-     * @param other Source network
-     * @param tau Interpolation factor (0 = keep current, 1 = copy other)
-     */
-    void SoftUpdate(const RFFNetwork& other, float tau);
-
 private:
     AlignedVector32<RFFLayer> mLayers;
     std::vector<size_t> mLayerInputDims;
     std::vector<size_t> mLayerOutputDims;
     size_t mInputDim = 0;
     size_t mOutputDim = 0;
-
-    AlignedVector32<float> mActivationBuffer;
 };
 
 /**
@@ -215,9 +215,11 @@ public:
      * @param actionDim Dimension of action space
      * @param hiddenDim Hidden layer dimension
      * @param latentDim Latent memory dimension
+     * @param rffConfig RFF configuration
      * @param rng Random number generator
      */
-    void Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng);
+    void Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, 
+              const RFFConfig& rffConfig, std::mt19937& rng);
 
     /**
      * Select action for single state
@@ -251,12 +253,21 @@ public:
                                      const std::vector<int>& envIndices, bool addNoise = true);
 
     /**
+     * Compute Q-value for single state-action pair
+     * @param state Input state [stateDim]
+     * @param action Input action [actionDim]
+     * @param qValue Output Q-value (single float)
+     */
+    void ComputeQValue(const float* state, const float* action, float* qValue);
+
+    /**
      * Compute Q-values for state-action pairs
      * @param state Input state [stateDim]
      * @param action Input action [actionDim]
      * @param qValues Output Q-values [4]
+     * @param envIdx Environment index
      */
-    void ComputeQValues(const float* state, const float* action, float* qValues);
+    void ComputeQValues(const float* state, const float* action, float* qValues, int envIdx = 0);
 
     /**
      * Compute Q-values for batch of state-action pairs
@@ -264,24 +275,28 @@ public:
      * @param actions Input actions [batchSize * actionDim]
      * @param qValues Output Q-values [batchSize * 4]
      * @param batchSize Batch size
+     * @param envIndices Environment indices
      */
-    void ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize);
+    void ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize,
+                              const std::vector<int>* envIndices = nullptr);
 
     /**
      * Compute Q1 value only
      * @param state Input state [stateDim]
      * @param action Input action [actionDim]
      * @param qValue Output Q1 value
+     * @param envIdx Environment index
      */
-    void ComputeQ1(const float* state, const float* action, float* qValue);
+    void ComputeQ1(const float* state, const float* action, float* qValue, int envIdx = 0);
 
     /**
      * Compute Q2 value only
      * @param state Input state [stateDim]
      * @param action Input action [actionDim]
      * @param qValue Output Q2 value
+     * @param envIdx Environment index
      */
-    void ComputeQ2(const float* state, const float* action, float* qValue);
+    void ComputeQ2(const float* state, const float* action, float* qValue, int envIdx = 0);
 
     RFFNetwork& GetActor() { return mActor; }
     RFFNetwork& GetCritic1() { return mCritic1; }
@@ -324,8 +339,4 @@ private:
     size_t mActionDim = 0;
     size_t mHiddenDim = 0;
     size_t mLatentDim = 0;
-
-    AlignedVector32<float> mStateActionBuffer;
-    AlignedVector32<float> mLatentBuffer;
-    AlignedVector32<float> mNoiseBuffer;
 };

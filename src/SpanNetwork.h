@@ -9,210 +9,50 @@
 
 #include "NeuralMath.h"
 #include "LatentMemory.h"
+#include "RFFNetwork.h"
+#include "RFFLatentDynamics.h"
 #include "AlignedAllocator.h"
 
-struct SpanLayerConfig
-{
-    size_t inputDim;
-    size_t outputDim;
-    int numKnots = 8;
-    int splineDegree = 3;
-};
+// Re-export RFF types for backward compatibility
+using SpanLayerConfig = RFFLayerConfig;
+using RFFConfig = RFFConfig;
 
-class alignas(32) TensorProductBSpline
-{
-public:
-    TensorProductBSpline() = default;
-    TensorProductBSpline(const TensorProductBSpline& other) = default;
-    TensorProductBSpline& operator=(const TensorProductBSpline& other) = default;
+// Alias TensorProductBSpline to RFFLayer for compatibility (deprecated)
+using TensorProductBSpline = RFFLayer;
 
-    void Init(size_t inputDim, size_t outputDim, int numKnots, int splineDegree, std::mt19937& rng);
+// Alias SpanNetwork to RFFNetwork for compatibility
+using SpanNetwork = RFFNetwork;
 
-    void Forward(const float* input, float* output);
-    void ForwardBatch(const float* input, float* output, int batchSize);
-    void ForwardBatchEigen(const float* input, float* output, int batchSize);  // Eigen-optimized
-    void ForwardBatchAVX2(const float* input, float* output, int batchSize);   // AVX2-optimized
-    void ForwardAVX2(const float* input, float* output);
+// Re-export SpanCache from RFFNetwork
+using SpanCache = ::SpanCache;
 
-    // Backward pass for analytic gradients
-    // input: original input to forward pass (needed for recomputing basis)
-    // output_grad: gradient of loss w.r.t. output [outputDim]
-    // input_grad: gradient of loss w.r.t. input [inputDim] (can be nullptr)
-    // control_points_grad: gradient of loss w.r.t. control points [numParams] (accumulated)
-    void Backward(const float* input, const float* output_grad, float* input_grad, float* control_points_grad);
+// Alias SpanActorCritic to RFFActorCritic for compatibility
+using SpanActorCritic = RFFActorCritic;
 
-    AlignedVector32<float>& GetControlPoints() { return mControlPoints; }
-    const AlignedVector32<float>& GetControlPoints() const { return mControlPoints; }
-
-    AlignedVector32<float>& GetControlPointGradients() { return mControlPointGradients; }
-    const AlignedVector32<float>& GetControlPointGradients() const { return mControlPointGradients; }
-
-    size_t GetInputDim() const { return mInputDim; }
-    size_t GetOutputDim() const { return mOutputDim; }
-    int GetNumKnots() const { return mNumKnots; }
-    size_t GetNumParams() const { return mControlPoints.size(); }
-
-private:
-    void ComputeBasisFunctions(float x, float* basis, int& spanIdx);
-    void ComputeKnotVector();
-
-    size_t mInputDim = 0;
-    size_t mOutputDim = 0;
-    int mNumKnots = 8;
-    int mSplineDegree = 3;
-
-    // Basis function lookup table for optimization
-    static constexpr int BASIS_LOOKUP_SIZE = 1024;
-    AlignedVector32<float> mBasisLookupTable;  // [BASIS_LOOKUP_SIZE][degree+1]
-    bool mUseLookupTable = false;
-
-    AlignedVector32<float> mKnots;
-    AlignedVector32<float> mControlPoints;
-    AlignedVector32<float> mControlPointGradients;  // For backpropagation
-
-    AlignedVector32<float> mBasisFunctionsBuffer;
-    std::vector<int> mSpanIndicesBuffer;
-    AlignedVector32<float> mBasisBuffer;
-    AlignedVector32<float> mTempOutput;
-};
-
-struct SpanCache {
-    std::vector<AlignedVector32<float>> layerInputs;
-    std::vector<AlignedVector32<float>> layerOutputs;
-};
-
-class alignas(32) SpanNetwork
-{
-public:
-    SpanNetwork() = default;
-    SpanNetwork(const SpanNetwork& other) = default;
-    SpanNetwork& operator=(const SpanNetwork& other) = default;
-
-    void Init(const std::vector<SpanLayerConfig>& layerConfigs, std::mt19937& rng);
-
-    void Forward(const float* input, float* output);
-    void ForwardBatch(const float* input, float* output, int batchSize);
-    void ForwardWithLatent(const float* input, float* output, SecondOrderLatentMemory& latent, int envIdx);
-
-    // Forward pass with caching for backpropagation
-    void ForwardWithCache(const float* input, float* output, SpanCache& cache);
-    void ForwardWithCache(const float* input, float* output);
-    void ForwardBatchWithCache(const float* input, float* output, int batchSize, std::vector<SpanCache>& caches);
-
-    // Backward pass for analytic gradients
-    void Backward(const float* input, const float* output_grad, float* input_grad, float* cp_grad_base, SpanCache& cache);
-    void Backward(const float* input, const float* output_grad, float* input_grad = nullptr, bool accumulate_grads = true);
-
-    std::vector<float> GetAllWeights() const;
-    void SetAllWeights(const std::vector<float>& weights);
-    size_t GetNumWeights() const;
-
-    // Gradient computation for Muon optimizer
-    std::vector<float> GetAllGradients() const;
-    void SetAllGradients(const std::vector<float>& grads);
-    void ZeroGradients();
-    void ScaleGradients(float scale);  // Scale all gradients by a factor
-    void ComputeGradients(const float* input, const float* output, const float* target, int batchSize, int sampleRate = 16);
-
-    TensorProductBSpline& GetLayer(size_t idx) { return mLayers[idx]; }
-    const TensorProductBSpline& GetLayer(size_t idx) const { return mLayers[idx]; }
-    size_t GetNumLayers() const { return mLayers.size(); }
-
-    size_t GetInputDim() const { return mInputDim; }
-    size_t GetOutputDim() const { return mOutputDim; }
-
-    void SoftUpdate(const SpanNetwork& other, float tau);
-
-private:
-    AlignedVector32<TensorProductBSpline> mLayers;
-    std::vector<size_t> mLayerInputDims;
-    std::vector<size_t> mLayerOutputDims;
-    size_t mInputDim = 0;
-    size_t mOutputDim = 0;
-
-    AlignedVector32<float> mActivationBuffer;
-
-    // INTERNAL CACHE (kept for single-threaded compatibility)
-    SpanCache mInternalCache;
-};
-
-class alignas(32) SpanActorCritic
-{
-public:
-    SpanActorCritic() = default;
-    SpanActorCritic(const SpanActorCritic& other) = default;
-    SpanActorCritic& operator=(const SpanActorCritic& other) = default;
-    
-    void Init(size_t stateDim, size_t actionDim, size_t hiddenDim, size_t latentDim, std::mt19937& rng);
-    
-    void SelectAction(const float* state, float* action, float* logProb, bool addNoise = true, int envIdx = 0);
-    void SelectActionBatch(const float* states, float* actions, float* logProbs, int batchSize, bool addNoise = true);
-    void SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices, bool addNoise = true);
-    
-    void ComputeQValues(const float* state, const float* action, float* qValues);
-    void ComputeQValuesBatch(const float* states, const float* actions, float* qValues, int batchSize);
-    
-    void ComputeQ1(const float* state, const float* action, float* qValue);
-    void ComputeQ2(const float* state, const float* action, float* qValue);
-    
-    SpanNetwork& GetActor() { return mActor; }
-    SpanNetwork& GetCritic1() { return mCritic1; }
-    SpanNetwork& GetCritic2() { return mCritic2; }
-    SpanNetwork& GetActorTarget() { return mActorTarget; }
-    SpanNetwork& GetCritic1Target() { return mCritic1Target; }
-    SpanNetwork& GetCritic2Target() { return mCritic2Target; }
-    
-    const SpanNetwork& GetActor() const { return mActor; }
-    const SpanNetwork& GetCritic1() const { return mCritic1; }
-    const SpanNetwork& GetCritic2() const { return mCritic2; }
-    const SpanNetwork& GetActorTarget() const { return mActorTarget; }
-    const SpanNetwork& GetCritic1Target() const { return mCritic1Target; }
-    const SpanNetwork& GetCritic2Target() const { return mCritic2Target; }
-    
-    class LatentMemoryManager& GetLatentMemory() { return mLatentMemory; }
-    
-    void UpdateTargets(float tau);
-    
-    size_t GetStateDim() const { return mStateDim; }
-    size_t GetActionDim() const { return mActionDim; }
-    size_t GetLatentDim() const { return mLatentDim; }
-
-private:
-    SpanNetwork mActor;
-    SpanNetwork mCritic1;
-    SpanNetwork mCritic2;
-    SpanNetwork mActorTarget;
-    SpanNetwork mCritic1Target;
-    SpanNetwork mCritic2Target;
-    
-    class LatentMemoryManager mLatentMemory;
-    
-    size_t mStateDim = 0;
-    size_t mActionDim = 0;
-    size_t mHiddenDim = 0;
-    size_t mLatentDim = 0;
-    
-    AlignedVector32<float> mStateActionBuffer;
-    AlignedVector32<float> mLatentBuffer;
-    AlignedVector32<float> mNoiseBuffer;
-};
-
+// Re-export CriticBatchBuffer from original (kept for compatibility)
 struct alignas(32) CriticBatchBuffer
 {
-    static constexpr size_t BATCH_SIZE = 256;
-    static constexpr size_t HIDDEN_ALIGNED = CRITIC_HIDDEN_DIM_ALIGNED;
-    
-    alignas(32) float preActivation[BATCH_SIZE * HIDDEN_ALIGNED];
-    alignas(32) float postActivation[BATCH_SIZE * HIDDEN_ALIGNED];
-    alignas(32) float gradients[BATCH_SIZE * HIDDEN_ALIGNED];
-    
-    alignas(32) float weights[HIDDEN_ALIGNED * HIDDEN_ALIGNED];
-    alignas(32) float biases[HIDDEN_ALIGNED];
-    
+    AlignedVector32<float> preActivation;
+    AlignedVector32<float> postActivation;
+    AlignedVector32<float> gradients;
+
+    AlignedVector32<float> weights;
+    AlignedVector32<float> biases;
+
+    void Init(size_t hiddenDim, size_t batchSize)
+    {
+        size_t hiddenAligned = GetAVX2PaddedSize(hiddenDim);
+        preActivation.assign(batchSize * hiddenAligned, 0.0f);
+        postActivation.assign(batchSize * hiddenAligned, 0.0f);
+        gradients.assign(batchSize * hiddenAligned, 0.0f);
+        weights.assign(hiddenAligned * hiddenAligned, 0.0f);
+        biases.assign(hiddenAligned, 0.0f);
+    }
+
     void Clear()
     {
-        std::memset(preActivation, 0, sizeof(preActivation));
-        std::memset(postActivation, 0, sizeof(postActivation));
-        std::memset(gradients, 0, sizeof(gradients));
+        std::fill(preActivation.begin(), preActivation.end(), 0.0f);
+        std::fill(postActivation.begin(), postActivation.end(), 0.0f);
+        std::fill(gradients.begin(), gradients.end(), 0.0f);
     }
 };

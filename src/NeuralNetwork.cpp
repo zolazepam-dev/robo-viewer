@@ -132,7 +132,7 @@ void NeuralNetwork::InitODE2VAE(int latentDim, std::mt19937& rng)
 {
     mHasODE2VAE = true;
     mODE2VAE.Init(mLayerSizes.front(), latentDim, rng);
-    mLatentMemory.Init();
+    mLatentMemory.Init(latentDim, NUM_PARALLEL_ENVS);
 }
 
 void NeuralNetwork::Forward(const float* input, float* output) {
@@ -237,7 +237,7 @@ void NeuralNetwork::ForwardODE2VAE(const float* input, float* output,
     float* z_pos = memory.GetPosition(envIdx);
     float* z_vel = memory.GetVelocity(envIdx);
     
-    AlignedVector32f accel(LATENT_DIM);
+    AlignedVector32f accel(mODE2VAE.latentDim);
     mODE2VAE.ComputeAcceleration(z_pos, z_vel, input, accel.data());
     
     memory.StepDynamicsScalar(accel.data(), envIdx);
@@ -252,7 +252,7 @@ void NeuralNetwork::ForwardODE2VAEVectorized(const float* inputs, float* outputs
         return;
     }
 
-    AlignedVector32f accelerations(LATENT_DIM * NUM_PARALLEL_ENVS);
+    AlignedVector32f accelerations(mODE2VAE.latentDim * numEnvs);
 
     for (int env = 0; env < numEnvs; ++env)
     {
@@ -432,10 +432,11 @@ float KLPERBuffer::GetPriorityWeight(int idx) const
     return weight / maxWeight;
 }
 
-ReplayBuffer::ReplayBuffer(int capacity, int stateDim, int actionDim)
+ReplayBuffer::ReplayBuffer(int capacity, int stateDim, int actionDim, int latentDim)
     : mCapacity(capacity)
     , mStateDim(stateDim)
     , mActionDim(actionDim)
+    , mLatentDim(latentDim)
 {
     mStates.resize(capacity * stateDim);
     mActions.resize(capacity * actionDim);
@@ -443,10 +444,27 @@ ReplayBuffer::ReplayBuffer(int capacity, int stateDim, int actionDim)
     mNextStates.resize(capacity * stateDim);
     mDones.resize(capacity);
     mVectorRewards.resize(capacity);
+    mLatentPos.resize(capacity * latentDim);
+    mLatentVel.resize(capacity * latentDim);
 }
 
 void ReplayBuffer::Add(const float* state, const float* action, const VectorReward& reward,
                         const float* nextState, bool done)
+{
+    // Legacy Add without latent state - stores zeros
+    Add(state, action, reward, nextState, done, nullptr, nullptr);
+}
+
+void ReplayBuffer::Add(const float* state, const float* action, float reward,
+                        const float* nextState, bool done, const float* latentPos, const float* latentVel)
+{
+    VectorReward vr;
+    vr.damage_dealt = reward;
+    Add(state, action, vr, nextState, done, latentPos, latentVel);
+}
+
+void ReplayBuffer::Add(const float* state, const float* action, const VectorReward& reward,
+                        const float* nextState, bool done, const float* latentPos, const float* latentVel)
 {
     int idx = mIndex * mStateDim;
     std::copy(state, state + mStateDim, mStates.begin() + idx);
@@ -461,21 +479,25 @@ void ReplayBuffer::Add(const float* state, const float* action, const VectorRewa
     std::copy(nextState, nextState + mStateDim, mNextStates.begin() + idx);
     
     mDones[mIndex] = done ? 1.0f : 0.0f;
+
+    if (latentPos) {
+        std::copy(latentPos, latentPos + mLatentDim, mLatentPos.begin() + mIndex * mLatentDim);
+    } else {
+        std::fill(mLatentPos.begin() + mIndex * mLatentDim, mLatentPos.begin() + (mIndex + 1) * mLatentDim, 0.0f);
+    }
+    
+    if (latentVel) {
+        std::copy(latentVel, latentVel + mLatentDim, mLatentVel.begin() + mIndex * mLatentDim);
+    } else {
+        std::fill(mLatentVel.begin() + mIndex * mLatentDim, mLatentVel.begin() + (mIndex + 1) * mLatentDim, 0.0f);
+    }
     
     mIndex = (mIndex + 1) % mCapacity;
     mSize = std::min(mSize + 1, mCapacity);
 }
 
-void ReplayBuffer::Add(const float* state, const float* action, float reward,
-                        const float* nextState, bool done)
-{
-    VectorReward vr;
-    vr.damage_dealt = reward;
-    Add(state, action, vr, nextState, done);
-}
-
 void ReplayBuffer::Sample(int batchSize, float* states, float* actions, float* rewards,
-                           float* nextStates, float* dones, std::mt19937& rng) {
+                           float* nextStates, float* dones, float* latentPos, float* latentVel, std::mt19937& rng) {
     std::uniform_int_distribution<int> dist(0, mSize - 1);
     
     for (int i = 0; i < batchSize; ++i) {
@@ -496,12 +518,23 @@ void ReplayBuffer::Sample(int batchSize, float* states, float* actions, float* r
                   nextStates + i * mStateDim);
         
         dones[i] = mDones[idx];
+
+        if (latentPos) {
+            std::copy(mLatentPos.begin() + idx * mLatentDim,
+                      mLatentPos.begin() + (idx + 1) * mLatentDim,
+                      latentPos + i * mLatentDim);
+        }
+        if (latentVel) {
+            std::copy(mLatentVel.begin() + idx * mLatentDim,
+                      mLatentVel.begin() + (idx + 1) * mLatentDim,
+                      latentVel + i * mLatentDim);
+        }
     }
 }
 
 void ReplayBuffer::SampleVectorRewards(int batchSize, float* states, float* actions,
                                         VectorReward* rewards, float* nextStates, float* dones,
-                                        std::mt19937& rng)
+                                        float* latentPos, float* latentVel, std::mt19937& rng)
 {
     std::uniform_int_distribution<int> dist(0, mSize - 1);
     
@@ -523,5 +556,16 @@ void ReplayBuffer::SampleVectorRewards(int batchSize, float* states, float* acti
                   nextStates + i * mStateDim);
         
         dones[i] = mDones[idx];
+
+        if (latentPos) {
+            std::copy(mLatentPos.begin() + idx * mLatentDim,
+                      mLatentPos.begin() + (idx + 1) * mLatentDim,
+                      latentPos + i * mLatentDim);
+        }
+        if (latentVel) {
+            std::copy(mLatentVel.begin() + idx * mLatentDim,
+                      mLatentVel.begin() + (idx + 1) * mLatentDim,
+                      latentVel + i * mLatentDim);
+        }
     }
 }

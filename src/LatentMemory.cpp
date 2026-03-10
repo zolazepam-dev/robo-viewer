@@ -7,67 +7,58 @@
 
 void SecondOrderLatentMemory::StepDynamicsScalar(const float* accelerations, size_t envIdx)
 {
-    size_t offset = envIdx * LATENT_DIM_ALIGNED;
-    for (size_t i = 0; i < LATENT_DIM; ++i)
+    size_t offset = envIdx * mLatentDimAligned;
+    float* zPos = z_pos.data() + offset;
+    float* zVel = z_vel.data() + offset;
+
+    for (size_t i = 0; i < mLatentDim; ++i)
     {
-        z_vel[offset + i] += accelerations[i] * dt;
-        z_pos[offset + i] += z_vel[offset + i] * dt;
+        // Simple Euler integration (second order)
+        // v = v + a * dt
+        // p = p + v * dt
+        zVel[i] += accelerations[i] * dt;
+        zPos[i] += zVel[i] * dt;
     }
 }
 
 void SecondOrderLatentMemory::StepDynamicsVectorized(const float* accelerations)
 {
-    const size_t totalSize = LATENT_DIM_ALIGNED * NUM_PARALLEL_ENVS;
     const size_t simdWidth = 8;
-    const size_t simdEnd = totalSize - (totalSize % simdWidth);
-    const __m256 dtVec = _mm256_set1_ps(dt);
+    __m256 dtVec = _mm256_set1_ps(dt);
 
-    size_t i = 0;
-    for (; i < simdEnd; i += simdWidth)
+    for (size_t i = 0; i < z_pos.size(); i += simdWidth)
     {
-        __m256 vel = _mm256_loadu_ps(z_vel + i);
-        __m256 pos = _mm256_loadu_ps(z_pos + i);
-        __m256 accel = _mm256_loadu_ps(accelerations + i);
+        __m256 p = _mm256_load_ps(z_pos.data() + i);
+        __m256 v = _mm256_load_ps(z_vel.data() + i);
+        __m256 a = _mm256_load_ps(accelerations + i);
 
-        __m256 newVel = _mm256_fmadd_ps(accel, dtVec, vel);
-        __m256 newPos = _mm256_fmadd_ps(newVel, dtVec, pos);
+        // v = v + a * dt
+        v = _mm256_add_ps(v, _mm256_mul_ps(a, dtVec));
+        // p = p + v * dt
+        p = _mm256_add_ps(p, _mm256_mul_ps(v, dtVec));
 
-        _mm256_storeu_ps(z_vel + i, newVel);
-        _mm256_storeu_ps(z_pos + i, newPos);
-    }
-
-    for (; i < totalSize; ++i)
-    {
-        z_vel[i] += accelerations[i] * dt;
-        z_pos[i] += z_vel[i] * dt;
+        _mm256_store_ps(z_vel.data() + i, v);
+        _mm256_store_ps(z_pos.data() + i, p);
     }
 }
 
 void SecondOrderLatentMemory::StepDynamicsVectorizedBatch(const float* accelerations, int numEnvs)
 {
-    const size_t totalSize = LATENT_DIM_ALIGNED * static_cast<size_t>(numEnvs);
     const size_t simdWidth = 8;
-    const size_t simdEnd = totalSize - (totalSize % simdWidth);
-    const __m256 dtVec = _mm256_set1_ps(dt);
+    __m256 dtVec = _mm256_set1_ps(dt);
+    size_t totalElements = mLatentDimAligned * static_cast<size_t>(numEnvs);
 
-    size_t i = 0;
-    for (; i < simdEnd; i += simdWidth)
+    for (size_t i = 0; i < totalElements; i += simdWidth)
     {
-        __m256 vel = _mm256_loadu_ps(z_vel + i);
-        __m256 pos = _mm256_loadu_ps(z_pos + i);
-        __m256 accel = _mm256_loadu_ps(accelerations + i);
+        __m256 p = _mm256_load_ps(z_pos.data() + i);
+        __m256 v = _mm256_load_ps(z_vel.data() + i);
+        __m256 a = _mm256_load_ps(accelerations + i);
 
-        __m256 newVel = _mm256_fmadd_ps(accel, dtVec, vel);
-        __m256 newPos = _mm256_fmadd_ps(newVel, dtVec, pos);
+        v = _mm256_add_ps(v, _mm256_mul_ps(a, dtVec));
+        p = _mm256_add_ps(p, _mm256_mul_ps(v, dtVec));
 
-        _mm256_storeu_ps(z_vel + i, newVel);
-        _mm256_storeu_ps(z_pos + i, newPos);
-    }
-
-    for (; i < totalSize; ++i)
-    {
-        z_vel[i] += accelerations[i] * dt;
-        z_pos[i] += z_vel[i] * dt;
+        _mm256_store_ps(z_vel.data() + i, v);
+        _mm256_store_ps(z_pos.data() + i, p);
     }
 }
 
@@ -76,64 +67,35 @@ void ODE2VAEEncoder::Init(size_t obsDim, size_t latentDim, std::mt19937& rng)
     mObsDim = obsDim;
     mLatentDim = latentDim;
 
-    std::normal_distribution<float> dist(0.0f, 0.1f);
-
     mWeightsPos.resize(latentDim * obsDim);
     mWeightsVel.resize(latentDim * obsDim);
     mBiasPos.resize(latentDim);
     mBiasVel.resize(latentDim);
-    mTempBuffer.resize(latentDim * 2);
 
+    std::normal_distribution<float> dist(0.0f, 0.01f);
     for (auto& w : mWeightsPos) w = dist(rng);
     for (auto& w : mWeightsVel) w = dist(rng);
-    for (size_t i = 0; i < latentDim; ++i)
-    {
-        mBiasPos[i] = 0.0f;
-        mBiasVel[i] = 0.0f;
-    }
+    for (auto& b : mBiasPos) b = 0.0f;
+    for (auto& b : mBiasVel) b = 0.0f;
 }
 
 void ODE2VAEEncoder::Encode(const float* observation, float* z_pos_out, float* z_vel_out)
 {
-    const size_t simdWidth = 8;
-
     for (size_t i = 0; i < mLatentDim; ++i)
     {
-        float posVal = mBiasPos[i];
-        float velVal = mBiasVel[i];
+        float p = mBiasPos[i];
+        float v = mBiasVel[i];
+        const float* wp = mWeightsPos.data() + i * mObsDim;
+        const float* wv = mWeightsVel.data() + i * mObsDim;
 
-        const float* wPos = mWeightsPos.data() + i * mObsDim;
-        const float* wVel = mWeightsVel.data() + i * mObsDim;
-
-        size_t j = 0;
-        for (; j + simdWidth <= mObsDim; j += simdWidth)
+        for (size_t j = 0; j < mObsDim; ++j)
         {
-            __m256 obs = _mm256_loadu_ps(observation + j);
-            __m256 wp = _mm256_loadu_ps(wPos + j);
-            __m256 wv = _mm256_loadu_ps(wVel + j);
-
-            __m256 prodP = _mm256_mul_ps(obs, wp);
-            __m256 prodV = _mm256_mul_ps(obs, wv);
-
-            alignas(32) float tempP[8], tempV[8];
-            _mm256_store_ps(tempP, prodP);
-            _mm256_store_ps(tempV, prodV);
-
-            for (int k = 0; k < 8; ++k)
-            {
-                posVal += tempP[k];
-                velVal += tempV[k];
-            }
+            p += wp[j] * observation[j];
+            v += wv[j] * observation[j];
         }
 
-        for (; j < mObsDim; ++j)
-        {
-            posVal += wPos[j] * observation[j];
-            velVal += wVel[j] * observation[j];
-        }
-
-        z_pos_out[i] = tanhf(posVal);
-        z_vel_out[i] = tanhf(velVal);
+        z_pos_out[i] = p;
+        z_vel_out[i] = v;
     }
 }
 
@@ -141,9 +103,11 @@ void ODE2VAEEncoder::EncodeBatch(const float* observations, float* z_pos_out, fl
 {
     for (int b = 0; b < batchSize; ++b)
     {
-        Encode(observations + static_cast<size_t>(b) * mObsDim,
-               z_pos_out + static_cast<size_t>(b) * mLatentDim,
-               z_vel_out + static_cast<size_t>(b) * mLatentDim);
+        Encode(
+            observations + static_cast<size_t>(b) * mObsDim,
+            z_pos_out + static_cast<size_t>(b) * mLatentDim,
+            z_vel_out + static_cast<size_t>(b) * mLatentDim
+        );
     }
 }
 
@@ -153,22 +117,17 @@ void ODE2VAEDynamics::Init(size_t latentDim, size_t obsDim, std::mt19937& rng)
     mObsDim = obsDim;
 
     size_t inputDim = latentDim * 2 + obsDim;
-
-    std::normal_distribution<float> dist(0.0f, 0.1f);
-
     mWeights.resize(latentDim * inputDim);
     mBias.resize(latentDim);
-    mCombinedInput.resize(inputDim);
 
+    std::normal_distribution<float> dist(0.0f, 0.01f);
     for (auto& w : mWeights) w = dist(rng);
-    for (size_t i = 0; i < latentDim; ++i)
-    {
-        mBias[i] = 0.0f;
-    }
+    for (auto& b : mBias) b = 0.0f;
+
+    mCombinedInput.resize(inputDim);
 }
 
-void ODE2VAEDynamics::ComputeAcceleration(const float* z_pos, const float* z_vel,
-                                           const float* obs, float* accel_out)
+void ODE2VAEDynamics::ComputeAcceleration(const float* z_pos, const float* z_vel, const float* obs, float* accel_out)
 {
     size_t inputIdx = 0;
     for (size_t i = 0; i < mLatentDim; ++i)
@@ -203,8 +162,7 @@ void ODE2VAEDynamics::ComputeAcceleration(const float* z_pos, const float* z_vel
 void ODE2VAEDynamics::ComputeAccelerationBatch(const float* z_pos, const float* z_vel, const float* obs,
                                                 float* accel_out, int batchSize)
 {
-    for (int b = 0; b < batchSize; ++b)
-    {
+    for (int b = 0; b < batchSize; ++b) {
         ComputeAcceleration(
             z_pos + static_cast<size_t>(b) * mLatentDim,
             z_vel + static_cast<size_t>(b) * mLatentDim,
@@ -214,117 +172,29 @@ void ODE2VAEDynamics::ComputeAccelerationBatch(const float* z_pos, const float* 
     }
 }
 
-// RFFDynamicsWrapper implementation
-void RFFDynamicsWrapper::Init(size_t latentDim, size_t obsDim, std::mt19937& rng)
-{
-    mLatentDim = latentDim;
-    mObsDim = obsDim;
-    mInputDim = latentDim * 2 + obsDim;
-
-    // Initialize RFF layer directly
-    RFFConfig config;
-    config.num_features = 256;  // Reduced for speed
-    config.sigma = 1.0f;
-    config.seed = 42;
-
-    mRFFLayer.Init(mInputDim, latentDim, config, rng);
-    
-    // Allocate combined input buffer
-    mCombinedInput.resize(mInputDim);
-}
-
-void RFFDynamicsWrapper::ComputeAcceleration(const float* z_pos, const float* z_vel,
-                                              const float* obs, float* accel_out)
-{
-    // Combine inputs: [z_pos; z_vel; obs]
-    size_t inputIdx = 0;
-    
-    for (size_t i = 0; i < mLatentDim; ++i) {
-        mCombinedInput[inputIdx++] = z_pos[i];
-    }
-    for (size_t i = 0; i < mLatentDim; ++i) {
-        mCombinedInput[inputIdx++] = z_vel[i];
-    }
-    for (size_t i = 0; i < mObsDim; ++i) {
-        mCombinedInput[inputIdx++] = obs[i];
-    }
-
-    mRFFLayer.Forward(mCombinedInput.data(), accel_out);
-}
-
-void RFFDynamicsWrapper::ComputeAccelerationBatch(const float* z_pos, const float* z_vel,
-                                                   const float* obs, float* accel_out,
-                                                   int batchSize)
-{
-    // Allocate batch buffers (reuse if already allocated)
-    size_t batch_size = static_cast<size_t>(batchSize);
-    size_t combined_size = batch_size * mInputDim;
-    size_t output_size = batch_size * mLatentDim;
-    
-    if (mCombinedInputBatch.size() < combined_size) {
-        mCombinedInputBatch.resize(combined_size);
-    }
-    if (mAccelOutBatch.size() < output_size) {
-        mAccelOutBatch.resize(output_size);
-    }
-    
-    // Pack all environments into single batch matrix: [batch_size × input_dim]
-    for (size_t b = 0; b < batch_size; ++b) {
-        size_t src_pos = b * mLatentDim;
-        size_t src_vel = b * mLatentDim;
-        size_t src_obs = b * mObsDim;
-        size_t dst = b * mInputDim;
-        
-        // Copy z_pos
-        for (size_t i = 0; i < mLatentDim; ++i) {
-            mCombinedInputBatch[dst + i] = z_pos[src_pos + i];
-        }
-        // Copy z_vel
-        for (size_t i = 0; i < mLatentDim; ++i) {
-            mCombinedInputBatch[dst + mLatentDim + i] = z_vel[src_vel + i];
-        }
-        // Copy obs
-        for (size_t i = 0; i < mObsDim; ++i) {
-            mCombinedInputBatch[dst + mLatentDim * 2 + i] = obs[src_obs + i];
-        }
-    }
-    
-    // Single batch forward pass through RFF
-    mRFFLayer.ForwardBatch(mCombinedInputBatch.data(), mAccelOutBatch.data(), batchSize);
-    
-    // Copy results back
-    for (size_t b = 0; b < batch_size; ++b) {
-        for (size_t i = 0; i < mLatentDim; ++i) {
-            accel_out[b * mLatentDim + i] = mAccelOutBatch[b * mLatentDim + i];
-        }
-    }
-}
-
 // LatentMemoryManager implementation
-void LatentMemoryManager::Init(size_t obsDim, size_t latentDim, std::mt19937& rng)
+void LatentMemoryManager::Init(size_t obsDim, size_t latentDim, const RFFConfig& config, std::mt19937& rng)
 {
     mObsDim = obsDim;
     mLatentDim = latentDim;
 
-    mMemory.latentDim = latentDim;
-    mMemory.numEnvs = NUM_PARALLEL_ENVS;
-    mMemory.Init();
+    mMemory.Init(latentDim, NUM_PARALLEL_ROBOTS);
 
     mEncoder.Init(obsDim, latentDim, rng);
-    
-    // Initialize RFF dynamics (primary)
-    mDynamics.Init(latentDim, obsDim, rng);
-    
+
+    // Initialize RFF dynamics with provided config
+    mDynamics.Init(latentDim, obsDim, config, rng);
+
     // Initialize legacy dynamics (for compatibility, not used)
     mLegacyDynamics.Init(latentDim, obsDim, rng);
 
-    mAccelerationBuffer.resize(latentDim * NUM_PARALLEL_ENVS);
+    mAccelerationBuffer.resize(GetAVX2PaddedSize(latentDim) * NUM_PARALLEL_ROBOTS);
 }
 
 void LatentMemoryManager::EncodeObservations(const float* observations, int numEnvs)
 {
-    AlignedVector32<float> tempPos(LATENT_DIM);
-    AlignedVector32<float> tempVel(LATENT_DIM);
+    AlignedVector32<float> tempPos(mLatentDim);
+    AlignedVector32<float> tempVel(mLatentDim);
 
     for (int env = 0; env < numEnvs; ++env)
     {
@@ -342,18 +212,42 @@ void LatentMemoryManager::StepLatentDynamics(const float* observations, int numE
 {
     // Use RFF dynamics for acceleration computation
     mDynamics.ComputeAccelerationBatch(
-        mMemory.z_pos,
-        mMemory.z_vel,
+        mMemory.z_pos.data(),
+        mMemory.z_vel.data(),
         observations,
         mAccelerationBuffer.data(),
         numEnvs
     );
 
     // Apply tanh activation to accelerations
-    ForwardTanh_AVX2(mAccelerationBuffer.data(), mLatentDim * static_cast<size_t>(numEnvs));
+    ForwardTanh_AVX2(mAccelerationBuffer.data(), GetAVX2PaddedSize(mLatentDim) * static_cast<size_t>(numEnvs));
 
     // Step the latent dynamics
     mMemory.StepDynamicsVectorizedBatch(mAccelerationBuffer.data(), numEnvs);
+}
+
+void LatentMemoryManager::StepLatentDynamics(const float* observations, const std::vector<int>& envIndices)
+{
+    int numEnvs = static_cast<int>(envIndices.size());
+    
+    // Process each environment individually with its specific index
+    for (int i = 0; i < numEnvs; ++i) {
+        int envIdx = envIndices[i];
+        const float* obs = observations + static_cast<size_t>(i) * mObsDim;
+        
+        // Get pointers to this environment's latent state
+        float* zPos = mMemory.GetPosition(static_cast<size_t>(envIdx));
+        float* zVel = mMemory.GetVelocity(static_cast<size_t>(envIdx));
+        
+        // Compute acceleration for this environment
+        mDynamics.ComputeAcceleration(zPos, zVel, obs, mAccelerationBuffer.data());
+        
+        // Apply tanh activation
+        ForwardTanh_AVX2(mAccelerationBuffer.data(), mLatentDim);
+        
+        // Step this environment's latent dynamics
+        mMemory.StepDynamicsScalar(mAccelerationBuffer.data(), static_cast<size_t>(envIdx));
+    }
 }
 
 void LatentMemoryManager::GetLatentStates(float* z_pos_out, float* z_vel_out, size_t envIdx) const
@@ -367,8 +261,9 @@ void LatentMemoryManager::GetLatentStates(float* z_pos_out, float* z_vel_out, si
 
 void LatentMemoryManager::GetLatentStatesBatch(float* z_pos_out, float* z_vel_out, int numEnvs) const
 {
-    std::memcpy(z_pos_out, mMemory.z_pos, mLatentDim * static_cast<size_t>(numEnvs) * sizeof(float));
-    std::memcpy(z_vel_out, mMemory.z_vel, mLatentDim * static_cast<size_t>(numEnvs) * sizeof(float));
+    size_t elements = mMemory.mLatentDimAligned * static_cast<size_t>(numEnvs);
+    if (z_pos_out) std::memcpy(z_pos_out, mMemory.z_pos.data(), elements * sizeof(float));
+    if (z_vel_out) std::memcpy(z_vel_out, mMemory.z_vel.data(), elements * sizeof(float));
 }
 
 void LatentMemoryManager::ResetEnv(int envIdx)

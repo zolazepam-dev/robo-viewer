@@ -214,24 +214,27 @@ private:
 
 class ReplayBuffer {
 public:
-    ReplayBuffer(int capacity, int stateDim, int actionDim);
+    ReplayBuffer(int capacity, int stateDim, int actionDim, int latentDim = MAX_LATENT_DIM);
     ReplayBuffer(const ReplayBuffer& other) = default;
     ReplayBuffer& operator=(const ReplayBuffer& other) = default;
     
     void Add(const float* state, const float* action, const VectorReward& reward,
              const float* nextState, bool done);
+    void Add(const float* state, const float* action, const VectorReward& reward,
+             const float* nextState, bool done, const float* latentPos, const float* latentVel);
     void Add(const float* state, const float* action, float reward,
-             const float* nextState, bool done);
+             const float* nextState, bool done, const float* latentPos, const float* latentVel);
     
     void Sample(int batchSize, float* states, float* actions, float* rewards,
-                float* nextStates, float* dones, std::mt19937& rng);
+                float* nextStates, float* dones, float* latentPos, float* latentVel, std::mt19937& rng);
     
     void SampleVectorRewards(int batchSize, float* states, float* actions,
                              VectorReward* rewards, float* nextStates, float* dones,
-                             std::mt19937& rng);
+                             float* latentPos, float* latentVel, std::mt19937& rng);
     
     int Size() const { return mSize; }
     bool IsReady(int batchSize) const { return mSize >= batchSize; }
+    int GetLatentDim() const { return mLatentDim; }
     
 private:
     AlignedVector32f mStates;
@@ -239,12 +242,15 @@ private:
     AlignedVector32f mRewards;
     AlignedVector32f mNextStates;
     AlignedVector32f mDones;
+    AlignedVector32f mLatentPos;
+    AlignedVector32f mLatentVel;
 
     std::vector<VectorReward> mVectorRewards;
     
     int mCapacity;
     int mStateDim;
     int mActionDim;
+    int mLatentDim;
     int mSize = 0;
     int mIndex = 0;
 };

@@ -3,6 +3,7 @@
 #include <vector>
 #include <random>
 #include <cstdint>
+#include <mutex>
 
 constexpr int MAX_POOL_SIZE = 64;
 
@@ -28,8 +29,8 @@ public:
     bool SampleOpponentRecent(std::vector<float>& weights, std::vector<float>& biases, 
                               std::mt19937& rng, int recentN = 10);
     
-    int Size() const { return mSize; }
-    bool Empty() const { return mSize == 0; }
+    int Size() const { std::lock_guard<std::mutex> lock(mMutex); return mSize; }
+    bool Empty() const { std::lock_guard<std::mutex> lock(mMutex); return mSize == 0; }
     int Capacity() const { return mMaxPoolSize; }
     
     void Clear();
@@ -44,6 +45,7 @@ public:
     int64_t GetOldestStepCount() const;
 
 private:
+    mutable std::mutex mMutex;
     std::vector<OpponentSnapshot> mPool;
     int mMaxPoolSize;
     int mSize = 0;

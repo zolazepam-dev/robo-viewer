@@ -6,6 +6,7 @@
 #include <vector>
 #include <GLFW/glfw3.h>
 #include "ConfigManager.h"
+#include "CombatEnv.h"
 
 // Forward declarations
 class VectorizedEnv;
@@ -18,25 +19,24 @@ class PhysicsCore;
 
 struct PhysicsTunables {
     float gravityY = -9.81f;
-    float timestep = 1.0f / 120.0f; // Higher Hz for better CCD
-    int velocitySteps = 8;         // More solver iterations
+    float timestep = 1.0f / 120.0f;
+    int velocitySteps = 8;
     int positionSteps = 3;
-    float Baumgarte = 0.3f;        // Faster error correction
+    float Baumgarte = 0.3f;
     float penetrationSlop = 0.005f;
     float speculativeContactDistance = 0.01f;
     bool allowSleep = false;
     float timeScale = 1.0f;
-    int stepsPerEpisode = 1000;
-};
-
-struct RobotTunables {
-    float enginePower = 100.0f;
-    float reactionWheelPower = 6000.0f;
-    float shellRadius = 2.0f;
-    float shellThickness = 0.3f;
-    float shellMass = 100.0f;
-    float motorSpeed = 10.0f;
-    float motorTorque = 450.0f;
+    int stepsPerEpisode = 10000;
+    
+    // NEW EXHAUSTIVE PHYSICS TUNABLES
+    float friction = 0.5f;
+    float restitution = 0.0f;
+    float linearDamping = 0.05f;
+    float angularDamping = 0.05f;
+    float maxPenetrationVelocity = 1.0f;
+    int numSubSteps = 1;
+    bool warmStarting = true;
 };
 
 struct TrainingConfigUI {
@@ -49,26 +49,18 @@ struct TrainingConfigUI {
     bool saveRequested = false;
     bool loadRequested = false;
     bool manualTorqueOverride = false;
+    DomainRandomization dr;
 };
 
 struct RobotConfiguration {
     std::string name;
     std::string configFile;
-    float enginePower;
-    float reactionWheelPower;
-    float shellRadius;
-    float shellThickness;
-    float shellMass;
-    float motorSpeed;
-    float motorTorque;
 };
 
 struct RobotSelectionUI {
     int selectedRobotIndex = 0;
     std::vector<RobotConfiguration> availableRobots;
     bool loadConfigRequested = false;
-    bool createCheckpointFolderRequested = false;
-    std::string newCheckpointFolderName = "new_checkpoint";
 };
 
 struct GraphicsSettings {
@@ -130,10 +122,8 @@ public:
     int GetStepsPerEpisode() const { return mStepsPerEpisode; }
     
     const PhysicsTunables& GetPhysics() const { return mPhysics; }
-    const RobotTunables& GetRobots() const { return mRobotTune; }
     const GraphicsSettings& GetGraphics() const { return mGraphics; }
     const TrainingConfigUI& GetConfig() const { return mConfig; }
-    GraphSelect GetGraphSelect() const { return mCurrentGraph; }
     
     // Policy management
     bool GetAndClearSaveRequest(std::string& outName);
@@ -141,11 +131,6 @@ public:
     bool GetAndClearGraphRequest();
     bool GetManualOverride() const { return mManualOverride; }
     
-    // Robot configuration management
-    bool GetAndClearLoadConfigRequest();
-    bool GetAndClearCreateCheckpointFolderRequest(std::string& outFolderName);
-    const std::string& GetSelectedRobotType() const;
-
     // Settings save/load
     void SaveSettings(const std::string& path = "viewer_config.json");
     void LoadSettings(const std::string& path = "viewer_config.json");
@@ -155,79 +140,14 @@ public:
 
     void DrawAllTabs();
     
-    // Spawn system
-    struct SpawnRequest {
-        bool valid = false;
-        std::string type = "internal_engine";
-        JPH::Vec3 position{0,5,0};
-        RobotTunables params;
-    };
-    bool GetSpawnRequest(SpawnRequest& outRequest);
-    void SetSpawnClickPosition(const JPH::Vec3& pos);
-    
-
-    
-    /*
-    ========================================
-    MAIN CODE INTEGRATION CHECKLIST
-    ========================================
-    
-    1. PHYSICS INTEGRATION (PhysicsCore.cpp / VectorizedEnv.cpp):
-       - Apply mPhysics.timestep * mTimeScale as physics timestep
-       - Set gravity: mPhysics.gravityY on Y axis
-       - Apply solver: mPhysics.velocitySteps, mPhysics.positionSteps
-       - Update JPH::PhysicsSettings when values change (not every frame)
-       - Handle mStepsPerEpisode in episode termination logic
-    
-    2. ROBOT PARAMETER INTEGRATION (CombatEnv.cpp / InternalRobot.cpp):
-       - Use mRobotTune.enginePower for max engine force
-       - Use mRobotTune.reactionWheelPower for reaction torque
-       - Use mRobotTune.shellRadius, thickness, mass for body creation
-       - Support runtime updates via BodyInterface::SetMassProperties()
-    
-    3. TRAINING LOOP (main_train.cpp or similar):
-       - Check ShouldReset() to reset environments
-       - Check ShouldRestartSim() to restart with new numEnvs (requires reconstructing vecEnv)
-       - Check GetStepsPerEpisode() for episode termination condition
-       - Apply timeScale before stepping physics
-       - Call UpdateStats() every frame with current metrics
-       - Call PushRewardData() when episode ends or per-step
-       - Call PushPhysicsMetrics() with timing data from profiling
-    
-    4. POLICY MANAGEMENT (TD3Trainer.cpp):
-       - When saveRequested: trainer.Save(checkpointDir + "/" + policySaveName + ".bin")
-       - When loadRequested: trainer.Load(checkpointDir + "/" + policyLoadName + ".bin")
-       - Use manualTorqueOverride to bypass policy network and use zero/random actions
-    
-    5. SPAWN SYSTEM (CombatEnv.cpp):
-       - In mouse callback, convert screen to world, call SetSpawnClickPosition()
-       - In main loop, check GetSpawnRequest() and create robot at position
-       - New robot should use current RobotTunables parameters
-    
-    6. RENDERING (Renderer.cpp):
-       - Filter robot rendering by GraphicsSettings show flags
-       - Add debug shape rendering for collision shapes, AABBs, contact points
-       - Apply camera settings from GraphicsSettings
-    
-    7. MICROBOARD INTEGRATION:
-       - Use GetGraphSelect() to determine which metrics to plot
-       - Feed data from PushRewardData() and PushPhysicsMetrics()
-       - Save/load UI settings with SaveAllSettings() / LoadAllSettings()
-    */
-    
 private:
     void DrawTabBar();
     void DrawTrainingTab();
     void DrawPhysicsTab();
     void DrawRobotsTab();
     void DrawGraphicsTab();
-    void DrawPolicyTab();
-    void DrawSpawnTab();
-    void DrawEpisodesTab();
-    void DrawGraphSelector();
     
     void DrawCyberpunkStyle();
-    void PlotLine(const char* label, const std::vector<float>& data, float scale_min, float scale_max);
     
     // State
     bool mPaused = false;
@@ -241,20 +161,12 @@ private:
     int mStepsPerEpisode = 1000;
     
     PhysicsTunables mPhysics;
-    RobotTunables mRobotTune;
     GraphicsSettings mGraphics;
     TrainingConfigUI mConfig;
     RobotSelectionUI mRobotSelection;
     
-    SpawnRequest mSpawnRequest;
-    JPH::Vec3 mPendingSpawnPos;
-    std::string mPendingSpawnType;
-    
-    GraphSelect mCurrentGraph = GraphSelect::REWARD_COMPONENTS;
-    
     std::vector<float> mRewardHistory[5];
     std::vector<float> mPhysicsHistory[4];
-    int mHistoryWritePos = 0;
     static constexpr int HISTORY_MAX = 500;
     
     int mTotalSteps = 0;

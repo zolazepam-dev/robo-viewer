@@ -1,7 +1,7 @@
 /**
  * @file CombatEnv.h
  * @brief Combat environment for reinforcement learning
- * 
+ *
  * This file contains the CombatEnv class and CombatContactListener class,
  * which define the combat simulation environment for reinforcement learning.
  * The environment manages two robots, their interactions, and the reward system.
@@ -23,18 +23,21 @@
 #include "RobotController.h"
 #include "AlignedAllocator.h"
 
-/** Size of the combat arena in meters */
-constexpr float ARENA_SIZE = 36.0f;
-/** Half-size of the combat arena in meters */
-constexpr float ARENA_HALF = ARENA_SIZE * 0.5f;
-/** Offset from center for robot spawning in meters */
-constexpr float ROBOT_SPAWN_OFFSET = 10.0f;
-/** Initial health points for each robot */
-constexpr float INITIAL_HP = 100.0f;
-/** Multiplier for damage calculations */
-constexpr float DAMAGE_MULTIPLIER = 5.0f;
-/** Maximum number of steps per episode */
-constexpr int MAX_EPISODE_STEPS = 7200; // 2 Minutes at 60Hz
+// Combat environment constants
+constexpr float COMBAT_ARENA_SIZE = 36.0f;
+constexpr float COMBAT_ARENA_HALF = COMBAT_ARENA_SIZE * 0.5f;
+constexpr float COMBAT_ROBOT_SPAWN_OFFSET = 10.0f;
+constexpr float COMBAT_INITIAL_HP = 100.0f;
+constexpr float COMBAT_DAMAGE_MULTIPLIER = 5.0f;
+constexpr int COMBAT_MAX_EPISODE_STEPS = 10000;
+
+// Aliases for compatibility
+constexpr float ARENA_SIZE = COMBAT_ARENA_SIZE;
+constexpr float ARENA_HALF = COMBAT_ARENA_HALF;
+constexpr float ROBOT_SPAWN_OFFSET = COMBAT_ROBOT_SPAWN_OFFSET;
+constexpr float INITIAL_HP = COMBAT_INITIAL_HP;
+constexpr float DAMAGE_MULTIPLIER = COMBAT_DAMAGE_MULTIPLIER;
+constexpr int MAX_EPISODE_STEPS = COMBAT_MAX_EPISODE_STEPS;
 
 /**
  * @brief Calculate force sensor dimension from number of satellites
@@ -108,8 +111,20 @@ public:
      */
     void ResetForceReadings(uint32_t envIdx, int numSatellites)
     {
+        if (envIdx >= mForceReadingsPerEnv.size()) return;
         mForceReadingsPerEnv[envIdx][0].Reset(numSatellites);
         mForceReadingsPerEnv[envIdx][1].Reset(numSatellites);
+    }
+
+    /**
+     * @brief Ensure the listener has enough capacity for the given number of environments
+     * @param numEnvs Number of environments
+     */
+    void EnsureCapacity(size_t numEnvs)
+    {
+        if (mForceReadingsPerEnv.size() < numEnvs) {
+            mForceReadingsPerEnv.resize(numEnvs);
+        }
     }
 
     /**
@@ -123,7 +138,15 @@ public:
 
 private:
     /** Force sensor readings per environment and robot */
-    std::array<std::array<ForceSensorReading, 2>, NUM_PARALLEL_ENVS> mForceReadingsPerEnv;
+    std::vector<std::array<ForceSensorReading, 2>> mForceReadingsPerEnv;
+};
+
+struct DomainRandomization {
+    bool enabled = false;
+    float gravityRange = 2.0f;    // +/- from default 9.81
+    float frictionRange = 0.3f;   // +/- from default 0.5
+    float restitutionRange = 0.2f; // +/- from default 0.0
+    float massRange = 0.2f;       // +/- from default (multiplier, e.g. 0.8 to 1.2)
 };
 
 /**
@@ -156,6 +179,9 @@ public:
     
     /** @brief Reset the environment to initial state */
     void Reset();
+
+    void SetDomainRandomization(const DomainRandomization& dr) { mDR = dr; }
+    const DomainRandomization& GetDomainRandomization() const { return mDR; }
 
     /**
      * @brief Queue actions for both robots
@@ -276,4 +302,6 @@ private:
     
     VectorReward mReward1; ///< Reward structure for robot 1
     VectorReward mReward2; ///< Reward structure for robot 2
+
+    DomainRandomization mDR; ///< Domain randomization settings
 };

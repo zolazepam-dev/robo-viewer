@@ -51,7 +51,7 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
         return;
     }
 
-    if (envIdx >= NUM_PARALLEL_ENVS) return;
+    if (envIdx >= mForceReadingsPerEnv.size()) return;
 
     // Calculate actual impulse magnitude from contact manifold using Jolt's EstimateCollisionResponse
     JPH::CollisionEstimationResult result;
@@ -78,7 +78,6 @@ void CombatContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH
 
 void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, CombatRobotLoader* globalLoader, const std::string& robotConfigPath, int stepsPerEpisode)
 {
-    std::cerr << "[CombatEnv] Init for env " << envIndex << "..." << std::endl;
     mEnvIndex = envIndex;
     mPhysicsSystem = globalPhysics;
     mRobotLoader = globalLoader;
@@ -118,8 +117,33 @@ void CombatEnv::Reset()
     mRobot1.totalEnergyUsed = 0.0f;
     mRobot2.totalEnergyUsed = 0.0f;
 
-    // Randomize KOTH point
-    static std::mt19937 rng(std::random_device{}());
+    // Use a member RNG or a properly seeded local one for thread safety during parallel resets
+    std::mt19937 rng(std::random_device{}() + mEnvIndex); 
+    
+    // APPLY DOMAIN RANDOMIZATION
+    if (mDR.enabled) {
+        std::uniform_real_distribution<float> gravDist(9.81f - mDR.gravityRange, 9.81f + mDR.gravityRange);
+        std::uniform_real_distribution<float> frictDist(0.5f - mDR.frictionRange, 0.5f + mDR.frictionRange);
+        std::uniform_real_distribution<float> restDist(0.0f, mDR.restitutionRange);
+        
+        float gravity = gravDist(rng);
+        float friction = std::clamp(frictDist(rng), 0.0f, 1.0f);
+        float restitution = std::clamp(restDist(rng), 0.0f, 1.0f);
+        float gravityFactor = gravity / 9.81f;
+        
+        auto applyDR = [&](Robot& robot) {
+            for (auto& bodyId : robot.bodyIds) {
+                if (!bodyId.IsInvalid()) {
+                    bodyInterface.SetFriction(bodyId, friction);
+                    bodyInterface.SetRestitution(bodyId, restitution);
+                    bodyInterface.SetGravityFactor(bodyId, gravityFactor);
+                }
+            }
+        };
+        applyDR(mRobot1);
+        applyDR(mRobot2);
+    }
+
     std::uniform_real_distribution<float> distXZ(-15.0f, 15.0f);
     std::uniform_real_distribution<float> distY(2.0f, 12.0f);
     mKothPoint = JPH::RVec3(distXZ(rng), distY(rng), distXZ(rng));
@@ -157,26 +181,23 @@ void CombatEnv::Reset()
          // First time initialization: load blue-prints then build
          std::ifstream f(mRobotConfigPath);
          if (!f.is_open()) {
-             std::cerr << "[CombatEnv] ERROR: Could not open robot config: " << mRobotConfigPath << std::endl;
              return;
          }
          nlohmann::json j;
          try {
              f >> j;
          } catch (const nlohmann::json::parse_error& e) {
-             std::cerr << "[CombatEnv] JSON Parse Error: " << e.what() << std::endl;
              return;
          }
          auto config = RobotConfig::LoadFromJSON(j);
-         
-         std::cerr << "[CombatEnv] Creating robot 1..." << std::endl;
+
          mRobot1 = RobotFactory::CreateRobot(config, mPhysicsSystem, pos1, mEnvIndex, 0);
-         std::cerr << "[CombatEnv] Robot 1 created with ID: " << mRobot1.mainBodyId.GetIndex() << std::endl;
-         std::cerr << "[CombatEnv] Creating robot 2..." << std::endl;
          mRobot2 = RobotFactory::CreateRobot(config, mPhysicsSystem, pos2, mEnvIndex, 1);
-         std::cerr << "[CombatEnv] Robot 2 created with ID: " << mRobot2.mainBodyId.GetIndex() << std::endl;
-         if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) { std::cerr << "[CombatEnv] FATAL: Robot creation failed for orbital_shard." << std::endl; return; }
+         if (mRobot1.mainBodyId.IsInvalid() || mRobot2.mainBodyId.IsInvalid()) { return; }
          
+         mRobot1.type = config.type;
+         mRobot2.type = config.type;
+
          // Update internal pointers for controllers
          mController1 = std::make_unique<RobotController>(mRobot1);
          mController2 = std::make_unique<RobotController>(mRobot2);
@@ -207,9 +228,9 @@ void CombatEnv::HarvestState(float* obs1, float* obs2, float* reward1, float* re
     }
 
     mStepCount++;
-    // [REMOVED] std::cout << "[CombatEnv] CheckCollisions..." << std::endl;
+    // [REMOVED] std::cout << "[CombatEnv] CheckCollisions..." << "\n";
     CheckCollisions();
-    // [REMOVED] std::cout << "[CombatEnv] UpdateForceSensors..." << std::endl;
+    // [REMOVED] std::cout << "[CombatEnv] UpdateForceSensors..." << "\n";
     UpdateForceSensors();
 
     CombatContactListener& listener = CombatContactListener::Get();
@@ -286,31 +307,60 @@ void CombatEnv::CheckCollisions()
     auto applyDamage = [&](Robot& attacker, Robot& victim) {
         if (attacker.mainBodyId.IsInvalid() || victim.mainBodyId.IsInvalid()) return;
         
-        if (victim.mainBodyId.IsInvalid()) return;
-    JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
+        JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.mainBodyId);
+        JPH::Vec3 victimVel = bodyInterface.GetLinearVelocity(victim.mainBodyId);
+
+        // BASE DAMAGE (Main body slam)
+        JPH::RVec3 attackerPos = bodyInterface.GetPosition(attacker.mainBodyId);
+        JPH::Vec3 attackerVel = bodyInterface.GetLinearVelocity(attacker.mainBodyId);
+        float distSq = (attackerPos - victimPos).LengthSq();
+        if (distSq < 2.5f * 2.5f) { // Main body radius is 0.5, so 2.5 is a decent "slam" range
+            float relativeVel = (attackerVel - victimVel).Length();
+            float damage = relativeVel * DAMAGE_MULTIPLIER * 0.05f; // Significant slam damage
+            victim.hp -= damage;
+            attacker.totalDamageDealt += damage;
+            victim.totalDamageTaken += damage;
+        }
         
         if (attacker.type == RobotType::SATELLITE) {
-            for (int i = 0; i < attacker.config.numSatellites; ++i) {
-                if (attacker.satellites[i].spikeBodyId.IsInvalid()) continue;
-                JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
-                if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
-                    JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].spikeBodyId);
-                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.001f;
-                    victim.hp -= damage;
-                    attacker.totalDamageDealt += damage;
-                    victim.totalDamageTaken += damage;
+            for (int i = 0; i < (int)attacker.satellites.size(); ++i) {
+                // SPIKE DAMAGE
+                if (!attacker.satellites[i].spikeBodyId.IsInvalid()) {
+                    JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
+                    if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
+                        JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].spikeBodyId);
+                        float relativeVel = (vel - victimVel).Length();
+                        float damage = relativeVel * DAMAGE_MULTIPLIER * 0.1f; 
+                        victim.hp -= damage;
+                        attacker.totalDamageDealt += damage;
+                        victim.totalDamageTaken += damage;
+                    }
+                }
+                
+                // SATELLITE BODY DAMAGE (New: allows damage without spikes)
+                if (!attacker.satellites[i].coreBodyId.IsInvalid()) {
+                    JPH::RVec3 satPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
+                    float satRadius = attacker.config.satellites.size() > i ? attacker.config.satellites[i].radius : 0.1f;
+                    float satThreshold = satRadius + 0.6f; // satellite radius + victim main body radius buffer
+                    
+                    if ((satPos - victimPos).LengthSq() < satThreshold * satThreshold) {
+                        JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
+                        float relativeVel = (vel - victimVel).Length();
+                        float damage = relativeVel * DAMAGE_MULTIPLIER * 0.02f; // Less than spike, more than zero
+                        victim.hp -= damage;
+                        attacker.totalDamageDealt += damage;
+                        victim.totalDamageTaken += damage;
+                    }
                 }
             }
         } else if (attacker.type == RobotType::INTERNAL_ENGINE) {
-            // Internal engines deal damage when they are near the opponent 
-            // (effectively slamming through their own shell into the opponent)
             for (int i = 0; i < (int)attacker.satellites.size(); ++i) {
-                if (i >= (int)attacker.satellites.size()) break;
                 if (attacker.satellites[i].coreBodyId.IsInvalid()) continue;
                 JPH::RVec3 engPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
                 if ((engPos - victimPos).LengthSq() < engineThreshold * engineThreshold) {
                     JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
-                    float damage = vel.Length() * DAMAGE_MULTIPLIER * 0.002f; // Heavier slam
+                    float relativeVel = (vel - victimVel).Length();
+                    float damage = relativeVel * DAMAGE_MULTIPLIER * 0.2f; // 100x increase from 0.002f
                     victim.hp -= damage;
                     attacker.totalDamageDealt += damage;
                     victim.totalDamageTaken += damage;
@@ -423,7 +473,7 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     vr1.damage_dealt += (prox1 + approach1 + wallPenalty1);
     vr2.damage_dealt += (prox1 + approach2 + wallPenalty2); 
 
-    if (!std::isfinite(vr1.Scalar())) { std::cerr << "[CombatEnv] Non-finite reward!" << std::endl; vr1.damage_dealt = 0; }
+    if (!std::isfinite(vr1.Scalar())) { std::cerr << "[CombatEnv] Non-finite reward!" << "\n"; vr1.damage_dealt = 0; }
     r1 = vr1.Scalar();
     r2 = vr2.Scalar();
     

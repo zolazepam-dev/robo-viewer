@@ -49,31 +49,34 @@ public:
      * Forward pass for single sample
      * @param input Input vector [inputDim]
      * @param output Output vector [outputDim]
+     * @param featureBuffer External buffer for RFF features (cos) [numFeatures]
      */
-    void Forward(const float* input, float* output);
+    void Forward(const float* input, float* output, float* featureBuffer);
 
     /**
      * Forward pass for batch
      * @param input Input batch [batchSize * inputDim]
      * @param output Output batch [batchSize * outputDim]
      * @param batchSize Number of samples in batch
+     * @param featureBuffer External buffer for RFF features (cos) [batchSize * numFeatures]
      */
-    void ForwardBatch(const float* input, float* output, int batchSize);
+    void ForwardBatch(const float* input, float* output, int batchSize, float* featureBuffer);
 
     /**
-     * Forward pass with Eigen optimization
+     * Forward pass for batch using Eigen optimization
      * @param input Input batch [batchSize * inputDim]
      * @param output Output batch [batchSize * outputDim]
      * @param batchSize Number of samples in batch
+     * @param featureBuffer External buffer for RFF features (cos) [batchSize * numFeatures]
      */
-    void ForwardBatchEigen(const float* input, float* output, int batchSize);
+    void ForwardBatchEigen(const float* input, float* output, int batchSize, float* featureBuffer);
 
     /**
      * Forward pass for batch using Eigen (returns MatrixXf)
      * @param input Input batch [batchSize × inputDim]
      * @return Output batch [batchSize × outputDim]
      */
-    Eigen::MatrixXf ForwardEigen(const Eigen::MatrixXf& input);
+    Eigen::MatrixXf ForwardEigen(const Eigen::MatrixXf& input) const;
 
     /**
      * Backward pass for gradient computation
@@ -82,9 +85,13 @@ public:
      * @param input_grad Gradient of loss w.r.t. input [inputDim] (can be nullptr)
      * @param weights_grad Gradient of loss w.r.t. trainable weights [outputDim * numFeatures] (accumulated)
      * @param bias_grad Gradient of loss w.r.t. trainable bias [outputDim] (accumulated)
+     * @param featureBuffer External buffer for RFF features (cos) [numFeatures]
+     * @param sinFeatureBuffer External buffer for RFF sin features [numFeatures]
+     * @param featureGradBuffer External buffer for RFF feature gradients [numFeatures]
      */
     void Backward(const float* input, const float* output_grad, float* input_grad, 
-                  float* weights_grad, float* bias_grad);
+                  float* weights_grad, float* bias_grad,
+                  const float* featureBuffer, const float* sinFeatureBuffer, float* featureGradBuffer);
 
     /**
      * Get trainable weights (W_train)
@@ -115,10 +122,12 @@ public:
     const AlignedVector32<float>& GetBiasGradient() const { return mBiasGradient; }
 
     /**
-     * Get number of trainable parameters
-     * @return Total number of trainable params (outputDim * numFeatures + outputDim)
+     * Get total number of trainable parameters
+     * @return Number of floats in weights + bias (padded for alignment)
      */
-    size_t GetNumParams() const { return mTrainableWeights.size() + mTrainableBias.size(); }
+    size_t GetNumParams() const { 
+        return mTrainableWeights.size() + mTrainableBias.size(); 
+    }
 
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
@@ -140,8 +149,9 @@ public:
      * Compute RFF features: cos(W_fixed * x + b_fixed)
      * @param input Input vector [inputDim]
      * @param features Output features [numFeatures]
+     * @param sin_features Optional output for sin(W_fixed * x + b_fixed) [numFeatures]
      */
-    void ComputeFeatures(const float* input, float* features);
+    void ComputeFeatures(const float* input, float* features, float* sin_features = nullptr);
 
 private:
     size_t mInputDim = 0;
@@ -160,8 +170,4 @@ private:
     // Gradients for trainable parameters
     AlignedVector32<float> mWeightsGradient;  // [outputDim * numFeatures]
     AlignedVector32<float> mBiasGradient;     // [outputDim]
-
-    // Temporary buffers
-    AlignedVector32<float> mFeatureBuffer;    // [numFeatures]
-    AlignedVector32<float> mFeatureGradBuffer; // [numFeatures]
 };
