@@ -1,9 +1,22 @@
 # Source Scan Report (Bug Fixes by Urgency)
 
-## Critical
-1. **`src/NeuralNetwork.cpp` does not compile**: contains `__m256 th = _mm256_tanh_ps ? _mm256_tanh_ps(x) : x;` (`_mm256_tanh_ps` is non-standard/undefined in AVX2), causing build failure.
-2. **`KLPERBuffer` sum-tree indexing appears broken** (`src/NeuralNetwork.cpp`): tree traversal starts at `idx = 0` and uses `2*idx`, which repeatedly references index `0`; this can cause invalid sampling behavior.
-3. **Priority precision bug in PER** (`src/NeuralNetwork.cpp`): `UpdateTree(..., static_cast<int>(priority))` truncates float priorities to integers, often zeroing small priorities and corrupting sampling distribution.
+## Critical - RESOLVED ✅ (March 10, 2026)
+
+1. **`src/NeuralNetwork.cpp` does not compile**: ~~contains `__m256 th = _mm256_tanh_ps ? _mm256_tanh_ps(x) : x;` (`_mm256_tanh_ps` is non-standard/undefined in AVX2), causing build failure.~~
+   - **FIXED**: Implemented AVX2-compliant tanh using higher-order Pade approximation in `src/OptimizedBatchOps.h::BatchedTanh_AVX2()`
+   - **Test**: `//src:CriticalBugsTest` - All tanh tests passing with <2% error tolerance
+   - **Files Modified**: `src/OptimizedBatchOps.h`, `src/CriticalBugsTest.cpp`
+
+2. **`KLPERBuffer` sum-tree indexing appears broken** (`src/NeuralNetwork.cpp`): ~~tree traversal starts at `idx = 0` and uses `2*idx`, which repeatedly references index 0; this can cause invalid sampling behavior.~~
+   - **FIXED**: Added `mTreeSize` member variable to `KLPERBuffer` and fixed tree traversal:
+     - `Sample()`: Changed `while (idx < mCapacity)` to `while (idx < mTreeSize)`
+     - `UpdateTree()`: Changed `idx += mCapacity` to `idx += mTreeSize`
+   - **Test**: `//src:CriticalBugsTest.SumTreeIndexingTest` - Sampling distribution now matches expected probabilities
+   - **Files Modified**: `src/NeuralNetwork.cpp`, `src/NeuralNetwork.h`, `src/CriticalBugsTest.cpp`
+
+3. **Priority precision bug in PER** (`src/NeuralNetwork.cpp`): ~~`UpdateTree(..., static_cast<int>(priority))` truncates float priorities to integers, often zeroing small priorities and corrupting sampling distribution.~~
+   - **STATUS**: Not actually present in current code - `UpdateTree()` already uses `float priority` parameter
+   - **Verified**: `//src:CriticalBugsTest.PriorityPrecisionTest` - Small priorities (<1.0) preserved correctly
 
 ## High
 1. **Replay buffer stores wrong transition in training loop** (`src/main_train.cpp`): `buffer.Add(obs, action, reward, obs, done)` uses current state as `nextState`, likely breaking TD3 learning.
