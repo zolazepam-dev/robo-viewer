@@ -121,6 +121,8 @@ cc_library(
         "ParallelPhysicsStepper.h",
         "SoAEnvBatch.h",
         "OptimizedTrainingPipeline.h",
+        # Phase 4 SoA optimization
+        "SoAEnvironment.h",
     ],
     deps = [
         "@glfw",
