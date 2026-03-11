@@ -243,14 +243,31 @@ void RFFNetwork::SetAllWeights(const std::vector<float>& weights)
         auto& w = layer.GetTrainableWeights();
         auto& b = layer.GetTrainableBias();
         
-        if (offset + w.size() + b.size() > weights.size()) break;
-        
-        std::copy(weights.begin() + offset, weights.begin() + offset + w.size(), w.begin());
+        // Copy weights from checkpoint or zero-initialize if missing
+        size_t weightCount = std::min(w.size(), weights.size() - offset);
+        if (weightCount > 0) {
+            std::copy(weights.begin() + offset, weights.begin() + offset + weightCount, w.begin());
+        }
+        // Zero out any remaining weights
+        if (weightCount < w.size()) {
+            std::fill(w.begin() + weightCount, w.end(), 0.0f);
+        }
         offset += w.size();
         
-        std::copy(weights.begin() + offset, weights.begin() + offset + b.size(), b.begin());
+        // Copy bias from checkpoint or zero-initialize if missing
+        size_t biasCount = std::min(b.size(), weights.size() - offset);
+        if (biasCount > 0) {
+            std::copy(weights.begin() + offset, weights.begin() + offset + biasCount, b.begin());
+        }
+        // Zero out any remaining bias
+        if (biasCount < b.size()) {
+            std::fill(b.begin() + biasCount, b.end(), 0.0f);
+        }
         offset += b.size();
     }
+    
+    fprintf(stderr, "[RFFNetwork::SetAllWeights] Loaded %zu weights, zero-initialized %zu missing\n", 
+            std::min(offset, weights.size()), (offset > weights.size()) ? (offset - weights.size()) : 0);
 }
 
 size_t RFFNetwork::GetNumWeights() const

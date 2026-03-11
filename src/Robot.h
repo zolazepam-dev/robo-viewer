@@ -24,8 +24,11 @@ struct SatelliteData {
     float currentAngularVelY = 0.0f;
     float currentAngularVelZ = 0.0f;
     
+    // Gyroscopic control state
+    JPH::Vec3 gyroAngularVelocity = JPH::Vec3::sZero();  // Internal gyro wheel speed (rad/s)
+    float gyroInertia = 0.1f;  // Moment of inertia of gyro wheel (kg·m²)
+    
     // Controller state moved to RobotController, but kept here for legacy CombatRobotData compatibility
-    // if it embeds SatelliteData directly.
     struct PIDState {
         float integral = 0.0f;
         float prevError = 0.0f;
@@ -46,7 +49,7 @@ struct SatelliteData {
             prevError = 0.0f;
         }
     };
-    PIDState pidX, pidY, pidZ;
+    PIDState pidX, pidY, pidZ, pidSlide;
 };
 
 /**

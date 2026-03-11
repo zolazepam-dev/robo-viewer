@@ -1,0 +1,8 @@
+Compiling 4 files (.ex)
+
+== Compilation error in file lib/joltrl_nx/td3.ex ==
+** (SyntaxError) lib/joltrl_nx/td3.ex:23:11: invalid character "e" after number 3. If you intended to write a number, make sure to separate the number from the character (using comma, space, etc). If you meant to write a function name or a variable, note that identifiers in Elixir cannot start with numbers. Unexpected token: e
+    |
+ 23 |       lr: 3e-4
+    |           ^
+    (elixir 1.14.0) lib/kernel/parallel_compiler.ex:346: anonymous fn/5 in Kernel.ParallelCompiler.spawn_workers/7

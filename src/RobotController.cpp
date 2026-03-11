@@ -97,7 +97,8 @@ void RobotController::ApplyPhysicsActions(const float* actions, JPH::PhysicsSyst
     }
 
     int actionIdx = numHinge;
-    for (auto* joint : mRobot.sixDofJoints) {
+    for (size_t jointIdx = 0; jointIdx < mRobot.sixDofJoints.size() && jointIdx < mRobot.bodyIds.size(); jointIdx++) {
+        auto* joint = mRobot.sixDofJoints[jointIdx];
         if (joint) {
             bodyInterface.ActivateBody(joint->GetBody1()->GetID());
             bodyInterface.ActivateBody(joint->GetBody2()->GetID());
@@ -105,6 +106,15 @@ void RobotController::ApplyPhysicsActions(const float* actions, JPH::PhysicsSyst
             JPH::Vec3 targetAngVel(actions[actionIdx] * 10.0f, actions[actionIdx+1] * 10.0f, actions[actionIdx+2] * 10.0f);
             joint->SetTargetAngularVelocityCS(targetAngVel + JPH::Vec3(jitter(rng), jitter(rng), jitter(rng)));
             energy += targetAngVel.Length();
+            
+            // Apply gyroscopic torque to connected bodies
+            if (jointIdx < mRobot.bodyIds.size()) {
+                JPH::Vec3 bodyOmega = bodyInterface.GetAngularVelocity(mRobot.bodyIds[jointIdx]);
+                JPH::Vec3 gyroAxis = JPH::Vec3(actions[actionIdx], actions[actionIdx+1], actions[actionIdx+2]).Normalized();
+                JPH::Vec3 angularMomentum = 0.1f * targetAngVel.Length() * gyroAxis;  // gyroInertia * omega
+                JPH::Vec3 gyroTorque = bodyOmega.Cross(angularMomentum);
+                bodyInterface.AddTorque(mRobot.bodyIds[jointIdx], -gyroTorque);
+            }
         }
         actionIdx += 3;
     }

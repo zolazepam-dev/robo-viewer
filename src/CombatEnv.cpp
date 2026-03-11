@@ -464,11 +464,21 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     mPrevHp1 = mRobot1.hp;
     mPrevHp2 = mRobot2.hp;
 
+    // Velocity-based damage multiplier (quadratic scaling)
+    float speed1 = vel1.Length();
+    float speed2 = vel2.Length();
+    float velocityMultiplier1 = 1.0f + (speed1 * speed1 / 400.0f);  // +100% at 20 m/s
+    float velocityMultiplier2 = 1.0f + (speed2 * speed2 / 400.0f);
+    
+    // Momentum advantage reward
+    float momentumBonus1 = (speed1 > speed2) ? 0.2f : 0.0f;
+    float momentumBonus2 = (speed2 > speed1) ? 0.2f : 0.0f;
+
     VectorReward vr1, vr2;
-    vr1.damage_dealt = deltaDmgDealt1;
+    vr1.damage_dealt = deltaDmgDealt1 * velocityMultiplier1 + momentumBonus1;
     vr1.damage_taken = -deltaDmgTaken1;
     
-    vr2.damage_dealt = deltaDmgDealt2;
+    vr2.damage_dealt = deltaDmgDealt2 * velocityMultiplier2 + momentumBonus2;
     vr2.damage_taken = -deltaDmgTaken2;
 
     // 3. Efficiency & Survival
@@ -484,13 +494,10 @@ void CombatEnv::CalculateRewards(float& r1, float& r2)
     float distToKoth1 = static_cast<float>((pos1 - mKothPoint).Length());
     float distToKoth2 = static_cast<float>((pos2 - mKothPoint).Length());
 
-    if (distToKoth1 < distToKoth2) {
-        vr1.koth = 0.1f;
-        vr2.koth = 0.0f;
-    } else {
-        vr1.koth = 0.0f;
-        vr2.koth = 0.1f;
-    }
+    // Continuous KOTH reward based on distance advantage
+    float kothAdvantage = std::max(0.0f, distToKoth2 - distToKoth1);
+    vr1.koth = 0.5f * kothAdvantage;
+    vr2.koth = 0.5f * std::max(0.0f, distToKoth1 - distToKoth2);
 
     // 5. Altitude
     vr1.altitude = std::max(0.0f, (float)pos1.GetY() * 0.05f);

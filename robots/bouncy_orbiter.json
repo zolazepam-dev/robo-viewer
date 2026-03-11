@@ -42,7 +42,7 @@
       "body2": "sat1",
       "position": [0, 0, 0],
       "hasMotor": true,
-      "motorMaxTorque": 20000.0
+      "motorMaxTorque": 30000.0
     },
     {
       "name": "joint2",
@@ -51,7 +51,7 @@
       "body2": "sat2",
       "position": [0, 0, 0],
       "hasMotor": true,
-      "motorMaxTorque": 20000.0
+      "motorMaxTorque": 30000.0
     },
     {
       "name": "joint3",
@@ -60,7 +60,7 @@
       "body2": "sat3",
       "position": [0, 0, 0],
       "hasMotor": true,
-      "motorMaxTorque": 20000.0
+      "motorMaxTorque": 30000.0
     }
   ],
   "sensors": {

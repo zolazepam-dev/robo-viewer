@@ -345,12 +345,10 @@ CombatRobotData CombatRobotLoader::LoadRobot(
                   << robotData.bodies.size() << " bodies, "
                   << robotData.hingeJoints.size() << " hinge joints, "
                   << robotData.sixDofJoints.size() << " 6DOF joints" << std::endl;
-    } else {
+    } else if (robotData.config.numSatellites > 0) {
         // Original satellite-based loading
         std::cout << "[LoadRobot" << idx << "] Step 5: Entering satellite loop" << std::endl;
         robotData.satellites.resize(robotData.config.numSatellites);
-    }
-    
     for (int i = 0; i < robotData.config.numSatellites; ++i)
     {
         std::cout << "[LoadRobot" << idx << "] Step 5." << i << ".1: Processing satellite " << i << std::endl;
@@ -490,6 +488,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
          robotData.satellites[i].pidZ = {0.0f, 0.0f, 200.0f, 5.0f, 50.0f};
     }
 
+}
     auto loadEnd = std::chrono::high_resolution_clock::now();
     auto loadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(loadEnd - loadStart).count();
     std::cout << "[LoadRobot" << idx << "] Loaded in " << loadDuration << "ms" << std::endl;

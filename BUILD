@@ -732,6 +732,74 @@ cc_binary(
     linkopts = ["-lpthread"],
 )
 
+# LockFreeQueue Test - Tests lock-free ring buffer for SPS optimization
+cc_binary(
+    name = "lock_free_queue_test",
+    srcs = ["//src:LockFreeQueueTest.cpp"],
+    deps = [
+        "//src:core",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = ["-lpthread"],
+)
+
+# LockFreeQueue Integration Example - Demonstrates integration into training loop
+cc_binary(
+    name = "lock_free_queue_integration",
+    srcs = ["//src:LockFreeQueueIntegrationExample.cpp"],
+    deps = [
+        "//src:core",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = ["-lpthread"],
+)
+
+# ThreadPinning Test - Tests CPU affinity management for SPS optimization
+cc_binary(
+    name = "thread_pinning_test",
+    srcs = ["//src:ThreadPinningTest.cpp"],
+    deps = [
+        "//src:core",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = ["-lpthread"],
+)
+
+# Phase 4: SoA Environment Test - Tests Structure-of-Arrays layout for SIMD optimization
+cc_binary(
+    name = "soa_environment_test",
+    srcs = ["//src:SoAEnvironmentTest.cpp"],
+    deps = [
+        "//src:core",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = ["-lpthread"],
+)
+
 
 cc_binary(
     name = "spider_viewer",
