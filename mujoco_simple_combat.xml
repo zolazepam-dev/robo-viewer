@@ -1,0 +1,173 @@
+<mujoco>
+  <option timestep="0.001" gravity="0 0 -9.8" integrator="RK4" />
+
+  <visual>
+    <headlight ambient="0.4 0.3 0.1" diffuse="0.8 0.7 0.5" specular="0.3 0.3 0.3" />
+    <rgba fog="0.3 0.22 0.05 1" />
+    <quality shadowsize="4096" />
+  </visual>
+
+  <statistic extent="10" meansize="0.5" />
+
+  <default>
+    <geom friction="1.8 0.1 0.1" solref="0.01 1" solimp="0.9 0.95 0.001" />
+    <joint damping="0.8" armature="0.5" />
+    <motor gear="450" />
+  </default>
+
+  <asset>
+    <texture name="grid_tex" type="2d" builtin="checker" width="512" height="512"
+          rgb1="0.1 0.1 0.2" rgb2="0.15 0.15 0.3" />
+
+    <material name="grid_material"
+          texture="grid_tex"
+          texrepeat="10 10"
+          specular="0.2"
+          shininess="0.1"
+          rgba="0.1 0.06 0.04 0" />
+
+    <material name="wall_material"
+          specular="0.5"
+          shininess="0.1"
+          rgba="0.18 0.09 0.06 0" />
+
+    <material name="safety_wall_material" rgba="1 0 0 0" />
+
+    <material name="roof_material"
+          specular="0.3"
+          shininess="0.2"
+          rgba="0.2 0.2 0.3 0" />
+
+    <texture name="robot1_tex" type="cube" builtin="flat" width="512" height="512"
+          mark="random" markrgb="1.0 0.2 0.2" />
+    <texture name="robot2_tex" type="cube" builtin="flat" width="512" height="512"
+          mark="random" markrgb="0.2 0.2 1.0" />
+    <material name="robot1_body_mat" texture="robot1_tex" specular="0.8" shininess="0.9"
+          rgba="1.0 0.55 0.0 1" />
+    <material name="robot2_body_mat" texture="robot2_tex" specular="0.8" shininess="0.9"
+          rgba="1.0 0.97 0.86 1" />
+
+    <material name="spike_mat" specular="1.0" shininess="1.0" rgba="0.5 0.5 0.5 1" />
+    <material name="yellow_outline" rgba="1 1 0 1" specular="1" shininess="1" emission="1.0" />
+  </asset>
+
+  <worldbody>
+    <light name="main_light" pos="0 0 15" dir="0 0 -1" diffuse="0.9 0.9 1.0"
+          specular="0.5 0.5 0.8" />
+    <geom name="floor" type="plane" size="50 50 0.1"
+          material="grid_material"
+          condim="3"
+          friction="1 0.005 0.005" />
+
+    <!-- Thick Outer Arena Walls -->
+    <geom name="wall_n" type="box" pos="0 15.0 6.0" size="12.5 2.5 6.0" material="wall_material" />
+    <geom name="wall_s" type="box" pos="0 -15.0 6.0" size="12.5 2.5 6.0" material="wall_material" />
+    <geom name="wall_e" type="box" pos="15.0 0 6.0" size="2.5 12.5 6.0" material="wall_material" />
+    <geom name="wall_w" type="box" pos="-15.0 0 6.0" size="2.5 12.5 6.0" material="wall_material" />
+    <geom name="roof" type="box" pos="0 0 12.1" size="17.6 17.6 0.1" material="roof_material" />
+
+    <!-- Yellow Arena Outline -->
+    <geom name="outline_n_floor" type="box" pos="0 12.0 0.01" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_s_floor" type="box" pos="0 -12.0 0.01" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_e_floor" type="box" pos="12.0 0 0.01" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_w_floor" type="box" pos="-12.0 0 0.01" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_n_ceil" type="box" pos="0 12.0 12.0" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_s_ceil" type="box" pos="0 -12.0 12.0" size="12.0 0.1 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_e_ceil" type="box" pos="12.0 0 12.0" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_w_ceil" type="box" pos="-12.0 0 12.0" size="0.1 12.0 0.01" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_ne_pillar" type="box" pos="12.0 12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_nw_pillar" type="box" pos="-12.0 12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_se_pillar" type="box" pos="12.0 -12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+    <geom name="outline_sw_pillar" type="box" pos="-12.0 -12.0 6.0" size="0.1 0.1 6.0" material="yellow_outline" contype="0" conaffinity="0" />
+
+    <!-- Robot 1 (Bright Red) - Large central sphere with 1 orbiting satellite -->
+    <body name="robot1" pos="-3.3 0 1.0">
+      <freejoint name="r1_root" />
+      <!-- Large central sphere (twice the size = radius 1.0) -->
+      <geom name="r1_body" type="sphere" size="1.0"
+            material="robot1_body_mat"
+            mass="30" />
+      <site name="r1_center" pos="0 0 0" size="0.01" rgba="1 0 0 1"/>
+
+      <!-- Single satellite with hinge joint for full orbit capability -->
+      <body name="r1_satellite" pos="0 0 0">
+        <!-- Hinge joint allowing full 360 degree rotation around the central sphere -->
+        <joint name="r1_sat_yaw" type="hinge" axis="0 0 1" />
+        <joint name="r1_sat_pitch" type="hinge" axis="0 1 0" />
+        
+        <!-- Satellite core at orbit radius -->
+        <geom name="r1_sat_core" type="sphere" pos="2.0 0 0" size="0.3" material="robot1_body_mat" mass="8" />
+        
+        <!-- Spike/Weapon extending from satellite -->
+        <body name="r1_sat_spike" pos="2.0 0 0">
+          <joint name="r1_sat_spike_slide" type="slide" axis="1 0 0" range="0 0.8"/>
+          <geom name="r1_sat_spike_geom" type="cylinder" fromto="0 0 0 0.6 0 0" size="0.05" material="spike_mat" mass="2" />
+          <site name="r1_sat_site" pos="0.6 0 0" size="0.05" rgba="1 1 1 0.5" />
+        </body>
+      </body>
+    </body>
+
+    <!-- Robot 2 (Bright Blue) - Large central sphere with 1 orbiting satellite -->
+    <body name="robot2" pos="3.3 0 1.0">
+      <freejoint name="r2_root" />
+      <!-- Large central sphere (twice the size = radius 1.0) -->
+      <geom name="r2_body" type="sphere" size="1.0"
+            material="robot2_body_mat"
+            mass="30" />
+      <site name="r2_center" pos="0 0 0" size="0.01" rgba="0 0 1 1"/>
+
+      <!-- Single satellite with hinge joint for full orbit capability -->
+      <body name="r2_satellite" pos="0 0 0">
+        <!-- Hinge joint allowing full 360 degree rotation around the central sphere -->
+        <joint name="r2_sat_yaw" type="hinge" axis="0 0 1" />
+        <joint name="r2_sat_pitch" type="hinge" axis="0 1 0" />
+        
+        <!-- Satellite core at orbit radius -->
+        <geom name="r2_sat_core" type="sphere" pos="2.0 0 0" size="0.3" material="robot2_body_mat" mass="8" />
+        
+        <!-- Spike/Weapon extending from satellite -->
+        <body name="r2_sat_spike" pos="2.0 0 0">
+          <joint name="r2_sat_spike_slide" type="slide" axis="1 0 0" range="0 0.8"/>
+          <geom name="r2_sat_spike_geom" type="cylinder" fromto="0 0 0 0.6 0 0" size="0.05" material="spike_mat" mass="2" />
+          <site name="r2_sat_site" pos="0.6 0 0" size="0.05" rgba="1 1 1 0.5" />
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Robot 1 Actuators -->
+    <motor name="r1m_yaw" joint="r1_sat_yaw" />
+    <motor name="r1m_pitch" joint="r1_sat_pitch" />
+    <motor name="r1m_spike" joint="r1_sat_spike_slide" />
+    
+    <!-- Robot 2 Actuators -->
+    <motor name="r2m_yaw" joint="r2_sat_yaw" />
+    <motor name="r2m_pitch" joint="r2_sat_pitch" />
+    <motor name="r2m_spike" joint="r2_sat_spike_slide" />
+  </actuator>
+
+  <sensor>
+    <!-- Robot 1 Sensors -->
+    <jointvel name="r1_jvel_yaw" joint="r1_sat_yaw"/>
+    <jointvel name="r1_jvel_pitch" joint="r1_sat_pitch"/>
+    <jointvel name="r1_jvel_spike" joint="r1_sat_spike_slide"/>
+    <gyro name="r1_gyro" site="r1_center"/>
+    <accelerometer name="r1_accel" site="r1_center"/>
+    <velocimeter name="r1_velo" site="r1_center"/>
+    <touch name="r1_body_touch" site="r1_center"/>
+    <touch name="r1_sat_touch" site="r1_sat_site"/>
+    <force name="r1_force" site="r1_sat_site"/>
+
+    <!-- Robot 2 Sensors -->
+    <jointvel name="r2_jvel_yaw" joint="r2_sat_yaw"/>
+    <jointvel name="r2_jvel_pitch" joint="r2_sat_pitch"/>
+    <jointvel name="r2_jvel_spike" joint="r2_sat_spike_slide"/>
+    <gyro name="r2_gyro" site="r2_center"/>
+    <accelerometer name="r2_accel" site="r2_center"/>
+    <velocimeter name="r2_velo" site="r2_center"/>
+    <touch name="r2_body_touch" site="r2_center"/>
+    <touch name="r2_sat_touch" site="r2_sat_site"/>
+    <force name="r2_force" site="r2_sat_site"/>
+  </sensor>
+</mujoco>

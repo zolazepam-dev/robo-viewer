@@ -103,19 +103,18 @@ std::atomic<bool> gNewFrameReady{false};
 void TrainingLoop(TD3Trainer* trainer, ReplayBuffer* buffer) {
     fprintf(stderr, "[TrainingLoop] STARTING\n");
     fflush(stderr);
-    
-    // Disable Eigen's internal multi-threading to prevent nested OMP issues
-    // Our TD3Trainer already uses OMP for outer loops
+
+    // Disable Eigen's internal multi-threading
     Eigen::setNbThreads(1);
 
     while (gTrainingRunning) {
-        if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
-        
-        if (buffer->Size() >= 1024) { // Wait for a bit more data
-            DIAGNOSE_SCOPE("Background: TrainingStep");
+        if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); continue; }
+
+        // Train when we have enough data (lower threshold for faster learning)
+        if (buffer->Size() >= 512) {
             trainer->Train(*buffer);
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::this_thread::yield();  // Yield instead of sleep for lower latency
         }
     }
 }
@@ -171,27 +170,22 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
             std::memcpy(obs2Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim + stateDim), stateDim * sizeof(float));
             indices2[i] = i * 2 + 1;
         }
-        
-        fprintf(stderr, "[SimulationLoop] Step %lld: obs batched\n", localSteps);
-        fflush(stderr);
 
-        {
-            DIAGNOSE_SCOPE("SimulationLoop: ActionSelection");
-            trainer->SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
-            opponentTrainer->SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
-            
-            // Capture updated latent states for storing in replay buffer later
-            #pragma omp parallel for num_threads(8)
-            for (int i = 0; i < numEnvs; ++i) {
-                trainer->GetModel().GetLatentMemory().GetLatentStates(
-                    latentPosBuffer.data() + (i * 2) * latentDim,
-                    latentVelBuffer.data() + (i * 2) * latentDim,
-                    indices1[i]);
-                opponentTrainer->GetModel().GetLatentMemory().GetLatentStates(
-                    latentPosBuffer.data() + (i * 2 + 1) * latentDim,
-                    latentVelBuffer.data() + (i * 2 + 1) * latentDim,
-                    indices2[i]);
-            }
+        // Action selection (removed profiling overhead)
+        trainer->SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
+        opponentTrainer->SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
+
+        // Capture updated latent states for replay buffer
+        #pragma omp parallel for num_threads(8)
+        for (int i = 0; i < numEnvs; ++i) {
+            trainer->GetModel().GetLatentMemory().GetLatentStates(
+                latentPosBuffer.data() + (i * 2) * latentDim,
+                latentVelBuffer.data() + (i * 2) * latentDim,
+                indices1[i]);
+            opponentTrainer->GetModel().GetLatentMemory().GetLatentStates(
+                latentPosBuffer.data() + (i * 2 + 1) * latentDim,
+                latentVelBuffer.data() + (i * 2 + 1) * latentDim,
+                indices2[i]);
         }
         
         // NEW: vecEnv->Step now handles parallel action queuing, physics step, and parallel harvesting

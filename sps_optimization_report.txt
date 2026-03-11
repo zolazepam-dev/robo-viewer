@@ -1,0 +1,26 @@
+================================================================================
+SPS PERFORMANCE OPTIMIZATION REPORT
+================================================================================
+Generated: 2026-03-10 14:37:59
+Current SPS: 26
+Target SPS: 100,000
+Gap: 99,974 (100.0% remaining)
+
+FINDINGS BY SEVERITY:
+--------------------------------------------------------------------------------
+
+DETAILED FINDINGS:
+--------------------------------------------------------------------------------
+
+BUILD CONFIGURATION RECOMMENDATIONS:
+--------------------------------------------------------------------------------
+  [MEDIUM] Missing compiler optimization: funroll_loops
+    Action: Add -funroll-loops to copts in BUILD file
+  [MEDIUM] Missing compiler optimization: ftree_vectorize
+    Action: Add -ftree-vectorize to copts in BUILD file
+  [MEDIUM] Missing compiler optimization: finline_functions
+    Action: Add -finline-functions to copts in BUILD file
+  [MEDIUM] Missing compiler optimization: fgcse_after_reload
+    Action: Add -fgcse-after-reload to copts in BUILD file
+
+================================================================================

@@ -1,0 +1,45 @@
+{
+  "type": "satellite",
+  "core": {
+    "radius": 0.5,
+    "mass": 13.0,
+    "friction": 0.5,
+    "restitution": 0.2,
+    "linear_damping": 0.1,
+    "angular_damping": 0.1
+  },
+  "part_shapes": [
+    {
+      "type": "box",
+      "dimensions": [1.0, 0.1, 1.0],
+      "relative_pos": [0.0, 0.0, 0.0],
+      "relative_rot": [0.0, 0.0, 0.0]
+    }
+  ],
+  "satellites": [
+    { "id": 1, "offset_angle": 0, "elevation": 0, "distance": 1.4 },
+    { "id": 2, "offset_angle": 72, "elevation": 0, "distance": 1.4 },
+    { "id": 3, "offset_angle": 144, "elevation": 0, "distance": 1.4 },
+    { "id": 4, "offset_angle": 216, "elevation": 0, "distance": 1.4 },
+    { "id": 5, "offset_angle": 288, "elevation": 0, "distance": 1.4 },
+    { "id": 6, "offset_angle": 0, "elevation": 45, "distance": 1.4 }
+  ],
+  "joints": {
+    "hinge_damping": 0.8,
+    "hinge_armature": 0.5,
+    "motor_torque": 5000.0,
+    "motor_min_torque": -10000.0,
+    "motor_max_torque": 10000.0,
+    "slide_range": [0.0, 0.5]
+  },
+  "actions": {
+    "per_satellite": 4,
+    "rotation_scale": 100.0,
+    "slide_scale": 250.0,
+    "reaction_torque_scale": 20000.0
+  },
+  "sensors": {
+    "lidar_rays": 10,
+    "lidar_max_distance": 20.0
+  }
+}

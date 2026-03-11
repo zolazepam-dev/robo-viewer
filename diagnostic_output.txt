@@ -1,0 +1,454 @@
+[ConfigManager] Loaded configuration from: viewer_config.json
+[ConfigManager] Loaded configuration from: viewer_config.json
+[TD3Trainer::TD3Trainer] stateDim=160, actionDim=8, hiddenDim=128, latentDim=24
+[TD3Trainer::TD3Trainer] Initializing model...
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 208 -> 24, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 24 (padded from 24)
+[TD3Trainer::TD3Trainer] Model initialized
+[TD3Trainer::TD3Trainer] Allocating buffers (batchSize=256)...
+[TD3Trainer::TD3Trainer] Buffers allocated
+[TD3Trainer::TD3Trainer] INIT COMPLETE
+[TD3Trainer::TD3Trainer] stateDim=160, actionDim=8, hiddenDim=128, latentDim=24
+[TD3Trainer::TD3Trainer] Initializing model...
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 208 -> 24, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 24 (padded from 24)
+[TD3Trainer::TD3Trainer] Model initialized
+[TD3Trainer::TD3Trainer] Allocating buffers (batchSize=256)...
+[TD3Trainer::TD3Trainer] Buffers allocated
+[TD3Trainer::TD3Trainer] INIT COMPLETE
+[main] Checking model path: /home/cammyz/.joltrl/checkpoints/BouncyOrbiter/model_final.bin
+[main] Model exists, loading...
+[TD3Trainer::Load] Successfully loaded 4704 weights from /home/cammyz/.joltrl/checkpoints/BouncyOrbiter/model_final.bin
+[main] Model loaded
+[main] Copying weights to opponent...
+[main] Weights copied
+[main] Creating threads...
+[IOWorker] STARTING
+[TrainingLoop] STARTING
+[main] Threads created
+[SimulationLoop] STARTING with 128 envs, stateDim=160, actionDim=8, latentDim=24
+[SimulationLoop] Buffers allocated, entering loop (render env=0)
+[VectorizedEnv] Initializing...
+[PhysicsCore] Allocating Temp Memory...
+[PhysicsCore] Hardware threads: 12, Using: 10
+[PhysicsCore] Allocating Temp Memory: 768 MB...
+[PhysicsCore] Creating Job System...
+[PhysicsCore] Pinning thread 0 to core 1
+[PhysicsCore] Pinning thread 1 to core 2
+[PhysicsCore] Pinning thread 2 to core 3
+[PhysicsCore] Pinning thread 3 to core 4
+[PhysicsCore] Pinning thread 4 to core 5
+[PhysicsCore] Pinning thread 5 to core 6
+[PhysicsCore] Pinning thread 6 to core 7
+[PhysicsCore] Pinning thread 7 to core 8
+[PhysicsCore] Pinning thread 8 to core 9
+[PhysicsCore] Pinning thread 9 to core 10
+[PhysicsCore] Checking Jolt Factory...
+[PhysicsCore] Registering Jolt Allocator...
+[PhysicsCore] Creating Jolt Factory...
+[PhysicsCore] Registering Jolt Types...
+[PhysicsCore] Creating BP Layers...
+[PhysicsCore] Creating PhysicsSystem...
+[PhysicsCore] Body limits: 10240 bodies, 12800 pairs, 10240 constraints
+[PhysicsCore] PhysicsSystem initialized successfully
+[VectorizedEnv] PhysicsCore initialized
+[VectorizedEnv] Contact listener created
+[VectorizedEnv] Contact listener registered
+[VectorizedEnv] Creating arena...
+[VectorizedEnv] Floor shape created
+[VectorizedEnv] Floor added
+[VectorizedEnv] Ceiling added
+[VectorizedEnv] Wall shape created
+[VectorizedEnv] North wall added
+[VectorizedEnv] South wall added
+[VectorizedEnv] East wall added
+[VectorizedEnv] West wall added
+[VectorizedEnv] Arena complete
+[VectorizedEnv] Initializing 128 robot environments...
+[VectorizedEnv] Init env 0/128
+[VectorizedEnv] Init env 10/128
+[VectorizedEnv] Init env 20/128
+[VectorizedEnv] Init env 30/128
+[VectorizedEnv] Init env 40/128
+[VectorizedEnv] Init env 50/128
+[VectorizedEnv] Init env 60/128
+[VectorizedEnv] Init env 70/128
+[VectorizedEnv] Init env 80/128
+[VectorizedEnv] Init env 90/128
+[VectorizedEnv] Init env 100/128
+[VectorizedEnv] Init env 110/128
+[VectorizedEnv] Init env 120/128
+[VectorizedEnv] All robots initialized
+[VectorizedEnv] Obs dim: 160, Action dim: 8
+[VectorizedEnv] Buffers allocated
+[VectorizedEnv] Initialization complete!
+
+========== PERFORMANCE DIAGNOSTIC REPORT ==========
+Metric                        Avg (ms)  Max (ms)  Count     
+---------------------------------------------------
+Mutex Wait: SimulationLoop: PhysicsUpdate0.000     0.000     2         
+Mutex Wait: UILoop: RenderDraw0.000     0.000     890       
+UILoop: TotalFrame            11.257    30.766    890       
+===================================================
+
+[ConfigManager] Saved configuration to: viewer_config.json
+[PhysicsCore] Shutdown starting...
+[PhysicsCore] Deleting PhysicsSystem...
+[PhysicsCore] Deleting JobSystem...
+[PhysicsCore] Deleting TempAllocator...
+[PhysicsCore] Shutdown complete.
+[PhysicsCore] Shutdown starting...
+[PhysicsCore] Not initialized, skipping.
+[VectorizedEnv] Initializing...
+[PhysicsCore] Allocating Temp Memory...
+[PhysicsCore] Hardware threads: 12, Using: 10
+[PhysicsCore] Allocating Temp Memory: 512 MB...
+[PhysicsCore] Creating Job System...
+[PhysicsCore] Pinning thread 0 to core 1
+[PhysicsCore] Pinning thread 1 to core 2
+[PhysicsCore] Pinning thread 2 to core 3
+[PhysicsCore] Pinning thread 3 to core 4
+[PhysicsCore] Pinning thread 4 to core 5
+[PhysicsCore] Pinning thread 5 to core 6
+[PhysicsCore] Pinning thread 6 to core 7
+[PhysicsCore] Pinning thread 7 to core 8
+[PhysicsCore] Pinning thread 8 to core 9
+[PhysicsCore] Pinning thread 9 to core 10
+[PhysicsCore] Checking Jolt Factory...
+[PhysicsCore] Creating BP Layers...
+[PhysicsCore] Creating PhysicsSystem...
+[PhysicsCore] Body limits: 51200 bodies, 204800 pairs, 102400 constraints
+[PhysicsCore] PhysicsSystem initialized successfully
+[VectorizedEnv] PhysicsCore initialized
+[VectorizedEnv] Contact listener created
+[VectorizedEnv] Contact listener registered
+[VectorizedEnv] Creating arena...
+[VectorizedEnv] Floor shape created
+[VectorizedEnv] Floor added
+[VectorizedEnv] Ceiling added
+[VectorizedEnv] Wall shape created
+[VectorizedEnv] North wall added
+[VectorizedEnv] South wall added
+[VectorizedEnv] East wall added
+[VectorizedEnv] West wall added
+[VectorizedEnv] Arena complete
+[VectorizedEnv] Initializing 2048 robot environments...
+[VectorizedEnv] Init env 0/2048
+[VectorizedEnv] Init env 10/2048
+[VectorizedEnv] Init env 20/2048
+[VectorizedEnv] Init env 30/2048
+[VectorizedEnv] Init env 40/2048
+[VectorizedEnv] Init env 50/2048
+[VectorizedEnv] Init env 60/2048
+[VectorizedEnv] Init env 70/2048
+[VectorizedEnv] Init env 80/2048
+[VectorizedEnv] Init env 90/2048
+[VectorizedEnv] Init env 100/2048
+[VectorizedEnv] Init env 110/2048
+[VectorizedEnv] Init env 120/2048
+[VectorizedEnv] Init env 130/2048
+[VectorizedEnv] Init env 140/2048
+[VectorizedEnv] Init env 150/2048
+[VectorizedEnv] Init env 160/2048
+[VectorizedEnv] Init env 170/2048
+[VectorizedEnv] Init env 180/2048
+[VectorizedEnv] Init env 190/2048
+[VectorizedEnv] Init env 200/2048
+[VectorizedEnv] Init env 210/2048
+[VectorizedEnv] Init env 220/2048
+[VectorizedEnv] Init env 230/2048
+[VectorizedEnv] Init env 240/2048
+[VectorizedEnv] Init env 250/2048
+[VectorizedEnv] Init env 260/2048
+[VectorizedEnv] Init env 270/2048
+[VectorizedEnv] Init env 280/2048
+[VectorizedEnv] Init env 290/2048
+[VectorizedEnv] Init env 300/2048
+[VectorizedEnv] Init env 310/2048
+[VectorizedEnv] Init env 320/2048
+[VectorizedEnv] Init env 330/2048
+[VectorizedEnv] Init env 340/2048
+[VectorizedEnv] Init env 350/2048
+[VectorizedEnv] Init env 360/2048
+[VectorizedEnv] Init env 370/2048
+[VectorizedEnv] Init env 380/2048
+[VectorizedEnv] Init env 390/2048
+[VectorizedEnv] Init env 400/2048
+[VectorizedEnv] Init env 410/2048
+[VectorizedEnv] Init env 420/2048
+[VectorizedEnv] Init env 430/2048
+[VectorizedEnv] Init env 440/2048
+[VectorizedEnv] Init env 450/2048
+[VectorizedEnv] Init env 460/2048
+[VectorizedEnv] Init env 470/2048
+[VectorizedEnv] Init env 480/2048
+[VectorizedEnv] Init env 490/2048
+[VectorizedEnv] Init env 500/2048
+[VectorizedEnv] Init env 510/2048
+[VectorizedEnv] Init env 520/2048
+[VectorizedEnv] Init env 530/2048
+[VectorizedEnv] Init env 540/2048
+[VectorizedEnv] Init env 550/2048
+[VectorizedEnv] Init env 560/2048
+[VectorizedEnv] Init env 570/2048
+[VectorizedEnv] Init env 580/2048
+[VectorizedEnv] Init env 590/2048
+[VectorizedEnv] Init env 600/2048
+[VectorizedEnv] Init env 610/2048
+[VectorizedEnv] Init env 620/2048
+[VectorizedEnv] Init env 630/2048
+[VectorizedEnv] Init env 640/2048
+[VectorizedEnv] Init env 650/2048
+[VectorizedEnv] Init env 660/2048
+[VectorizedEnv] Init env 670/2048
+[VectorizedEnv] Init env 680/2048
+[VectorizedEnv] Init env 690/2048
+[VectorizedEnv] Init env 700/2048
+[VectorizedEnv] Init env 710/2048
+[VectorizedEnv] Init env 720/2048
+[VectorizedEnv] Init env 730/2048
+[VectorizedEnv] Init env 740/2048
+[VectorizedEnv] Init env 750/2048
+[VectorizedEnv] Init env 760/2048
+[VectorizedEnv] Init env 770/2048
+[VectorizedEnv] Init env 780/2048
+[VectorizedEnv] Init env 790/2048
+[VectorizedEnv] Init env 800/2048
+[VectorizedEnv] Init env 810/2048
+[VectorizedEnv] Init env 820/2048
+[VectorizedEnv] Init env 830/2048
+[VectorizedEnv] Init env 840/2048
+[VectorizedEnv] Init env 850/2048
+[VectorizedEnv] Init env 860/2048
+[VectorizedEnv] Init env 870/2048
+[VectorizedEnv] Init env 880/2048
+[VectorizedEnv] Init env 890/2048
+[VectorizedEnv] Init env 900/2048
+[VectorizedEnv] Init env 910/2048
+[VectorizedEnv] Init env 920/2048
+[VectorizedEnv] Init env 930/2048
+[VectorizedEnv] Init env 940/2048
+[VectorizedEnv] Init env 950/2048
+[VectorizedEnv] Init env 960/2048
+[VectorizedEnv] Init env 970/2048
+[VectorizedEnv] Init env 980/2048
+[VectorizedEnv] Init env 990/2048
+[VectorizedEnv] Init env 1000/2048
+[VectorizedEnv] Init env 1010/2048
+[VectorizedEnv] Init env 1020/2048
+[VectorizedEnv] Init env 1030/2048
+[VectorizedEnv] Init env 1040/2048
+[VectorizedEnv] Init env 1050/2048
+[VectorizedEnv] Init env 1060/2048
+[VectorizedEnv] Init env 1070/2048
+[VectorizedEnv] Init env 1080/2048
+[VectorizedEnv] Init env 1090/2048
+[VectorizedEnv] Init env 1100/2048
+[VectorizedEnv] Init env 1110/2048
+[VectorizedEnv] Init env 1120/2048
+[VectorizedEnv] Init env 1130/2048
+[VectorizedEnv] Init env 1140/2048
+[VectorizedEnv] Init env 1150/2048
+[VectorizedEnv] Init env 1160/2048
+[VectorizedEnv] Init env 1170/2048
+[VectorizedEnv] Init env 1180/2048
+[VectorizedEnv] Init env 1190/2048
+[VectorizedEnv] Init env 1200/2048
+[VectorizedEnv] Init env 1210/2048
+[VectorizedEnv] Init env 1220/2048
+[VectorizedEnv] Init env 1230/2048
+[VectorizedEnv] Init env 1240/2048
+[VectorizedEnv] Init env 1250/2048
+[VectorizedEnv] Init env 1260/2048
+[VectorizedEnv] Init env 1270/2048
+[VectorizedEnv] Init env 1280/2048
+[VectorizedEnv] Init env 1290/2048
+[VectorizedEnv] Init env 1300/2048
+[VectorizedEnv] Init env 1310/2048
+[VectorizedEnv] Init env 1320/2048
+[VectorizedEnv] Init env 1330/2048
+[VectorizedEnv] Init env 1340/2048
+[VectorizedEnv] Init env 1350/2048
+[VectorizedEnv] Init env 1360/2048
+[VectorizedEnv] Init env 1370/2048
+[VectorizedEnv] Init env 1380/2048
+[VectorizedEnv] Init env 1390/2048
+[VectorizedEnv] Init env 1400/2048
+[VectorizedEnv] Init env 1410/2048
+[VectorizedEnv] Init env 1420/2048
+[VectorizedEnv] Init env 1430/2048
+[VectorizedEnv] Init env 1440/2048
+[VectorizedEnv] Init env 1450/2048
+[VectorizedEnv] Init env 1460/2048
+[VectorizedEnv] Init env 1470/2048
+[VectorizedEnv] Init env 1480/2048
+[VectorizedEnv] Init env 1490/2048
+[VectorizedEnv] Init env 1500/2048
+[VectorizedEnv] Init env 1510/2048
+[VectorizedEnv] Init env 1520/2048
+[VectorizedEnv] Init env 1530/2048
+[VectorizedEnv] Init env 1540/2048
+[VectorizedEnv] Init env 1550/2048
+[VectorizedEnv] Init env 1560/2048
+[VectorizedEnv] Init env 1570/2048
+[VectorizedEnv] Init env 1580/2048
+[VectorizedEnv] Init env 1590/2048
+[VectorizedEnv] Init env 1600/2048
+[VectorizedEnv] Init env 1610/2048
+[VectorizedEnv] Init env 1620/2048
+[VectorizedEnv] Init env 1630/2048
+[VectorizedEnv] Init env 1640/2048
+[VectorizedEnv] Init env 1650/2048
+[VectorizedEnv] Init env 1660/2048
+[VectorizedEnv] Init env 1670/2048
+[VectorizedEnv] Init env 1680/2048
+[VectorizedEnv] Init env 1690/2048
+[VectorizedEnv] Init env 1700/2048
+[VectorizedEnv] Init env 1710/2048
+[VectorizedEnv] Init env 1720/2048
+[VectorizedEnv] Init env 1730/2048
+[VectorizedEnv] Init env 1740/2048
+[VectorizedEnv] Init env 1750/2048
+[VectorizedEnv] Init env 1760/2048
+[VectorizedEnv] Init env 1770/2048
+[VectorizedEnv] Init env 1780/2048
+[VectorizedEnv] Init env 1790/2048
+[VectorizedEnv] Init env 1800/2048
+[VectorizedEnv] Init env 1810/2048
+[VectorizedEnv] Init env 1820/2048
+[VectorizedEnv] Init env 1830/2048
+[VectorizedEnv] Init env 1840/2048
+[VectorizedEnv] Init env 1850/2048
+[VectorizedEnv] Init env 1860/2048
+[VectorizedEnv] Init env 1870/2048
+[VectorizedEnv] Init env 1880/2048
+[VectorizedEnv] Init env 1890/2048
+[VectorizedEnv] Init env 1900/20[TrainingLoop] STARTING
+[SimulationLoop] STARTING with 2048 envs, stateDim=160, actionDim=8, latentDim=24
+48
+[VectorizedEnv] Init env 1910/2048
+[VectorizedEnv] Init env 1920/2048
+[VectorizedEnv] Init env 1930/2048
+[VectorizedEnv] Init env 1940/2048
+[VectorizedEnv] Init env 1950/2048
+[VectorizedEnv] Init env 1960/2048
+[VectorizedEnv] Init env 1970/2048
+[VectorizedEnv] Init env 1980/2048
+[VectorizedEnv] Init env 1990/2048
+[VectorizedEnv] Init env 2000/2048
+[VectorizedEnv] Init env 2010/2048
+[VectorizedEnv] Init env 2020/2048
+[VectorizedEnv] Init env 2030/2048
+[VectorizedEnv] Init env 2040/2048
+[VectorizedEnv] All robots initialized
+[VectorizedEnv] Obs dim: 160, Action dim: 8
+[VectorizedEnv] Buffers allocated
+[VectorizedEnv] Initialization complete!
+[STUTTER DETECTED] UILoop: TotalFrame: 394.204ms
+[SimulationLoop] Buffers allocated, entering loop (render env=0)
+[STUTTER DETECTED] UILoop: TotalFrame: 53.1355ms
+[STUTTER DETECTED] UILoop: TotalFrame: 52.633ms
+
+========== PERFORMANCE DIAGNOSTIC REPORT ==========
+Metric                        Avg (ms)  Max (ms)  Count     
+---------------------------------------------------
+Mutex Wait: MainLoop: SimRestart0.000     0.000     1         
+Mutex Wait: SimulationLoop: PhysicsUpdate0.000     0.000     3         
+Mutex Wait: UILoop: RenderDraw0.000     0.000     1624      
+UILoop: TotalFrame            12.327    394.204   1624      
+===================================================
+
+
+========== PERFORMANCE DIAGNOSTIC REPORT ==========
+Metric                        Avg (ms)  Max (ms)  Count     
+---------------------------------------------------
+Mutex Wait: MainLoop: SimRestart0.000     0.000     1         
+Mutex Wait: SimulationLoop: PhysicsUpdate0.000     0.000     3         
+Mutex Wait: UILoop: RenderDraw0.000     0.000     2382      
+UILoop: TotalFrame            12.605    394.204   2382      
+===================================================
+

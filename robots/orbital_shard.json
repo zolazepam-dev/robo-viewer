@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "name": "Orbital Shard X-4",
+    "version": "2.0",
+    "description": "Heavy shard with four motorized scythe wings and improved sensor suite",
+    "author": "Gemini CLI"
+  },
+  "type": "internal_engine",
+  "isUnifiedBody": false,
+  "bodies": [
+    {
+      "name": "chassis",
+      "type": "dynamic",
+      "mass": 2000.0,
+      "position": [0, 0, 0],
+      "shape": {
+        "type": "box",
+        "halfExtents": [1.0, 0.1, 1.0]
+      }
+    },
+    { "name": "wing_fl", "type": "dynamic", "mass": 500.0, "position": [-1.5, 0, 0.8], "shape": { "type": "box", "halfExtents": [0.5, 0.05, 1.2] } },
+    { "name": "wing_fr", "type": "dynamic", "mass": 500.0, "position": [1.5, 0, 0.8], "shape": { "type": "box", "halfExtents": [0.5, 0.05, 1.2] } },
+    { "name": "wing_bl", "type": "dynamic", "mass": 500.0, "position": [-1.5, 0, -0.8], "shape": { "type": "box", "halfExtents": [0.5, 0.05, 1.2] } },
+    { "name": "wing_br", "type": "dynamic", "mass": 500.0, "position": [1.5, 0, -0.8], "shape": { "type": "box", "halfExtents": [0.5, 0.05, 1.2] } }
+  ],
+  "constraints": [
+    { "name": "hinge_fl", "type": "hinge", "body1": "chassis", "body2": "wing_fl", "position": [-1.0, 0, 0.8], "hingeAxis": [0, 0, 1], "limits": { "min": -0.8, "max": 0.8 } },
+    { "name": "hinge_fr", "type": "hinge", "body1": "chassis", "body2": "wing_fr", "position": [1.0, 0, 0.8], "hingeAxis": [0, 0, 1], "limits": { "min": -0.8, "max": 0.8 } },
+    { "name": "hinge_bl", "type": "hinge", "body1": "chassis", "body2": "wing_bl", "position": [-1.0, 0, -0.8], "hingeAxis": [0, 0, 1], "limits": { "min": -0.8, "max": 0.8 } },
+    { "name": "hinge_br", "type": "hinge", "body1": "chassis", "body2": "wing_br", "position": [1.0, 0, -0.8], "hingeAxis": [0, 0, 1], "limits": { "min": -0.8, "max": 0.8 } }
+  ],
+  "sensors": {
+    "lidar": [
+      { "name": "front_lidar", "body": "chassis", "rays": 16, "maxDistance": 30.0 },
+      { "name": "back_lidar", "body": "chassis", "rays": 8, "maxDistance": 15.0 }
+    ],
+    "radar": [
+      { "name": "enemy_track", "body": "chassis", "range": 50.0 }
+    ]
+  },
+  "actuators": {
+    "motors": [
+      { "name": "motor_fl", "constraint": "hinge_fl", "axis": 0, "settings": { "type": "velocity", "maxForce": 80000.0 } },
+      { "name": "motor_fr", "constraint": "hinge_fr", "axis": 0, "settings": { "type": "velocity", "maxForce": 80000.0 } },
+      { "name": "motor_bl", "constraint": "hinge_bl", "axis": 0, "settings": { "type": "velocity", "maxForce": 80000.0 } },
+      { "name": "motor_br", "constraint": "hinge_br", "axis": 0, "settings": { "type": "velocity", "maxForce": 80000.0 } }
+    ],
+    "reactionWheels": [
+      { "name": "body_control", "body": "chassis", "axes": ["x", "y", "z"], "maxTorque": 100000.0 }
+    ]
+  },
+  "actions": {
+    "rotation_scale": 150.0,
+    "reaction_torque_scale": 100000.0
+  }
+}

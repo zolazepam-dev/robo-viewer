@@ -1,0 +1,76 @@
+{
+  "name": "BouncyOrbiter",
+  "type": "satellite",
+  "metadata": {
+    "description": "Large bouncy sphere with 3 double-sized bouncy orbiters"
+  },
+  "bodies": [
+    {
+      "name": "body_central",
+      "shape": { "type": "sphere", "radius": 1.0 },
+      "position": [0, 0, 0],
+      "mass": 30.0,
+      "material": { "friction": 0.8, "restitution": 0.9 }
+    },
+    {
+      "name": "sat1",
+      "shape": { "type": "sphere", "radius": 0.4 },
+      "position": [2.5, 0, 0],
+      "mass": 5.0,
+      "material": { "friction": 0.9, "restitution": 0.9 }
+    },
+    {
+      "name": "sat2",
+      "shape": { "type": "sphere", "radius": 0.4 },
+      "position": [-1.25, 0, 2.165],
+      "mass": 5.0,
+      "material": { "friction": 0.9, "restitution": 0.9 }
+    },
+    {
+      "name": "sat3",
+      "shape": { "type": "sphere", "radius": 0.4 },
+      "position": [-1.25, 0, -2.165],
+      "mass": 5.0,
+      "material": { "friction": 0.9, "restitution": 0.9 }
+    }
+  ],
+  "constraints": [
+    {
+      "name": "joint1",
+      "type": "sixdof",
+      "body1": "body_central",
+      "body2": "sat1",
+      "position": [0, 0, 0],
+      "hasMotor": true,
+      "motorMaxTorque": 20000.0
+    },
+    {
+      "name": "joint2",
+      "type": "sixdof",
+      "body1": "body_central",
+      "body2": "sat2",
+      "position": [0, 0, 0],
+      "hasMotor": true,
+      "motorMaxTorque": 20000.0
+    },
+    {
+      "name": "joint3",
+      "type": "sixdof",
+      "body1": "body_central",
+      "body2": "sat3",
+      "position": [0, 0, 0],
+      "hasMotor": true,
+      "motorMaxTorque": 20000.0
+    }
+  ],
+  "sensors": {
+    "lidar_rays": 16,
+    "lidar_max_distance": 25.0
+  },
+  "actions": {
+    "reaction_wheel_dim": 3,
+    "reaction_torque_scale": 10000.0
+  },
+  "useDirectTorque": true,
+  "orbiterTorqueScale": 40000.0
+}

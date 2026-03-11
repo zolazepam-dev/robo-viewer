@@ -1,0 +1,356 @@
+[ConfigManager] Loaded configuration from: viewer_config.json
+[ConfigManager] Loaded configuration from: viewer_config.json
+[TD3Trainer::TD3Trainer] stateDim=160, actionDim=8, hiddenDim=128, latentDim=24
+[TD3Trainer::TD3Trainer] Initializing model...
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 208 -> 24, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 24 (padded from 24)
+[TD3Trainer::TD3Trainer] Model initialized
+[TD3Trainer::TD3Trainer] Allocating buffers (batchSize=256)...
+[TD3Trainer::TD3Trainer] Buffers allocated
+[TD3Trainer::TD3Trainer] INIT COMPLETE
+[TD3Trainer::TD3Trainer] stateDim=160, actionDim=8, hiddenDim=128, latentDim=24
+[TD3Trainer::TD3Trainer] Initializing model...
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 184 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 8, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 8)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 192 -> 256, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 256 (padded from 256)
+[RFFLayer::Init] 256 -> 128, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 128 (padded from 128)
+[RFFLayer::Init] 128 -> 4, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 8 (padded from 4)
+[RFFNetwork::Init] Complete. 3 layers.
+[RFFLayer::Init] 208 -> 24, features=1024, sigma=1.00
+[RFFLayer::Init] Complete. Bias size: 24 (padded from 24)
+[TD3Trainer::TD3Trainer] Model initialized
+[TD3Trainer::TD3Trainer] Allocating buffers (batchSize=256)...
+[TD3Trainer::TD3Trainer] Buffers allocated
+[TD3Trainer::TD3Trainer] INIT COMPLETE
+[main] Checking model path: /home/cammyz/.joltrl/checkpoints/BouncyOrbiter/model_final.bin
+[main] Model exists, loading...
+[TD3Trainer::Load] Successfully loaded 4704 weights from /home/cammyz/.joltrl/checkpoints/BouncyOrbiter/model_final.bin
+[main] Model loaded
+[main] Copying weights to opponent...
+[main] Weights copied
+[main] Creating threads...
+[main] Threads created
+[IOWorker] STARTING
+[TrainingLoop] STARTING
+[SimulationLoop] STARTING with 128 envs, stateDim=160, actionDim=8, latentDim=24
+[SimulationLoop] Buffers allocated, entering loop
+[SimulationLoop] Step 0, numEnvs=128
+[SimulationLoop] Step 0: obs batched
+[SimulationLoop] Step 1: obs batched
+[SimulationLoop] Step 2: obs batched
+[SimulationLoop] Step 3: obs batched
+[SimulationLoop] Step 4: obs batched
+[SimulationLoop] Step 5: obs batched
+[VectorizedEnv] Initializing...
+[PhysicsCore] Allocating Temp Memory...
+[PhysicsCore] Hardware threads: 12, Using: 10
+[PhysicsCore] Allocating Temp Memory: 768 MB...
+[PhysicsCore] Creating Job System...
+[PhysicsCore] Pinning thread 0 to core 1
+[PhysicsCore] Pinning thread 1 to core 2
+[PhysicsCore] Pinning thread 2 to core 3
+[PhysicsCore] Pinning thread 3 to core 4
+[PhysicsCore] Pinning thread 4 to core 5
+[PhysicsCore] Pinning thread 5 to core 6
+[PhysicsCore] Pinning thread 6 to core 7
+[PhysicsCore] Pinning thread 7 to core 8
+[PhysicsCore] Pinning thread 8 to core 9
+[PhysicsCore] Pinning thread 9 to core 10
+[PhysicsCore] Checking Jolt Factory...
+[PhysicsCore] Registering Jolt Allocator...
+[PhysicsCore] Creating Jolt Factory...
+[PhysicsCore] Registering Jolt Types...
+[PhysicsCore] Creating BP Layers...
+[PhysicsCore] Creating PhysicsSystem...
+[PhysicsCore] Body limits: 10240 bodies, 12800 pairs, 10240 constraints
+[PhysicsCore] PhysicsSystem initialized successfully
+[VectorizedEnv] PhysicsCore initialized
+[VectorizedEnv] Contact listener created
+[VectorizedEnv] Contact listener registered
+[VectorizedEnv] Creating arena...
+[VectorizedEnv] Floor shape created
+[VectorizedEnv] Floor added
+[VectorizedEnv] Ceiling added
+[VectorizedEnv] Wall shape created
+[VectorizedEnv] North wall added
+[VectorizedEnv] South wall added
+[VectorizedEnv] East wall added
+[VectorizedEnv] West wall added
+[VectorizedEnv] Arena complete
+[VectorizedEnv] Initializing 128 robot environments...
+[VectorizedEnv] Init env 0/128
+[VectorizedEnv] Init env 10/128
+[VectorizedEnv] Init env 20/128
+[VectorizedEnv] Init env 30/128
+[VectorizedEnv] Init env 40/128
+[VectorizedEnv] Init env 50/128
+[VectorizedEnv] Init env 60/128
+[VectorizedEnv] Init env 70/128
+[VectorizedEnv] Init env 80/128
+[VectorizedEnv] Init env 90/128
+[VectorizedEnv] Init env 100/128
+[VectorizedEnv] Init env 110/128
+[VectorizedEnv] Init env 120/128
+[VectorizedEnv] All robots initialized
+[VectorizedEnv] Obs dim: 160, Action dim: 8
+[VectorizedEnv] Buffers allocated
+[VectorizedEnv] Initialization complete!
+[STUTTER DETECTED] Background: TrainingStep: 650.497ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 676.507ms
+[SimulationLoop] Step 6: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 55.3119ms
+[STUTTER DETECTED] Background: TrainingStep: 698.827ms
+[STUTTER DETECTED] Background: TrainingStep: 71.9224ms
+[STUTTER DETECTED] Background: TrainingStep: 748.282ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1569.74ms
+[SimulationLoop] Step 7: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 100.755ms
+[TD3Trainer::Train] Step 4710 starting...
+[TD3Trainer::Train] Sampled buffer
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 116.758ms
+[SimulationLoop] Step 8: obs batched
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 709.416ms
+[STUTTER DETECTED] Background: TrainingStep: 87.0406ms
+[STUTTER DETECTED] Background: TrainingStep: 652.2ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1427.92ms
+[SimulationLoop] Step 9: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 95.2212ms
+[STUTTER DETECTED] Background: TrainingStep: 692.12ms
+[STUTTER DETECTED] Background: TrainingStep: 618.297ms
+[STUTTER DETECTED] Background: TrainingStep: 71.1435ms
+[STUTTER DETECTED] Background: TrainingStep: 711.179ms
+[TD3Trainer::Train] Step 4720 starting...
+[TD3Trainer::Train] Sampled buffer
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 659.261ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 2928.31ms
+[SimulationLoop] Step 10: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 61.6866ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 60.0598ms
+[SimulationLoop] Step 11: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 651.007ms
+[STUTTER DETECTED] Background: TrainingStep: 73.3208ms
+[STUTTER DETECTED] Background: TrainingStep: 703.485ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1428.02ms
+[SimulationLoop] Step 12: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 101.757ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 141.138ms
+[SimulationLoop] Step 13: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 784.581ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 733.696ms
+[SimulationLoop] Step 14: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 95.3672ms
+
+========== PERFORMANCE DIAGNOSTIC REPORT ==========
+Metric                        Avg (ms)  Max (ms)  Count     
+---------------------------------------------------
+Background: TrainingStep      382.329   784.581   24        
+Mutex Wait: SimulationLoop: PhysicsUpdate0.000     0.000     14        
+Mutex Wait: UILoop: RenderDraw-27176.1660.000     876       
+SimulationLoop: ActionSelection658.953   2928.310  14        
+SimulationLoop: ReplayBufferAdd0.086     0.172     13        
+UILoop: TotalFrame            11.414    44.165    876       
+===================================================
+
+[STUTTER DETECTED] Background: TrainingStep: 678.582ms
+[STUTTER DETECTED] Background: TrainingStep: 75.8746ms
+[TD3Trainer::Train] Step 4730 starting...
+[TD3Trainer::Train] Sampled buffer
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 725.07ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1575.03ms
+[SimulationLoop] Step 15: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 63.6424ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 66.7101ms
+[SimulationLoop] Step 16: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 682.422ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 670.803ms
+[SimulationLoop] Step 17: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 105.834ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 157.756ms
+[SimulationLoop] Step 18: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 728.389ms
+[STUTTER DETECTED] Background: TrainingStep: 635.571ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1348.98ms
+[SimulationLoop] Step 19: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 104.091ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 101.81ms
+[SimulationLoop] Step 20: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 716.041ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 719.183ms
+[SimulationLoop] Step 21: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 62.2917ms
+[TD3Trainer::Train] Step 4740 starting...
+[TD3Trainer::Train] Sampled buffer
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 59.7174ms
+[SimulationLoop] Step 22: obs batched
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 669.138ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 662.583ms
+[SimulationLoop] Step 23: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 99.2862ms
+[STUTTER DETECTED] Background: TrainingStep: 709.428ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 808.616ms
+[SimulationLoop] Step 24: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 96.3552ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 129.164ms
+[SimulationLoop] Step 25: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 765.922ms
+[STUTTER DETECTED] Background: TrainingStep: 707.515ms
+[STUTTER DETECTED] Background: TrainingStep: 64.6503ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1555.6ms
+[SimulationLoop] Step 26: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 723.239ms
+[STUTTER DETECTED] Background: TrainingStep: 72.8019ms
+[TD3Trainer::Train] Step 4750 starting...
+[TD3Trainer::Train] Sampled buffer
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 733.188ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1512.19ms
+[SimulationLoop] Step 27: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 96.7364ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 128.177ms
+[SimulationLoop] Step 28: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 766.364ms
+[STUTTER DETECTED] Background: TrainingStep: 73.1416ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 804.041ms
+[SimulationLoop] Step 29: obs batched
+
+========== PERFORMANCE DIAGNOSTIC REPORT ==========
+Metric                        Avg (ms)  Max (ms)  Count     
+---------------------------------------------------
+Background: TrainingStep      388.353   784.581   50        
+Mutex Wait: SimulationLoop: PhysicsUpdate0.000     0.000     29        
+Mutex Wait: UILoop: RenderDraw-27176.0840.000     1743      
+SimulationLoop: ActionSelection673.300   2928.310  29        
+SimulationLoop: ReplayBufferAdd0.081     0.172     28        
+UILoop: TotalFrame            11.478    44.165    1743      
+===================================================
+
+[STUTTER DETECTED] Background: TrainingStep: 700.699ms
+[STUTTER DETECTED] Background: TrainingStep: 607.058ms
+[STUTTER DETECTED] Background: TrainingStep: 71.2281ms
+[STUTTER DETECTED] Background: TrainingStep: 667.655ms
+[STUTTER DETECTED] Background: TrainingStep: 76.5152ms
+[TD3Trainer::Train] Step 4760 starting...
+[TD3Trainer::Train] Sampled buffer
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 694.717ms
+[STUTTER DETECTED] Background: TrainingStep: 76.0032ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 2932.71ms
+[SimulationLoop] Step 30: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 699.183ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 691.789ms
+[SimulationLoop] Step 31: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 98.8248ms
+[STUTTER DETECTED] Background: TrainingStep: 726.403ms
+[STUTTER DETECTED] Background: TrainingStep: 72.1843ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 898.031ms
+[SimulationLoop] Step 32: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 715.535ms
+[STUTTER DETECTED] Background: TrainingStep: 76.2925ms
+[STUTTER DETECTED] Background: TrainingStep: 652.865ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 1438.54ms
+[SimulationLoop] Step 33: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 98.2322ms
+[TD3Trainer::Train] Step 4770 starting...
+[TD3Trainer::Train] Sampled buffer
+[STUTTER DETECTED] UILoop: TotalFrame: 52.7662ms
+[TD3Trainer::Train] Updated critic
+[TD3Trainer::Train] Updated actor & targets
+[STUTTER DETECTED] Background: TrainingStep: 766.381ms
+[STUTTER DETECTED] Background: TrainingStep: 721.028ms
+[STUTTER DETECTED] Background: TrainingStep: 68.2797ms
+[STUTTER DETECTED] Background: TrainingStep: 691.453ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 2392.08ms
+[SimulationLoop] Step 34: obs batched
+[STUTTER DETECTED] Background: TrainingStep: 102.723ms
+[STUTTER DETECTED] Background: TrainingStep: 662.904ms
+[STUTTER DETECTED] Background: TrainingStep: 78.1026ms
+[STUTTER DETECTED] SimulationLoop: ActionSelection: 870.239ms
+[SimulationLoop] Step 35: obs batched

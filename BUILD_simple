@@ -1,0 +1,12 @@
+cc_binary(
+    name = "simple_viewer",
+    srcs = ["simple_viewer.cpp"],
+    deps = [
+        "//third_party/Jolt:JoltPhysics",
+    ],
+    linkopts = [
+        "-lSDL2",
+        "-lGL",
+        "-lglu",
+    ],
+)

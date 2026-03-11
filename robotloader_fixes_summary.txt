@@ -1,0 +1,41 @@
+# RobotLoader Fixes Summary
+
+## Issues Identified:
+1. Satellite bodies are all positioned at the same location instead of at their core geom positions
+2. Multiple joints per satellite aren't being handled correctly
+3. Constraint anchor points aren't precise enough for smooth rotation
+
+## Key Fixes Needed:
+
+### 1. Satellite Positioning Fix
+In the `BuildMJCFRecursive` function, we need to modify the body positioning logic to correctly place satellite bodies:
+
+```cpp
+// Special handling for satellite bodies - use the position of their core geom
+const char* bodyName = bodyElem->Attribute("name");
+std::string name = bodyName ? bodyName : "";
+
+// Check if this is a satellite body (name contains "_s" and "_sat")
+if (name.find("_s") != std::string::npos && name.find("_sat") != std::string::npos) {
+    // Look for a core geom (name contains "core")
+    for (const tinyxml2::XMLElement* geom = bodyElem->FirstChildElement("geom"); geom; geom = geom->NextSiblingElement("geom")) {
+        const char* geomName = geom->Attribute("name");
+        if (geomName && strstr(geomName, "core")) {
+            // Use the geom's position instead of the body's position
+            JPH::Vec3 corePos = ParseVec3(geom->Attribute("pos"));
+            if (!corePos.IsNearZero()) {
+                localPos = corePos;
+                break;
+            }
+        }
+    }
+}
+```
+
+### 2. Improved Constraint Creation
+Enhanced constraint creation to ensure precise anchor points for smooth rotation.
+
+## Expected Results:
+- Satellite bodies will be positioned at their correct locations based on their core geom positions
+- Robots will have proper articulated structures with precise joint movements
+- Satellites will be able to rotate smoothly around their parent body with high precision

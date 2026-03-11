@@ -1,0 +1,36 @@
+{
+  "name": "CubeWarrior",
+  "type": "satellite",
+  "is_unified": true,
+  "core": {
+    "radius": 0.5,
+    "mass": 50.0,
+    "friction": 0.8,
+    "restitution": 0.1,
+    "linear_damping": 0.2,
+    "angular_damping": 0.2
+  },
+  "satellites": [],
+  "part_shapes": [
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.0,  0.0,  0.0], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.6,  0.0,  0.0], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [-0.6,  0.0,  0.0], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.0,  0.6,  0.0], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.0, -0.6,  0.0], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.0,  0.0,  0.6], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.3, 0.3, 0.3], "relative_pos": [ 0.0,  0.0, -0.6], "relative_rot": [0,0,0,1] },
+    
+    { "type": "box", "dimensions": [0.2, 0.8, 0.2], "relative_pos": [ 0.8,  0.0,  0.8], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.2, 0.8, 0.2], "relative_pos": [-0.8,  0.0,  0.8], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.2, 0.8, 0.2], "relative_pos": [ 0.8,  0.0, -0.8], "relative_rot": [0,0,0,1] },
+    { "type": "box", "dimensions": [0.2, 0.8, 0.2], "relative_pos": [-0.8,  0.0, -0.8], "relative_rot": [0,0,0,1] }
+  ],
+  "joints": {
+    "motor_torque": 1000.0
+  },
+  "actions": {
+    "reaction_wheel_dim": 8,
+    "rotation_scale": 50.0,
+    "reaction_torque_scale": 10000.0
+  }
+}

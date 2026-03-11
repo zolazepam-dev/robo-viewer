@@ -1,0 +1,149 @@
+**Prompt for AI Agent: Implement RFF + ODE Hybrid Architecture for TD3 Agent**
+
+---
+
+### Objective
+Replace the existing B‑spline neural networks (`TensorProductBSpline` and `SpanNetwork`) with a hybrid architecture combining **Random Fourier Features (RFF)** and the existing **second‑order ODE latent memory**. This will dramatically improve inference speed while preserving temporal memory. The new architecture must be CPU‑only, use **Eigen** for linear algebra, and integrate seamlessly into the current TD3 training loop.
+
+---
+
+### Background
+The current codebase (C++) implements a TD3 agent with:
+- `SecondOrderLatentMemory`: per‑environment latent state (position `zPos`, velocity `zVel`) updated via an ODE.
+- `TensorProductBSpline`: a B‑spline layer used in the actor and critic networks.
+- `SpanNetwork`: a container for stacking B‑spline layers.
+- `SpanActorCritic`: holds actor, critics, and latent memory.
+- `TD3Trainer`: performs weight‑perturbation updates (soon to be replaced by gradient‑based optimization).
+
+We now want to replace all B‑spline layers with **RFF layers** while keeping the latent ODE (Option 3: full hybrid). The RFF layers will be used for:
+- The actor mapping: `[obs; zPos] → action`
+- Each critic mapping: `[obs; action; zPos] → Q‑value`
+- The latent acceleration function: `[obs; zPos; zVel] → zVel_update` (acceleration)
+
+All random projections are **fixed** (non‑trainable); only the **output linear weights** of each RFF layer will be trainable. This makes the network extremely fast and compatible with gradient‑based optimizers (Muon, LION, etc.).
+
+---
+
+### Required New Classes
+
+#### 1. `RFFLayer`
+- **Purpose**: Implements a single Random Fourier Features layer:  
+  `features = cos( W_fixed * input + b_fixed )`  
+  `output = W_train * features + bias_train` (optional)
+- **Members**:
+  - `Eigen::MatrixXf W_fixed` – random weights (size `num_features × input_dim`), initialized from `N(0, 1/σ²)`
+  - `Eigen::VectorXf b_fixed` – random biases (size `num_features`), initialized uniformly from `[0, 2π]`
+  - `Eigen::MatrixXf W_train` – trainable output weights (size `output_dim × num_features`)
+  - `Eigen::VectorXf bias_train` – trainable output bias (size `output_dim`)
+  - `float sigma` – kernel bandwidth (controls the scale of random weights)
+  - `bool use_output_layer` – if `false`, output is just the features (useful for intermediate layers)
+- **Methods**:
+  - `void init(int input_dim, int num_features, int output_dim, float sigma, unsigned seed)`: draws fixed weights and biases; initializes trainable weights (e.g., Xavier).
+  - `Eigen::VectorXf forward(const Eigen::VectorXf& x) const`: returns output.
+  - `Eigen::MatrixXf forward_batch(const Eigen::MatrixXf& X) const`: X is `input_dim × batch_size`, returns `output_dim × batch_size`.
+  - `std::vector<float*> trainable_params()`: returns pointers to `W_train` and `bias_train` for the optimizer.
+  - `void set_trainable_params(const std::vector<float*>& params)` (optional, for restoring).
+
+#### 2. `RFFNetwork`
+- **Purpose**: A container for a sequence of RFF layers (though a single layer may suffice for many tasks). For simplicity, we may only need one RFF layer per network (actor, critic, acceleration). But to allow depth, we can implement a simple sequential model.
+- **Members**: `std::vector<RFFLayer> layers`.
+- **Methods**:
+  - `void add_layer(...)`.
+  - `Eigen::VectorXf forward(const Eigen::VectorXf& x)`.
+  - `Eigen::MatrixXf forward_batch(const Eigen::MatrixXf& X)`.
+  - `std::vector<float*> trainable_params()` aggregates from all layers.
+
+#### 3. `RFFLatentDynamics`
+- **Purpose**: Replaces the hard‑coded acceleration in `SecondOrderLatentMemory` with an RFF‑based learnable function.
+- **Input**: `[obs; zPos; zVel]` (concatenated).
+- **Output**: `zVel_update` (acceleration), same dimension as latent.
+- **Internally**: Uses an `RFFLayer` with `output_dim = latent_dim` (and no output bias, or with).
+- **Integration**: The existing `LatentMemoryManager` would call this to compute acceleration during `StepLatentDynamics`.
+- **Methods**:
+  - `void init(...)`.
+  - `void step(Eigen::VectorXf& zPos, Eigen::VectorXf& zVel, const Eigen::VectorXf& obs, float dt)`.
+  - Batch version for all environments.
+
+---
+
+### Modifications to Existing Classes
+
+#### 1. `SpanNetwork` → Replace with `RFFNetwork`
+- Remove `TensorProductBSpline` usage; instantiate `RFFNetwork` for actor and critics.
+- Keep the same interface (`Forward`, `ForwardBatch`, `GetAllWeights`, `SetAllWeights`) to minimize changes in higher layers. However, `GetAllWeights` should now return only the trainable weights (the linear output weights and biases). The fixed random weights are never saved/loaded (they are recreated from seed each time). This ensures checkpoints remain small.
+
+#### 2. `SpanActorCritic`
+- Replace `SpanNetwork mActor`, `mCritic1`, etc. with `RFFNetwork`.
+- Keep `LatentMemoryManager` as is, but modify its dynamics to use `RFFLatentDynamics`.
+- Update `SelectActionBatchWithLatent`:  
+  - Still call `mLatentMemory.StepLatentDynamics(...)` (which now uses RFF).
+  - Concatenate state and `zPos`.
+  - Call `mActor.ForwardBatch` (RFF version) to get actions.
+- Update critic forward similarly.
+
+#### 3. `LatentMemoryManager`
+- Add a member `std::unique_ptr<RFFLatentDynamics> dynamics`.
+- In `StepLatentDynamics`, for each environment, call `dynamics->step(...)`.
+- Ensure gradients flow through the dynamics during training (i.e., the output weights of `RFFLatentDynamics` are part of the trainable parameter set).
+
+#### 4. `TD3Trainer`
+- No major changes except that the number of trainable parameters is now much smaller.
+- The training loop will compute losses (TD error for critics, negative Q for actor) and then call an optimizer (e.g., Muon) on all trainable parameters (actor, critics, latent dynamics).
+- The optimizer should be provided with the list of trainable parameters via a method like `get_trainable_params()` in `SpanActorCritic`.
+
+---
+
+### Hyperparameters & Initialization
+
+| Parameter | Typical Value | Description |
+|-----------|---------------|-------------|
+| `num_features` | 512 – 2048 | Number of random Fourier features. Higher gives better approximation but more compute. |
+| `sigma` (kernel bandwidth) | 1.0 (or tuned) | Controls the smoothness of the approximated kernel. If features are too high/low, adjust. |
+| `latent_dim` | 16 – 64 | Dimension of latent state (kept from existing config). |
+| `dt` | 1/120 (physics step) | Time step for ODE integration. |
+
+- Random seed: use a fixed seed (e.g., 42) for reproducibility, but allow configuration.
+- Trainable weights: initialize with small random values (e.g., Xavier uniform).
+
+---
+
+### Performance Considerations
+
+- Use **Eigen** with `-march=native` to enable AVX/FMA.
+- For batch operations, pre‑allocate matrices and reuse them (avoid reallocation each step).
+- The RFF forward pass is a single matrix multiply + cosine, which Eigen executes efficiently.
+- The latent dynamics step is per environment, but we can batch it similarly: stack all environments' `[obs; zPos; zVel]` into a single matrix and do one RFF batch forward.
+
+---
+
+### Integration Steps
+
+1. Create new files: `RFFLayer.h`, `RFFLayer.cpp`, `RFFLatentDynamics.h`, `RFFLatentDynamics.cpp`. (Or integrate into existing files.)
+2. Replace `SpanNetwork` implementation with `RFFNetwork` (or simply rename).
+3. Modify `SpanActorCritic` to use `RFFNetwork` and `RFFLatentDynamics`.
+4. Update `TD3Trainer` to collect trainable parameters and pass them to the optimizer.
+5. Remove all B‑spline related code (`TensorProductBSpline`, old `SpanNetwork` methods) if no longer needed.
+
+---
+
+### Deliverables
+
+- Complete C++ code for `RFFLayer`, `RFFNetwork`, and `RFFLatentDynamics` using Eigen.
+- Modified `SpanActorCritic` and `LatentMemoryManager` to integrate the new components.
+- Brief documentation on how to configure the new architecture (feature count, sigma) via `TD3Config`.
+- Example of how to collect trainable parameters for an optimizer.
+
+---
+
+### Testing Suggestions
+
+- **Unit test**: Verify that the RFF forward pass approximates a Gaussian kernel by comparing with a reference kernel on random data.
+- **Gradient check**: For a small network, compute finite‑difference gradients of a simple loss and compare with backprop (using your optimizer).
+- **Overfit test**: Train on a single environment with a fixed reward to ensure the agent can learn.
+- **Benchmark**: Measure step time before and after; expect at least 10–100× speedup.
+
+---
+
+**Note**: The agent should assume that gradients will be computed externally (e.g., using a simple manual backprop or an autograd library). For now, the classes only need to provide forward passes and expose trainable parameters. The training loop will handle loss computation and gradient application.
+
+If you have any questions or need clarification on any part, please ask!

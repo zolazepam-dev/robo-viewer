@@ -1,0 +1,1508 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+WARNING: Build options --compilation_mode and --copt have changed, discarding analysis cache (this can be expensive, see https://bazel.build/advanced/performance/iteration-speed).
+Analyzing: target //:train (0 packages loaded, 0 targets configured)
+Analyzing: target //:train (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:train (0 packages loaded, 5613 targets configured).
+[49 / 848] Compiling imgui_widgets.cpp; 0s linux-sandbox ... (12 actions, 11 running)
+[52 / 848] Compiling imgui_widgets.cpp; 1s linux-sandbox ... (12 actions, 11 running)
+[60 / 848] Compiling imgui_widgets.cpp; 3s linux-sandbox ... (12 actions, 11 running)
+[69 / 848] Compiling imgui_widgets.cpp; 4s linux-sandbox ... (12 actions running)
+[73 / 848] Compiling imgui_widgets.cpp; 5s linux-sandbox ... (12 actions, 11 running)
+[85 / 848] Compiling imgui_widgets.cpp; 6s linux-sandbox ... (12 actions running)
+[94 / 848] Compiling imgui_widgets.cpp; 7s linux-sandbox ... (12 actions, 11 running)
+[97 / 848] Compiling imgui_widgets.cpp; 8s linux-sandbox ... (12 actions, 11 running)
+[100 / 848] Compiling imgui_widgets.cpp; 9s linux-sandbox ... (12 actions running)
+[102 / 848] Compiling imgui_widgets.cpp; 10s linux-sandbox ... (12 actions running)
+[106 / 848] Compiling imgui_widgets.cpp; 11s linux-sandbox ... (12 actions, 11 running)
+[110 / 848] Compiling imgui_widgets.cpp; 13s linux-sandbox ... (12 actions, 11 running)
+[113 / 848] Compiling src/glew.c; 14s linux-sandbox ... (12 actions, 11 running)
+[117 / 848] Compiling src/glew.c; 15s linux-sandbox ... (12 actions, 11 running)
+[119 / 848] Compiling src/glew.c; 16s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/glew.c:
+external/glew+/src/glew.c: In function '_glewStrSame1':
+external/glew+/src/glew.c:256:29: warning: the comparison will always evaluate as 'true' for the pointer operand in '*a + (sizetype)i' must not be NULL [-Waddress]
+  256 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                             ^~
+external/glew+/src/glew.c:256:44: warning: the comparison will always evaluate as 'true' for the pointer operand in 'b + (sizetype)i' must not be NULL [-Waddress]
+  256 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                                            ^~
+external/glew+/src/glew.c: In function '_glewStrSame2':
+external/glew+/src/glew.c:272:29: warning: the comparison will always evaluate as 'true' for the pointer operand in '*a + (sizetype)i' must not be NULL [-Waddress]
+  272 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                             ^~
+external/glew+/src/glew.c:272:44: warning: the comparison will always evaluate as 'true' for the pointer operand in 'b + (sizetype)i' must not be NULL [-Waddress]
+  272 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                                            ^~
+external/glew+/src/glew.c: In function '_glewStrSame3':
+external/glew+/src/glew.c:288:29: warning: the comparison will always evaluate as 'true' for the pointer operand in '*a + (sizetype)i' must not be NULL [-Waddress]
+  288 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                             ^~
+external/glew+/src/glew.c:288:44: warning: the comparison will always evaluate as 'true' for the pointer operand in 'b + (sizetype)i' must not be NULL [-Waddress]
+  288 |     while (i < nb && (*a)+i != NULL && b+i != NULL && (*a)[i] == b[i]) i++;
+      |                                            ^~
+[122 / 848] Compiling src/ConfigManager.cpp; 10s linux-sandbox ... (12 actions, 11 running)
+[129 / 848] Compiling Jolt/Physics/Collision/CastConvexVsTriangles.cpp; 4s linux-sandbox ... (12 actions, 11 running)
+[133 / 848] Compiling Jolt/Physics/Collision/GroupFilter.cpp; 2s linux-sandbox ... (12 actions running)
+[135 / 848] Compiling Jolt/Physics/Collision/ManifoldBetweenTwoFaces.cpp; 3s linux-sandbox ... (12 actions running)
+[141 / 848] Compiling imgui_draw.cpp; 4s linux-sandbox ... (12 actions, 11 running)
+[143 / 848] Compiling imgui_draw.cpp; 5s linux-sandbox ... (12 actions, 11 running)
+[146 / 848] Compiling imgui_draw.cpp; 6s linux-sandbox ... (12 actions, 11 running)
+[147 / 848] Compiling imgui_draw.cpp; 7s linux-sandbox ... (12 actions, 11 running)
+[150 / 848] Compiling imgui_draw.cpp; 8s linux-sandbox ... (12 actions running)
+[152 / 848] Compiling imgui_draw.cpp; 9s linux-sandbox ... (12 actions, 11 running)
+[155 / 848] Compiling Jolt/Physics/Collision/Shape/ConvexShape.cpp; 8s linux-sandbox ... (12 actions, 11 running)
+[157 / 848] Compiling Jolt/Physics/Collision/Shape/HeightFieldShape.cpp; 9s linux-sandbox ... (12 actions, 11 running)
+[163 / 848] Compiling Jolt/Physics/Collision/Shape/HeightFieldShape.cpp; 10s linux-sandbox ... (12 actions, 11 running)
+[165 / 848] Compiling src/MuonOptimizer.cpp; 6s linux-sandbox ... (12 actions, 11 running)
+[167 / 848] Compiling src/MuonOptimizer.cpp; 7s linux-sandbox ... (12 actions running)
+[171 / 848] Compiling src/MuonOptimizer.cpp; 8s linux-sandbox ... (12 actions, 11 running)
+[175 / 848] Compiling src/MuonOptimizer.cpp; 10s linux-sandbox ... (12 actions, 11 running)
+[177 / 848] Compiling src/MuonOptimizer.cpp; 11s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/MuonOptimizer.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from /usr/include/eigen3/Eigen/Dense:1,
+                 from src/MuonOptimizer.h:5,
+                 from src/MuonOptimizer.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+[183 / 848] Compiling Jolt/Physics/Constraints/SixDOFConstraint.cpp; 4s linux-sandbox ... (12 actions running)
+[185 / 848] Compiling Jolt/Physics/Constraints/SixDOFConstraint.cpp; 6s linux-sandbox ... (12 actions, 11 running)
+[189 / 848] Compiling Jolt/Physics/PhysicsScene.cpp; 3s linux-sandbox ... (12 actions, 11 running)
+[190 / 848] Compiling Jolt/Physics/PhysicsScene.cpp; 4s linux-sandbox ... (12 actions, 11 running)
+[192 / 848] Compiling src/OctopodEnv.cpp; 5s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp: In member function 'virtual void JPH::SoftBodyMotionProperties::DetermineCollidingShapes(const JPH::SoftBodyUpdateContext&, const JPH::PhysicsSystem&, const JPH::BodyLockInterface&)::Collector::AddHit(const JPH::BodyID&)':
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:134:64: warning: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mInvMass' may be used uninitialized [-Wmaybe-uninitialized]
+  134 |                                                 CollidingShape cs;
+      |                                                                ^~
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:134:64: warning: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mSoftBodyInvMassScale' may be used uninitialized [-Wmaybe-uninitialized]
+In file included from external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:7:
+In copy constructor 'JPH::SoftBodyMotionProperties::CollidingShape::CollidingShape(const JPH::SoftBodyMotionProperties::CollidingShape&)',
+    inlined from 'static constexpr std::_Require<std::__and_<std::__not_<typename std::allocator_traits< <template-parameter-1-1> >::__construct_helper<_Tp, _Args>::type>, std::is_constructible<_Tp, _Args ...> > > std::allocator_traits< <template-parameter-1-1> >::_S_construct(_Alloc&, _Tp*, _Args&& ...) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/alloc_traits.h:277:4,
+    inlined from 'static decltype (std::allocator_traits< <template-parameter-1-1> >::_S_construct(__a, __p, (forward<_Args>)(std::allocator_traits< <template-parameter-1-1> >::construct::__args)...)) std::allocator_traits< <template-parameter-1-1> >::construct(_Alloc&, _Tp*, _Args&& ...) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/alloc_traits.h:380:16,
+    inlined from 'void std::vector<_Tp, _Alloc>::_M_realloc_append(_Args&& ...) [with _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/vector.tcc:634:26,
+    inlined from 'void std::vector<_Tp, _Alloc>::push_back(const value_type&) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/stl_vector.h:1294:21,
+    inlined from 'virtual void JPH::SoftBodyMotionProperties::DetermineCollidingShapes(const JPH::SoftBodyUpdateContext&, const JPH::PhysicsSystem&, const JPH::BodyLockInterface&)::Collector::AddHit(const JPH::BodyID&)' at external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:152:22:
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.h:165:16: warning: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mLinearVelocity.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' may be used uninitialized [-Wmaybe-uninitialized]
+  165 |         struct CollidingShape
+      |                ^~~~~~~~~~~~~~
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp: In member function 'virtual void JPH::SoftBodyMotionProperties::DetermineCollidingShapes(const JPH::SoftBodyUpdateContext&, const JPH::PhysicsSystem&, const JPH::BodyLockInterface&)::Collector::AddHit(const JPH::BodyID&)':
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:134:64: note: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mLinearVelocity.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' was declared here
+  134 |                                                 CollidingShape cs;
+      |                                                                ^~
+In copy constructor 'JPH::SoftBodyMotionProperties::CollidingShape::CollidingShape(const JPH::SoftBodyMotionProperties::CollidingShape&)',
+    inlined from 'static constexpr std::_Require<std::__and_<std::__not_<typename std::allocator_traits< <template-parameter-1-1> >::__construct_helper<_Tp, _Args>::type>, std::is_constructible<_Tp, _Args ...> > > std::allocator_traits< <template-parameter-1-1> >::_S_construct(_Alloc&, _Tp*, _Args&& ...) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/alloc_traits.h:277:4,
+    inlined from 'static decltype (std::allocator_traits< <template-parameter-1-1> >::_S_construct(__a, __p, (forward<_Args>)(std::allocator_traits< <template-parameter-1-1> >::construct::__args)...)) std::allocator_traits< <template-parameter-1-1> >::construct(_Alloc&, _Tp*, _Args&& ...) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/alloc_traits.h:380:16,
+    inlined from 'void std::vector<_Tp, _Alloc>::_M_realloc_append(_Args&& ...) [with _Args = {const JPH::SoftBodyMotionProperties::CollidingShape&}; _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/vector.tcc:634:26,
+    inlined from 'void std::vector<_Tp, _Alloc>::push_back(const value_type&) [with _Tp = JPH::SoftBodyMotionProperties::CollidingShape; _Alloc = JPH::STLAllocator<JPH::SoftBodyMotionProperties::CollidingShape>]' at /usr/include/c++/14/bits/stl_vector.h:1294:21,
+    inlined from 'virtual void JPH::SoftBodyMotionProperties::DetermineCollidingShapes(const JPH::SoftBodyUpdateContext&, const JPH::PhysicsSystem&, const JPH::BodyLockInterface&)::Collector::AddHit(const JPH::BodyID&)' at external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:152:22:
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.h:165:16: warning: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mAngularVelocity.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' may be used uninitialized [-Wmaybe-uninitialized]
+  165 |         struct CollidingShape
+      |                ^~~~~~~~~~~~~~
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp: In member function 'virtual void JPH::SoftBodyMotionProperties::DetermineCollidingShapes(const JPH::SoftBodyUpdateContext&, const JPH::PhysicsSystem&, const JPH::BodyLockInterface&)::Collector::AddHit(const JPH::BodyID&)':
+external/+_repo_rules+jolt/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp:134:64: note: 'cs.JPH::SoftBodyMotionProperties::CollidingShape::mAngularVelocity.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' was declared here
+  134 |                                                 CollidingShape cs;
+      |                                                                ^~
+[194 / 848] Compiling src/OctopodEnv.cpp; 6s linux-sandbox ... (12 actions running)
+[198 / 848] Compiling src/OctopodEnv.cpp; 7s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling Jolt/Physics/Vehicle/VehicleCollisionTester.cpp:
+In file included from /usr/include/c++/14/atomic:50,
+                 from external/+_repo_rules+jolt/Jolt/Core/Atomics.h:8,
+                 from external/+_repo_rules+jolt/Jolt/Core/Reference.h:7,
+                 from external/+_repo_rules+jolt/Jolt/ObjectStream/ObjectStream.h:8,
+                 from external/+_repo_rules+jolt/Jolt/ObjectStream/SerializableObject.h:7,
+                 from external/+_repo_rules+jolt/Jolt/Physics/Body/MassProperties.h:7,
+                 from external/+_repo_rules+jolt/Jolt/Physics/Collision/Shape/Shape.h:7,
+                 from external/+_repo_rules+jolt/Jolt/Physics/Body/Body.h:9,
+                 from external/+_repo_rules+jolt/Jolt/Physics/Vehicle/VehicleCollisionTester.h:7,
+                 from external/+_repo_rules+jolt/Jolt/Physics/Vehicle/VehicleCollisionTester.cpp:7:
+In member function 'std::__atomic_base<_IntTp>::__int_type std::__atomic_base<_IntTp>::load(std::memory_order) const [with _ITp = unsigned char]',
+    inlined from 'bool JPH::Body::IsSensor() const' at external/+_repo_rules+jolt/Jolt/Physics/Body/Body.h:80:66,
+    inlined from 'virtual void JPH::VehicleCollisionTesterRay::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::RayCastResult&)' at external/+_repo_rules+jolt/Jolt/Physics/Vehicle/VehicleCollisionTester.cpp:56:23:
+/usr/include/c++/14/bits/atomic_base.h:501:31: warning: 'unsigned char __atomic_load_1(const volatile void*, int)' writing 1 byte into a region of size 0 overflows the destination [-Wstringop-overflow=]
+  501 |         return __atomic_load_n(&_M_i, int(__m));
+      |                ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+In member function 'virtual void JPH::VehicleCollisionTesterRay::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::RayCastResult&)':
+cc1plus: note: destination object is likely at address zero
+In member function 'std::__atomic_base<_IntTp>::__int_type std::__atomic_base<_IntTp>::load(std::memory_order) const [with _ITp = unsigned char]',
+    inlined from 'bool JPH::Body::IsSensor() const' at external/+_repo_rules+jolt/Jolt/Physics/Body/Body.h:80:66,
+    inlined from 'virtual void JPH::VehicleCollisionTesterCastCylinder::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::ShapeCastResult&)' at external/+_repo_rules+jolt/Jolt/Physics/Vehicle/VehicleCollisionTester.cpp:290:23:
+/usr/include/c++/14/bits/atomic_base.h:501:31: warning: 'unsigned char __atomic_load_1(const volatile void*, int)' writing 1 byte into a region of size 0 overflows the destination [-Wstringop-overflow=]
+  501 |         return __atomic_load_n(&_M_i, int(__m));
+      |                ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+In member function 'virtual void JPH::VehicleCollisionTesterCastCylinder::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::ShapeCastResult&)':
+cc1plus: note: destination object is likely at address zero
+In member function 'std::__atomic_base<_IntTp>::__int_type std::__atomic_base<_IntTp>::load(std::memory_order) const [with _ITp = unsigned char]',
+    inlined from 'bool JPH::Body::IsSensor() const' at external/+_repo_rules+jolt/Jolt/Physics/Body/Body.h:80:66,
+    inlined from 'virtual void JPH::VehicleCollisionTesterCastSphere::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::ShapeCastResult&)' at external/+_repo_rules+jolt/Jolt/Physics/Vehicle/VehicleCollisionTester.cpp:170:23:
+/usr/include/c++/14/bits/atomic_base.h:501:31: warning: 'unsigned char __atomic_load_1(const volatile void*, int)' writing 1 byte into a region of size 0 overflows the destination [-Wstringop-overflow=]
+  501 |         return __atomic_load_n(&_M_i, int(__m));
+      |                ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+In member function 'virtual void JPH::VehicleCollisionTesterCastSphere::Collide(JPH::PhysicsSystem&, const JPH::VehicleConstraint&, JPH::uint, JPH::RVec3Arg, JPH::Vec3Arg, const JPH::BodyID&, JPH::Body*&, JPH::SubShapeID&, JPH::RVec3&, JPH::Vec3&, float&) const::MyCollector::AddHit(const JPH::ShapeCastResult&)':
+cc1plus: note: destination object is likely at address zero
+[202 / 848] Compiling src/OctopodEnv.cpp; 9s linux-sandbox ... (12 actions, 11 running)
+[205 / 848] Compiling src/OctopodEnv.cpp; 10s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/OctopodEnv.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/SpanNetwork.h:11,
+                 from src/TD3Trainer.h:13,
+                 from src/OctopodEnv.h:27,
+                 from src/OctopodEnv.cpp:8:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from /usr/include/armadillo:95,
+                 from src/OptimizedMath.h:3,
+                 from src/TD3Trainer.h:22:
+/usr/include/armadillo_bits/compiler_setup.hpp: At global scope:
+/usr/include/armadillo_bits/compiler_setup.hpp:451:95: note: '#pragma message: WARNING: compiler is in fast math mode; some functions may be unreliable.'
+  451 |   #pragma message ("WARNING: compiler is in fast math mode; some functions may be unreliable.")
+      |                                                                                               ^
+/usr/include/armadillo_bits/compiler_setup.hpp:452:77: note: '#pragma message: WARNING: to suppress this warning and related warnings,'
+  452 |   #pragma message ("WARNING: to suppress this warning and related warnings,")
+      |                                                                             ^
+/usr/include/armadillo_bits/compiler_setup.hpp:453:100: note: '#pragma message: WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>'
+  453 |   #pragma message ("WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>")
+      |                                                                                                    ^
+src/OctopodEnv.cpp: In member function 'void OctopodEnv::Reset()':
+src/OctopodEnv.cpp:131:14: warning: variable 'resetRobot' set but not used [-Wunused-but-set-variable]
+  131 |         auto resetRobot = [&](const OctopodRobot& robot, const JPH::RVec3& basePos) {
+      |              ^~~~~~~~~~
+[209 / 848] Compiling imgui.cpp; 11s linux-sandbox ... (12 actions, 11 running)
+[211 / 848] Compiling imgui.cpp; 13s linux-sandbox ... (12 actions, 11 running)
+[217 / 848] Compiling imgui.cpp; 14s linux-sandbox ... (12 actions, 11 running)
+[224 / 848] Compiling imgui.cpp; 15s linux-sandbox ... (12 actions, 11 running)
+[240 / 848] Compiling imgui.cpp; 16s linux-sandbox ... (12 actions, 11 running)
+[271 / 848] Compiling src/VectorizedOctopodEnv.cpp; 5s linux-sandbox ... (12 actions, 11 running)
+[326 / 848] Compiling src/VectorizedOctopodEnv.cpp; 6s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/XEVI.c:
+In file included from external/libxext+/src/XEVI.c:34:
+external/libxext+/src/XEVI.c: In function 'XeviGetVisualInfo':
+external/libxext+/src/reallocarray.h:41:41: warning: argument 2 range [18446744071562067968, 18446744073709551615] exceeds maximum object size 9223372036854775807 [-Walloc-size-larger-than=]
+   41 | # define Xreallocarray(ptr, n, size)    reallocarray((ptr), (n), (size))
+      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+external/libxext+/src/reallocarray.h:44:41: note: in expansion of macro 'Xreallocarray'
+   44 | #define Xmallocarray(n, size)           Xreallocarray(NULL, (n), (size))
+      |                                         ^~~~~~~~~~~~~
+external/libxext+/src/XEVI.c:150:23: note: in expansion of macro 'Xmallocarray'
+  150 |         temp_visual = Xmallocarray(n_visual, sz_VisualID32);
+      |                       ^~~~~~~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:353,
+                 from external/libxext+/src/XEVI.c:27:
+/usr/include/stdlib.h:701:14: note: in a call to allocation function 'reallocarray' declared here
+  701 | extern void *reallocarray (void *__ptr, size_t __nmemb, size_t __size)
+      |              ^~~~~~~~~~~~
+[367 / 848] Compiling src/VectorizedOctopodEnv.cpp; 7s linux-sandbox ... (11 actions, 10 running)
+INFO: From Compiling src/ClDisplay.c:
+In file included from external/libx11+/src/Xxcbint.h:14,
+                 from external/libx11+/src/ClDisplay.c:33:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/Xxcbint.h:9:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/Context.c:
+In file included from external/libx11+/src/Context.c:71:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/Context.c:68:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+[430 / 848] Compiling src/VectorizedOctopodEnv.cpp; 8s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/ErrDes.c:
+external/libx11+/src/ErrDes.c: In function 'XGetErrorDatabaseText.part.0':
+external/libx11+/src/ErrDes.c:194:38: warning: '%s' directive output may be truncated writing up to 8190 bytes into a region of size between 1 and 8191 [-Wformat-truncation=]
+  194 |             snprintf(tptr, tlen, "%s.%s", name, type);
+      |                                      ^~
+external/libx11+/src/ErrDes.c:194:13: note: 'snprintf' output between 2 and 16382 bytes into a destination of size 8192
+  194 |             snprintf(tptr, tlen, "%s.%s", name, type);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[507 / 848] Compiling src/VectorizedOctopodEnv.cpp; 9s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/LockDis.c:
+In file included from external/libx11+/src/LockDis.c:39:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/LockDis.c:37:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/Macros.c:
+In file included from external/libx11+/src/Xxcbint.h:14,
+                 from external/libx11+/src/Macros.c:33:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/Macros.c:30:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/OpenDis.c:
+In file included from external/libx11+/src/Xxcbint.h:14,
+                 from external/libx11+/src/OpenDis.c:31:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/OpenDis.c:30:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/ImUtil.c:
+external/libx11+/src/ImUtil.c: In function '_XGetPixel':
+external/libx11+/src/ImUtil.c:517:28: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [32, 268435440] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [32, 268435440] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [33, 268435441] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [1, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [33, 268435441] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [34, 268435442] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [2, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [34, 268435442] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [35, 268435443] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [3, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [35, 268435443] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [36, 268435444] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [4, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [36, 268435444] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [37, 268435445] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [5, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [37, 268435445] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [38, 268435446] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [6, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [38, 268435446] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [39, 268435447] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [7, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [39, 268435447] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [40, 268435448] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset 8 into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [40, 268435448] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [41, 268435449] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [9, 25] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [41, 268435449] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [42, 268435450] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [10, 26] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [42, 268435450] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [43, 268435451] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [11, 27] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [43, 268435451] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [44, 268435452] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [12, 28] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [44, 268435452] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [45, 268435453] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [13, 29] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [45, 268435453] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:517:28: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  517 |                     *dst++ = *src++;
+      |                     ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [46, 268435454] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [14, 30] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [46, 268435454] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [32, 268435440] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [32, 268435440] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [33, 268435441] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [1, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [33, 268435441] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [34, 268435442] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [2, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [34, 268435442] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [35, 268435443] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [3, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [35, 268435443] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [36, 268435444] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [4, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [36, 268435444] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [37, 268435445] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [5, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [37, 268435445] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [38, 268435446] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [6, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [38, 268435446] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [39, 268435447] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [7, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [39, 268435447] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [40, 268435448] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset 8 into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [40, 268435448] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [41, 268435449] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [9, 25] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [41, 268435449] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [42, 268435450] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [10, 26] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [42, 268435450] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [43, 268435451] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [11, 27] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [43, 268435451] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [44, 268435452] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [12, 28] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [44, 268435452] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [45, 268435453] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [13, 29] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [45, 268435453] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:505:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  505 |                     for (j = nbytes; --j >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [46, 268435454] into destination object 'px' of size 8
+  482 |         unsigned long pixel, px;
+      |                              ^~
+external/libx11+/src/ImUtil.c:482:30: note: at offset [14, 30] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:482:30: note: at offset [46, 268435454] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [32, 268435440] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [32, 268435440] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [33, 268435441] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [1, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [33, 268435441] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [34, 268435442] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [2, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [34, 268435442] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [35, 268435443] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [3, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [35, 268435443] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [36, 268435444] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [4, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [36, 268435444] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [37, 268435445] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [5, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [37, 268435445] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [38, 268435446] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [6, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [38, 268435446] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [39, 268435447] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [7, 8] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [39, 268435447] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [40, 268435448] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset 8 into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [40, 268435448] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [41, 268435449] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [9, 25] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [41, 268435449] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [42, 268435450] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [10, 26] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [42, 268435450] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [43, 268435451] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [11, 27] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [43, 268435451] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [44, 268435452] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [12, 28] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [44, 268435452] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [45, 268435453] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [13, 29] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [45, 268435453] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:493:71: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  493 |                 for (i = ximage->bitmap_unit >> 3; --i >= 0; ) *dst++ = *src++;
+      |                                                                ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [46, 268435454] into destination object 'pixel' of size 8
+  482 |         unsigned long pixel, px;
+      |                       ^~~~~
+external/libx11+/src/ImUtil.c:482:23: note: at offset [14, 30] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c:482:23: note: at offset [46, 268435454] into destination object 'pixel' of size 8
+external/libx11+/src/ImUtil.c: In function '_XPutPixel':
+external/libx11+/src/ImUtil.c:712:53: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [1, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [2, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [3, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [4, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [5, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [6, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [7, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset 8 into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [9, 25] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [10, 26] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [11, 27] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [12, 28] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [13, 29] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:712:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  712 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [14, 30] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [1, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [2, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [3, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [4, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [5, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [6, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [7, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset 8 into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [9, 25] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [10, 26] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [11, 27] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [12, 28] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [13, 29] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:694:57: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  694 |                     for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                                  ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [14, 30] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 16 bytes into a region of size 8 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [32, 268435440] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [1, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [33, 268435441] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [2, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [34, 268435442] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [3, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [35, 268435443] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [4, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [36, 268435444] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [5, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [37, 268435445] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [6, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [38, 268435446] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [7, 8] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [39, 268435447] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset 8 into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [40, 268435448] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [9, 25] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [41, 268435449] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [10, 26] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [42, 268435450] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [11, 27] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [43, 268435451] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [12, 28] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [44, 268435452] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [13, 29] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [45, 268435453] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:678:53: warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+  678 |                 for (i = nbytes; --i >= 0; ) *dst++ = *src++;
+      |                                              ~~~~~~~^~~~~~~~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+  661 |         unsigned long px, npixel;
+      |                       ^~
+external/libx11+/src/ImUtil.c:661:23: note: at offset [14, 30] into destination object 'px' of size 8
+external/libx11+/src/ImUtil.c:661:23: note: at offset [46, 268435454] into destination object 'px' of size 8
+[567 / 848] Compiling src/VectorizedOctopodEnv.cpp; 10s linux-sandbox ... (11 actions running)
+[632 / 848] Compiling src/VectorizedOctopodEnv.cpp; 11s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/x11_xcb.c:
+In file included from external/libx11+/src/Xxcbint.h:14,
+                 from external/libx11+/src/x11_xcb.c:5:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/x11_xcb.c:4:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/xcb_disp.c:
+In file included from external/libx11+/src/Xxcbint.h:14,
+                 from external/libx11+/src/xcb_disp.c:9:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/xcb_disp.c:8:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/locking.c:
+In file included from external/libx11+/src/locking.c:49:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/locking.c:36:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/xcb_io.c:
+In file included from external/libx11+/src/xcb_io.c:9:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/xcb_io.c:8:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/XlibInt.c:
+In file included from external/libx11+/src/XlibInt.c:66:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/XlibInt.c:40:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+INFO: From Compiling src/VectorizedOctopodEnv.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/SpanNetwork.h:11,
+                 from src/TD3Trainer.h:13,
+                 from src/OctopodEnv.h:27,
+                 from src/VectorizedOctopodEnv.h:10,
+                 from src/VectorizedOctopodEnv.cpp:14:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from /usr/include/armadillo:95,
+                 from src/OptimizedMath.h:3,
+                 from src/TD3Trainer.h:22:
+/usr/include/armadillo_bits/compiler_setup.hpp: At global scope:
+/usr/include/armadillo_bits/compiler_setup.hpp:451:95: note: '#pragma message: WARNING: compiler is in fast math mode; some functions may be unreliable.'
+  451 |   #pragma message ("WARNING: compiler is in fast math mode; some functions may be unreliable.")
+      |                                                                                               ^
+/usr/include/armadillo_bits/compiler_setup.hpp:452:77: note: '#pragma message: WARNING: to suppress this warning and related warnings,'
+  452 |   #pragma message ("WARNING: to suppress this warning and related warnings,")
+      |                                                                             ^
+/usr/include/armadillo_bits/compiler_setup.hpp:453:100: note: '#pragma message: WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>'
+  453 |   #pragma message ("WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>")
+      |                                                                                                    ^
+[673 / 848] Compiling external/libxcb+/xproto.c; 1s linux-sandbox ... (12 actions, 10 running)
+[715 / 848] Compiling external/libxcb+/xproto.c; 2s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/Xrm.c:
+In file included from external/libx11+/src/Xrm.c:61:
+external/libx11+/src/locking.h:37:9: warning: "xmalloc" redefined
+   37 | #define xmalloc(s) Xmalloc(s)
+      |         ^~~~~~~
+In file included from external/libx11+/include/X11/Xlibint.h:47,
+                 from external/libx11+/src/Xrm.c:57:
+external/xorgproto+/include/X11/Xthreads.h:34:11: note: this is the location of the previous definition
+   34 | #  define xmalloc malloc
+      |           ^~~~~~~
+external/libx11+/src/locking.h:38:9: warning: "xfree" redefined
+   38 | #define xfree(s) Xfree(s)
+      |         ^~~~~
+external/xorgproto+/include/X11/Xthreads.h:37:11: note: this is the location of the previous definition
+   37 | #  define xfree free
+      |           ^~~~~
+external/libx11+/src/Xrm.c: In function 'PutEntry':
+external/libx11+/src/Xrm.c:900:36: warning: logical not is only applied to the left hand side of comparison [-Wlogical-not-parentheses]
+  900 |                         !quarks[2] != table->leaf)
+      |                                    ^~
+external/libx11+/src/Xrm.c:900:25: note: add parentheses around left hand side expression to silence this warning
+  900 |                         !quarks[2] != table->leaf)
+      |                         ^~~~~~~~~~
+      |                         (         )
+external/libx11+/src/Xrm.c: In function 'GetDatabase':
+external/libx11+/src/Xrm.c:1496:39: warning: pointer 'rhs' may be used after 'realloc' [-Wuse-after-free]
+ 1496 |                 ptr = temp_str + (ptr - rhs); /* reset pointer. */
+      |                                  ~~~~~^~~~~~
+external/libx11+/src/Xrm.c:1487:28: note: call to 'realloc' here
+ 1487 |                 temp_str = Xrealloc(rhs, sizeof(char) * alloc_chars);
+      |                            ^~~~~~~~
+[736 / 848] Compiling src/OctopodLoader.cpp; 2s linux-sandbox ... (12 actions, 11 running)
+[768 / 848] Compiling src/OctopodLoader.cpp; 3s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/xlibi18n/xim_trans.c:
+In file included from bazel-out/k8-fastbuild/bin/external/libxtrans+/_virtual_includes/xtrans/X11/Xtrans/transport.c:67,
+                 from external/libx11+/src/xlibi18n/xim_trans.c:30:
+bazel-out/k8-fastbuild/bin/external/libxtrans+/_virtual_includes/xtrans/X11/Xtrans/Xtranssock.c: In function '_XimXTransSocketUNIXConnect':
+bazel-out/k8-fastbuild/bin/external/libxtrans+/_virtual_includes/xtrans/X11/Xtrans/Xtranssock.c:762:45: warning: '%s' directive output may be truncated writing up to 107 bytes into a region of size between 90 and 108 [-Wformat-truncation=]
+  762 |     snprintf(path, sizeof(s.sun_path), "%s%s%s", at, upath, port);
+      |                                             ^~
+In function 'set_sun_path',
+    inlined from '_XimXTransSocketUNIXConnect' at bazel-out/k8-fastbuild/bin/external/libxtrans+/_virtual_includes/xtrans/X11/Xtrans/Xtranssock.c:1891:9:
+bazel-out/k8-fastbuild/bin/external/libxtrans+/_virtual_includes/xtrans/X11/Xtrans/Xtranssock.c:762:5: note: 'snprintf' output between 1 and 126 bytes into a destination of size 108
+  762 |     snprintf(path, sizeof(s.sun_path), "%s%s%s", at, upath, port);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+INFO: From Compiling modules/im/ximcp/imLcPrs.c:
+external/libx11+/modules/im/ximcp/imLcPrs.c: In function 'parseline':
+external/libx11+/modules/im/ximcp/imLcPrs.c:682:70: warning: pointer 'old' may be used after 'realloc' [-Wuse-after-free]
+  682 |                     top = (DTIndex *) (((char *)new) + (((char *)top)-(char *)old));
+      |                                                        ~~~~~~~~~~~~~~^~~~~~~~~~~~~
+In file included from external/libx11+/modules/im/ximcp/imLcPrs.c:39:
+external/libx11+/modules/im/ximcp/imLcPrs.c:674:36: note: call to 'realloc' here
+  674 |                 DefTree *new     = Xrealloc (b->tree, sizeof(DefTree) * newsize);
+      |                                    ^~~~~~~~
+external/libx11+/modules/im/ximcp/imLcPrs.c:681:72: warning: pointer 'old' may be used after 'realloc' [-Wuse-after-free]
+  681 |                 if (old && top >= (DTIndex *) old && top < (DTIndex *) &old[oldsize])
+      |                                                                        ^~~~~~~~~~~~~
+external/libx11+/modules/im/ximcp/imLcPrs.c:674:36: note: call to 'realloc' here
+  674 |                 DefTree *new     = Xrealloc (b->tree, sizeof(DefTree) * newsize);
+      |                                    ^~~~~~~~
+external/libx11+/modules/im/ximcp/imLcPrs.c:681:32: warning: pointer 'old' may be used after 'realloc' [-Wuse-after-free]
+  681 |                 if (old && top >= (DTIndex *) old && top < (DTIndex *) &old[oldsize])
+      |                            ~~~~^~~~~~~~~~~~~~~~~~
+external/libx11+/modules/im/ximcp/imLcPrs.c:674:36: note: call to 'realloc' here
+  674 |                 DefTree *new     = Xrealloc (b->tree, sizeof(DefTree) * newsize);
+      |                                    ^~~~~~~~
+[795 / 848] Compiling src/OctopodLoader.cpp; 4s linux-sandbox ... (12 actions, 11 running)
+[817 / 848] Compiling src/OctopodLoader.cpp; 5s linux-sandbox ... (12 actions, 11 running)
+[820 / 848] Compiling src/OctopodLoader.cpp; 6s linux-sandbox ... (12 actions, 11 running)
+[821 / 848] Compiling src/OctopodLoader.cpp; 7s linux-sandbox ... (12 actions running)
+[824 / 848] Compiling src/OctopodLoader.cpp; 8s linux-sandbox ... (12 actions running)
+[825 / 848] Compiling src/OctopodLoader.cpp; 10s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/SpanNetwork.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/SpanNetwork.h:11,
+                 from src/SpanNetwork.cpp:5:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+[826 / 848] Compiling src/OctopodLoader.cpp; 11s linux-sandbox ... (12 actions running)
+[827 / 848] Compiling src/RobotLoader.cpp; 8s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/OverlayUI_refactor.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/NeuralNetwork.h:12,
+                 from src/CombatEnv.h:21,
+                 from src/OverlayUI_refactor.h:9,
+                 from src/OverlayUI_refactor.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+INFO: From Compiling src/RFFLatentDynamics.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/RFFLatentDynamics.h:9,
+                 from src/RFFLatentDynamics.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+[829 / 848] Compiling src/RobotLoader.cpp; 9s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/NeuralMath.cpp:
+src/NeuralMath.cpp: In function 'void ForwardMoLU_AVX2(float*, size_t)':
+src/NeuralMath.cpp:26:18: warning: unused variable 'clampHi' [-Wunused-variable]
+   26 |     const __m256 clampHi = _mm256_set1_ps(10.0f);
+      |                  ^~~~~~~
+src/NeuralMath.cpp:27:18: warning: unused variable 'clampLo' [-Wunused-variable]
+   27 |     const __m256 clampLo = _mm256_set1_ps(-10.0f);
+      |                  ^~~~~~~
+src/NeuralMath.cpp: In function 'void Softmax_AVX2(float*, size_t)':
+src/NeuralMath.cpp:237:16: warning: unused variable 'x' [-Wunused-variable]
+  237 |         __m256 x = _mm256_load_ps(data + i);
+      |                ^
+src/NeuralMath.cpp:233:12: warning: unused variable 'mVec' [-Wunused-variable]
+  233 |     __m256 mVec = _mm256_set1_ps(maxVal);
+      |            ^~~~
+src/NeuralMath.cpp: In function 'void MatVec_FMA_AVX2(const float*, const float*, float*, size_t, size_t)':
+src/NeuralMath.cpp:354:18: warning: unused variable 'simdWidth' [-Wunused-variable]
+  354 |     const size_t simdWidth = 8;
+      |                  ^~~~~~~~~
+src/NeuralMath.cpp: In function 'void MatVec_FMA_AVX2_Prefetch(const float*, const float*, float*, size_t, size_t)':
+src/NeuralMath.cpp:418:18: warning: unused variable 'simdWidth' [-Wunused-variable]
+  418 |     const size_t simdWidth = 8;
+      |                  ^~~~~~~~~
+INFO: From Compiling src/VectorizedEnv.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/NeuralNetwork.h:12,
+                 from src/CombatEnv.h:21,
+                 from src/VectorizedEnv.h:5,
+                 from src/VectorizedEnv.cpp:3:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+[831 / 848] Compiling src/RobotLoader.cpp; 10s linux-sandbox ... (12 actions, 11 running)
+[831 / 848] Compiling src/RobotLoader.cpp; 12s linux-sandbox ... (12 actions running)
+INFO: From Compiling src/RFFNetwork.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/RFFNetwork.h:8,
+                 from src/RFFNetwork.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from src/RFFNetwork.cpp:13:
+./src/EigenUtils.h: In function 'void EigenUtils::MinQValues(const float*, const float*, float*, int, int)':
+./src/EigenUtils.h:205:10: warning: variable 'out' set but not used [-Wunused-but-set-variable]
+  205 |     auto out = Map(minQ, batchSize, 1);
+      |          ^~~
+src/RFFNetwork.cpp: In member function 'void RFFActorCritic::SelectActionBatchWithLatent(const float*, float*, int, const std::vector<int>&, bool)':
+src/RFFNetwork.cpp:396:10: warning: variable 'alloc_end' set but not used [-Wunused-but-set-variable]
+  396 |     auto alloc_end = std::chrono::high_resolution_clock::now();
+      |          ^~~~~~~~~
+src/RFFNetwork.cpp:411:10: warning: variable 'molu_end' set but not used [-Wunused-but-set-variable]
+  411 |     auto molu_end = std::chrono::high_resolution_clock::now();
+      |          ^~~~~~~~
+src/RFFNetwork.cpp: In member function 'void RFFActorCritic::ComputeQValuesBatch(const float*, const float*, float*, int, const std::vector<int>*)':
+src/RFFNetwork.cpp:475:13: warning: unused variable 'tid' [-Wunused-variable]
+  475 |         int tid = omp_get_thread_num();
+      |             ^~~
+INFO: From Compiling src/CombatRobot.cpp:
+src/CombatRobot.cpp: In member function 'void CombatRobotLoader::GetObservations(CombatRobotData&, const CombatRobotData&, float*, const ForceSensorReading&, JPH::PhysicsSystem*)':
+src/CombatRobot.cpp:848:15: warning: comparison of integer expressions of different signedness: 'int' and 'std::vector<float>::size_type' {aka 'long unsigned int'} [-Wsign-compare]
+  848 |         if (i < forces.impulseMagnitude.size())
+      |             ~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/CombatRobot.cpp:855:15: warning: comparison of integer expressions of different signedness: 'int' and 'std::vector<float>::size_type' {aka 'long unsigned int'} [-Wsign-compare]
+  855 |         if (i < forces.jointStress.size())
+      |             ~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/CombatRobot.cpp:827:15: warning: variable 'oppAngMom' set but not used [-Wunused-but-set-variable]
+  827 |     JPH::Vec3 oppAngMom = oppAngVel * 10.0f;
+      |               ^~~~~~~~~
+INFO: From Compiling src/CombatEnv.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/NeuralNetwork.h:12,
+                 from src/CombatEnv.h:21,
+                 from src/CombatEnv.cpp:2:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+src/CombatEnv.cpp: In lambda function:
+src/CombatEnv.cpp:343:73: warning: comparison of integer expressions of different signedness: 'std::vector<SatelliteConfig>::size_type' {aka 'long unsigned int'} and 'int' [-Wsign-compare]
+  343 |                     float satRadius = attacker.config.satellites.size() > i ? attacker.config.satellites[i].radius : 0.1f;
+      |                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~
+[834 / 848] Compiling src/RobotLoader.cpp; 13s linux-sandbox ... (12 actions, 11 running)
+INFO: From Compiling src/RobotLoader.cpp:
+src/RobotLoader.cpp: In function 'void NativeLoader::LoadConstraints(const nlohmann::json_abi_v3_11_3::json&, JPH::BodyInterface&, JPH::PhysicsSystem&, const std::map<std::__cxx11::basic_string<char>, JPH::BodyID>&, RobotData&)':
+src/RobotLoader.cpp:254:30: warning: 'position.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' may be used uninitialized [-Wmaybe-uninitialized]
+  254 |             settings.mPoint2 = position;
+      |             ~~~~~~~~~~~~~~~~~^~~~~~~~~~
+src/RobotLoader.cpp:196:20: note: 'position.JPH::Vec3::<anonymous>.JPH::Vec3::<unnamed union>::mValue' was declared here
+  196 |         JPH::RVec3 position;
+      |                    ^~~~~~~~
+In file included from src/RobotLoader.cpp:22:
+In constructor 'JPH::BodyCreationSettings::BodyCreationSettings(const JPH::Shape*, JPH::RVec3Arg, JPH::QuatArg, JPH::EMotionType, JPH::ObjectLayer)',
+    inlined from 'void NativeLoader::LoadBodies(const nlohmann::json_abi_v3_11_3::json&, JPH::BodyInterface&, std::map<std::__cxx11::basic_string<char>, JPH::BodyID>&, RobotData&)' at src/RobotLoader.cpp:135:92:
+external/+_repo_rules+jolt/Jolt/Physics/Body/BodyCreationSettings.h:38:196: warning: 'position.JPH::Vec3::<unnamed>.JPH::Vec3::._anon_119::mValue' may be used uninitialized [-Wmaybe-uninitialized]
+   38 |                                                         BodyCreationSettings(const Shape *inShape, RVec3Arg inPosition, QuatArg inRotation, EMotionType inMotionType, ObjectLayer inObjectLayer) : mPosition(inPosition), mRotation(inRotation), mObjectLayer(inObjectLayer), mMotionType(inMotionType), mShapePtr(inShape) { }
+      |                                                                                                                                                                                                    ^~~~~~~~~~~~~~~~~~~~~
+src/RobotLoader.cpp: In function 'void NativeLoader::LoadBodies(const nlohmann::json_abi_v3_11_3::json&, JPH::BodyInterface&, std::map<std::__cxx11::basic_string<char>, JPH::BodyID>&, RobotData&)':
+src/RobotLoader.cpp:116:20: note: 'position.JPH::Vec3::<unnamed>.JPH::Vec3::._anon_119::mValue' was declared here
+  116 |         JPH::RVec3 position;
+      |                    ^~~~~~~~
+INFO: From Compiling src/LatentMemory.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/LatentMemory.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+INFO: From Compiling src/main_train.cpp:
+cc1plus: warning: '-fassociative-math' disabled; other options take precedence
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from ./src/RFFLayer.h:9,
+                 from ./src/LatentMemory.h:13,
+                 from ./src/NeuralNetwork.h:12,
+                 from ./src/CombatEnv.h:21,
+                 from ./src/VectorizedEnv.h:5,
+                 from src/main_train.cpp:16:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from /usr/include/armadillo:95,
+                 from ./src/OptimizedMath.h:3,
+                 from ./src/TD3Trainer.h:22,
+                 from src/main_train.cpp:18:
+/usr/include/armadillo_bits/compiler_setup.hpp: At global scope:
+/usr/include/armadillo_bits/compiler_setup.hpp:451:95: note: '#pragma message: WARNING: compiler is in fast math mode; some functions may be unreliable.'
+  451 |   #pragma message ("WARNING: compiler is in fast math mode; some functions may be unreliable.")
+      |                                                                                               ^
+/usr/include/armadillo_bits/compiler_setup.hpp:452:77: note: '#pragma message: WARNING: to suppress this warning and related warnings,'
+  452 |   #pragma message ("WARNING: to suppress this warning and related warnings,")
+      |                                                                             ^
+/usr/include/armadillo_bits/compiler_setup.hpp:453:100: note: '#pragma message: WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>'
+  453 |   #pragma message ("WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>")
+      |                                                                                                    ^
+src/main_train.cpp: In function 'void SimulationLoop(VectorizedEnv*, TD3Trainer*, TD3Trainer*, ReplayBuffer*, OverlayUIRefactored*, int, int)':
+src/main_train.cpp:150:32: warning: unused variable 'phys' [-Wunused-variable]
+  150 |         const PhysicsTunables& phys = ui->GetPhysics();
+      |                                ^~~~
+INFO: From Compiling src/NeuralNetwork.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/NeuralNetwork.h:12,
+                 from src/NeuralNetwork.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+src/NeuralNetwork.cpp: In member function 'float KLPERBuffer::ComputeKLDivergence(float, float) const':
+src/NeuralNetwork.cpp:409:11: warning: unused variable 'q' [-Wunused-variable]
+  409 |     float q = std::exp(behaviorLogProb);
+      |           ^
+[840 / 848] Compiling src/TD3Trainer.cpp; 13s linux-sandbox ... (7 actions running)
+INFO: From Compiling src/TD3Trainer.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/LatentMemory.h:13,
+                 from src/SpanNetwork.h:11,
+                 from src/TD3Trainer.h:13,
+                 from src/TD3Trainer.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from /usr/include/armadillo:95,
+                 from src/OptimizedMath.h:3,
+                 from src/TD3Trainer.h:22:
+/usr/include/armadillo_bits/compiler_setup.hpp: At global scope:
+/usr/include/armadillo_bits/compiler_setup.hpp:451:95: note: '#pragma message: WARNING: compiler is in fast math mode; some functions may be unreliable.'
+  451 |   #pragma message ("WARNING: compiler is in fast math mode; some functions may be unreliable.")
+      |                                                                                               ^
+/usr/include/armadillo_bits/compiler_setup.hpp:452:77: note: '#pragma message: WARNING: to suppress this warning and related warnings,'
+  452 |   #pragma message ("WARNING: to suppress this warning and related warnings,")
+      |                                                                             ^
+/usr/include/armadillo_bits/compiler_setup.hpp:453:100: note: '#pragma message: WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>'
+  453 |   #pragma message ("WARNING: #define ARMA_DONT_PRINT_FAST_MATH_WARNING before #include <armadillo>")
+      |                                                                                                    ^
+In file included from src/TD3Trainer.cpp:10:
+./src/EigenUtils.h: In function 'void EigenUtils::MinQValues(const float*, const float*, float*, int, int)':
+./src/EigenUtils.h:205:10: warning: variable 'out' set but not used [-Wunused-but-set-variable]
+  205 |     auto out = Map(minQ, batchSize, 1);
+      |          ^~~
+src/TD3Trainer.cpp: In member function 'void TD3Trainer::UpdateActor(ReplayBuffer&)':
+src/TD3Trainer.cpp:345:12: warning: unused variable 'actorInputDim' [-Wunused-variable]
+  345 |     size_t actorInputDim = mStateDim + latentDim;
+      |            ^~~~~~~~~~~~~
+src/TD3Trainer.cpp: In member function 'void TD3Trainer::ComputeActorGradient(ReplayBuffer&)':
+src/TD3Trainer.cpp:445:33: warning: unused variable 'threadZPos' [-Wunused-variable]
+  445 |         AlignedVector32<float>& threadZPos = mThreadZPosBuffers[tid];
+      |                                 ^~~~~~~~~~
+src/TD3Trainer.cpp:432:15: warning: unused variable 'criticInputDim' [-Wunused-variable]
+  432 |     const int criticInputDim = mStateDim + mActionDim + latentDim;
+      |               ^~~~~~~~~~~~~~
+src/TD3Trainer.cpp:434:15: warning: unused variable 'actorWeights' [-Wunused-variable]
+  434 |     const int actorWeights = actor.GetNumWeights();
+      |               ^~~~~~~~~~~~
+INFO: From Compiling src/AircraftEnv.cpp:
+src/AircraftEnv.cpp: In lambda function:
+src/AircraftEnv.cpp:31:19: warning: variable 'rot' set but not used [-Wunused-but-set-variable]
+   31 |         JPH::Quat rot = bodyInterface.GetRotation(ac.GetMainBodyId());
+      |                   ^~~
+INFO: From Compiling src/RFFLayer.cpp:
+In file included from /usr/include/eigen3/Eigen/Core:199,
+                 from src/RFFLayer.h:9,
+                 from src/RFFLayer.cpp:1:
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h: In function 'Eigen::internal::Packet8bf Eigen::internal::F32ToBf16(const Packet8f&)':
+/usr/include/eigen3/Eigen/src/Core/arch/AVX/PacketMath.h:1275:13: warning: unused variable 'r' [-Wunused-variable]
+ 1275 |   Packet8bf r;
+      |             ^
+In file included from src/RFFLayer.cpp:8:
+./src/EigenUtils.h: In function 'void EigenUtils::MinQValues(const float*, const float*, float*, int, int)':
+./src/EigenUtils.h:205:10: warning: variable 'out' set but not used [-Wunused-but-set-variable]
+  205 |     auto out = Map(minQ, batchSize, 1);
+      |          ^~~
+src/RFFLayer.cpp: In member function 'Eigen::MatrixXf RFFLayer::ForwardEigen(const Eigen::MatrixXf&) const':
+src/RFFLayer.cpp:141:9: warning: unused variable 'batchSize' [-Wunused-variable]
+  141 |     int batchSize = static_cast<int>(input.rows());
+      |         ^~~~~~~~~
+[844 / 848] Compiling src/InternalRobot.cpp; 7s linux-sandbox ... (3 actions running)
+[847 / 848] [Prepa] Linking train
+INFO: Found 1 target...
+Target //:train up-to-date:
+  bazel-bin/train
+INFO: Elapsed time: 88.309s, Critical Path: 18.09s
+INFO: 803 processes: 48 action cache hit, 2 internal, 801 linux-sandbox.
+INFO: Build completed successfully, 803 total actions

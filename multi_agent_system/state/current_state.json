@@ -1,0 +1,12 @@
+{
+  "last_updated": "2026-03-09T18:46:43.506578",
+  "task_counts": {
+    "unclaimed": 148,
+    "claimed": 2,
+    "in_progress": 1,
+    "blocked": 0,
+    "completed": 1
+  },
+  "active_agents": 4,
+  "current_blockers": 1
+}
