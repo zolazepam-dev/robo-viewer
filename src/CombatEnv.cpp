@@ -84,6 +84,33 @@ void CombatEnv::Init(uint32_t envIndex, JPH::PhysicsSystem* globalPhysics, Comba
     mRobotConfigPath = robotConfigPath;
     mStepsPerEpisode = stepsPerEpisode;
 
+    // Load robots FIRST before Reset()
+    JPH::RVec3 spawnPos1(-10.0f, 10.0f, 0.0f);
+    JPH::RVec3 spawnPos2(10.0f, 10.0f, 0.0f);
+    CombatRobotData loaded1 = globalLoader->LoadRobot(robotConfigPath, globalPhysics, spawnPos1, envIndex, 0);
+    CombatRobotData loaded2 = globalLoader->LoadRobot(robotConfigPath, globalPhysics, spawnPos2, envIndex, 1);
+    
+    // Copy loaded data to Robot objects
+    mRobot1.mainBodyId = loaded1.mainBodyId;
+    mRobot1.satellites = loaded1.satellites;
+    mRobot1.bodyIds = loaded1.bodies;
+    mRobot1.hingeJoints = loaded1.hingeJoints;
+    mRobot1.sixDofJoints = loaded1.sixDofJoints;
+    mRobot1.config = loaded1.config;
+    mRobot1.envIndex = loaded1.envIndex;
+    mRobot1.robotIndex = loaded1.robotIndex;
+    mRobot1.collisionGroup = loaded1.collisionGroup;
+    
+    mRobot2.mainBodyId = loaded2.mainBodyId;
+    mRobot2.satellites = loaded2.satellites;
+    mRobot2.bodyIds = loaded2.bodies;
+    mRobot2.hingeJoints = loaded2.hingeJoints;
+    mRobot2.sixDofJoints = loaded2.sixDofJoints;
+    mRobot2.config = loaded2.config;
+    mRobot2.envIndex = loaded2.envIndex;
+    mRobot2.robotIndex = loaded2.robotIndex;
+    mRobot2.collisionGroup = loaded2.collisionGroup;
+
     Reset();
     
     // Initialize Controllers (The Brains)

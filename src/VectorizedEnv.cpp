@@ -99,6 +99,13 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
 
         mObservationDim = mEnvs[0].GetObservationDim();
         mActionDim = mEnvs[0].GetRobot1Ref().config.actionsPerRobot;
+        
+        // Safety fallback: ensure actionDim is never 0
+        if (mActionDim <= 0) {
+            mActionDim = 56; // Default fallback for combat robots
+            std::cerr << "[VectorizedEnv] WARNING: actionsPerRobot was 0, using fallback: " << mActionDim << "\n";
+        }
+        
         std::cout << "[VectorizedEnv] Obs dim: " << mObservationDim << ", Action dim: " << mActionDim << "\n";
         
         mAllObservations.resize(mNumEnvs * mObservationDim * 2, 0.0f);

@@ -147,11 +147,11 @@ void TD3Trainer::SelectActionEval(const float* state, float* action) {
     mModel.SelectAction(state, action, nullptr, false, 0); 
 }
 void TD3Trainer::SelectActionWithLatent(const float* state, float* action, int envIdx) { 
-    std::lock_guard<std::mutex> lock(mMutex);
+    // Read-only inference - no lock needed
     mModel.SelectAction(state, action, nullptr, true, envIdx); 
 }
 void TD3Trainer::SelectActionBatchWithLatent(const float* states, float* actions, int batchSize, const std::vector<int>& envIndices) { 
-    std::lock_guard<std::mutex> lock(mMutex);
+    // Read-only inference - no lock needed (weights are not modified during forward pass)
     mModel.SelectActionBatchWithLatent(states, actions, batchSize, envIndices, true); 
 }
 void TD3Trainer::SelectActionResidual(const float* state, float* residualAction) { 

@@ -41,6 +41,7 @@ void RobotController::ApplyResidualActions(const float* residualActions, JPH::Ph
     if (mRobot.mainBodyId.IsInvalid()) return;
 
     int actionDim = (int)mResidualActions.size();
+    
     for (int i = 0; i < actionDim; ++i) {
         if (!std::isfinite(residualActions[i])) {
             mResidualActions[i] = 0.0f;
@@ -54,7 +55,12 @@ void RobotController::ApplyResidualActions(const float* residualActions, JPH::Ph
     } else if (mRobot.type == RobotType::INTERNAL_ENGINE) {
         ApplyShardPhysics(mResidualActions.data(), physicsSystem, dt);
     } else {
-        if (!mRobot.config.satellites.empty()) {
+        // Multi-body robot (has joints) or satellite robot
+        if (!mRobot.sixDofJoints.empty() || !mRobot.hingeJoints.empty()) {
+            // Multi-body: actions go directly to joint motors
+            for (int i = 0; i < actionDim; ++i) mFinalActions[i] = mResidualActions[i];
+        } else if (!mRobot.config.satellites.empty()) {
+            // Satellite robot with PID base actions
             ComputeBasePIDActions(physicsSystem, dt);
             for (int i = 0; i < mRobot.config.numSatellites; ++i) {
                 int base = i * mRobot.config.actionsPerSatellite;
@@ -66,6 +72,7 @@ void RobotController::ApplyResidualActions(const float* residualActions, JPH::Ph
             int satActions = mRobot.config.numSatellites * mRobot.config.actionsPerSatellite;
             for (int i = satActions; i < mRobot.config.actionsPerRobot; ++i) mFinalActions[i] = mResidualActions[i];
         } else {
+            // Fallback: direct copy
             for (int i = 0; i < actionDim; ++i) mFinalActions[i] = mResidualActions[i];
         }
         ApplyPhysicsActions(mFinalActions.data(), physicsSystem);
@@ -78,7 +85,8 @@ void RobotController::ApplyPhysicsActions(const float* actions, JPH::PhysicsSyst
     float energy = 0.0f;
     static std::mt19937 rng(std::random_device{}());
     std::uniform_real_distribution<float> jitter(-0.05f, 0.05f);
-if (!mRobot.hingeJoints.empty() || !mRobot.sixDofJoints.empty()) {
+    
+ if (!mRobot.hingeJoints.empty() || !mRobot.sixDofJoints.empty()) {
     int numHinge = static_cast<int>(mRobot.hingeJoints.size());
     for (int i = 0; i < numHinge; ++i) {
         if (mRobot.hingeJoints[i]) {
@@ -91,6 +99,9 @@ if (!mRobot.hingeJoints.empty() || !mRobot.sixDofJoints.empty()) {
     int actionIdx = numHinge;
     for (auto* joint : mRobot.sixDofJoints) {
         if (joint) {
+            bodyInterface.ActivateBody(joint->GetBody1()->GetID());
+            bodyInterface.ActivateBody(joint->GetBody2()->GetID());
+            
             JPH::Vec3 targetAngVel(actions[actionIdx] * 10.0f, actions[actionIdx+1] * 10.0f, actions[actionIdx+2] * 10.0f);
             joint->SetTargetAngularVelocityCS(targetAngVel + JPH::Vec3(jitter(rng), jitter(rng), jitter(rng)));
             energy += targetAngVel.Length();

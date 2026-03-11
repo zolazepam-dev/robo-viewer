@@ -75,6 +75,12 @@ struct CombatRobotData
     RobotType type = RobotType::SATELLITE;
     JPH::BodyID mainBodyId;
     std::vector<SatelliteData> satellites;
+    
+    // Multi-body support
+    std::vector<JPH::BodyID> bodies;
+    std::vector<JPH::HingeConstraint*> hingeJoints;
+    std::vector<JPH::SixDOFConstraint*> sixDofJoints;
+    
     float hp = 100.0f;
 
     uint32_t envIndex = 0;

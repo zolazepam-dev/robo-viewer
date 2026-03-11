@@ -8,6 +8,9 @@
 
 #include <stdexcept>
 #include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 #include "CombatRobot.h"
 #include "RobotConfig.h"
 #include "Robot.h"
@@ -194,8 +197,159 @@ CombatRobotData CombatRobotLoader::LoadRobot(
     robotData.mainBodyId = coreBody->GetID();
     bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
 
-    std::cout << "[LoadRobot" << idx << "] Step 5: Entering satellite loop" << std::endl;
-    robotData.satellites.resize(robotData.config.numSatellites);
+    std::cout << "[LoadRobot" << idx << "] Config: bodies=" << robotData.config.bodies.size() 
+              << ", joints=" << robotData.config.joints.size() 
+              << ", satellites=" << robotData.config.numSatellites << std::endl;
+
+    // Handle multi-body configs (bodies + constraints/joints)
+    if (!robotData.config.bodies.empty()) {
+        std::cout << "[LoadRobot" << idx << "] Loading multi-body config with " 
+                  << robotData.config.bodies.size() << " bodies and "
+                  << robotData.config.joints.size() << " joints" << std::endl;
+        
+        robotData.bodies.resize(robotData.config.bodies.size());
+        
+        // Create all bodies first
+        for (size_t i = 0; i < robotData.config.bodies.size(); ++i) {
+            const auto& bodyConfig = robotData.config.bodies[i];
+            JPH::Ref<JPH::Shape> bodyShape;
+            
+            if (bodyConfig.shapeType == "sphere") {
+                float radius = bodyConfig.shapeParams.empty() ? 1.0f : bodyConfig.shapeParams[0];
+                JPH::SphereShapeSettings shapeSettings(radius);
+                shapeSettings.SetDensity(bodyConfig.mass / (4.0f / 3.0f * 3.14159f * pow(radius, 3)));
+                auto result = shapeSettings.Create();
+                if (result.HasError()) throw std::runtime_error("Body Shape Error: " + std::string(result.GetError().c_str()));
+                bodyShape = result.Get();
+            } else if (bodyConfig.shapeType == "box") {
+                if (bodyConfig.shapeParams.size() >= 3) {
+                    JPH::BoxShapeSettings shapeSettings(JPH::Vec3(bodyConfig.shapeParams[0], bodyConfig.shapeParams[1], bodyConfig.shapeParams[2]));
+                    shapeSettings.SetDensity(bodyConfig.mass / (8.0f * bodyConfig.shapeParams[0] * bodyConfig.shapeParams[1] * bodyConfig.shapeParams[2]));
+                    auto result = shapeSettings.Create();
+                    if (result.HasError()) throw std::runtime_error("Box Shape Error: " + std::string(result.GetError().c_str()));
+                    bodyShape = result.Get();
+                }
+            }
+            
+            if (!bodyShape) continue;
+            
+            JPH::Vec3 position(bodyConfig.position[0], bodyConfig.position[1], bodyConfig.position[2]);
+            JPH::Quat rotation = JPH::Quat::sIdentity();
+            if (bodyConfig.rotation.size() >= 3) {
+                rotation = JPH::Quat::sEulerAngles(JPH::Vec3(bodyConfig.rotation[0], bodyConfig.rotation[1], bodyConfig.rotation[2]));
+            }
+            
+            JPH::BodyCreationSettings bodySettings(bodyShape, pos + position, rotation, JPH::EMotionType::Dynamic, ghostLayer);
+            bodySettings.mFriction = bodyConfig.friction;
+            bodySettings.mRestitution = bodyConfig.restitution;
+            bodySettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
+            bodySettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
+            bodySettings.mCollisionGroup.SetSubGroupID(static_cast<uint32_t>(i));
+            
+            JPH::Body* body = bodyInterface.CreateBody(bodySettings);
+            if (body) {
+                robotData.bodies[i] = body->GetID();
+                bodyInterface.AddBody(robotData.bodies[i], JPH::EActivation::Activate);
+                
+                // Set mainBodyId to first body for IsValid() check
+                if (i == 0) robotData.mainBodyId = body->GetID();
+            }
+        }
+        
+        // Create joints/constraints
+        for (const auto& jointConfig : robotData.config.joints) {
+            if (jointConfig.body1.empty() || jointConfig.body2.empty()) continue;
+            
+            // Find body indices by name
+            int body1Idx = -1, body2Idx = -1;
+            for (size_t i = 0; i < robotData.config.bodies.size(); ++i) {
+                if (robotData.config.bodies[i].name == jointConfig.body1) body1Idx = i;
+                if (robotData.config.bodies[i].name == jointConfig.body2) body2Idx = i;
+            }
+            
+            if (body1Idx < 0 || body2Idx < 0) continue;
+            if (body1Idx >= (int)robotData.bodies.size() || body2Idx >= (int)robotData.bodies.size()) continue;
+            
+            JPH::BodyID body1 = robotData.bodies[body1Idx];
+            JPH::BodyID body2 = robotData.bodies[body2Idx];
+            
+            if (jointConfig.type == "sixdof" || jointConfig.type == "SixDOF") {
+                JPH::SixDOFConstraintSettings sixDofSettings;
+                sixDofSettings.mSpace = JPH::EConstraintSpace::WorldSpace;
+                
+                // Use joint position from config (in local body space)
+                JPH::Vec3 jointPos(0.0f, 0.0f, 0.0f);
+                if (jointConfig.position.size() >= 3) {
+                    jointPos = JPH::Vec3(jointConfig.position[0], jointConfig.position[1], jointConfig.position[2]);
+                }
+                sixDofSettings.mPosition1 = pos + jointPos;
+                sixDofSettings.mPosition2 = pos + jointPos;
+                
+                // Lock translations
+                for (int axis = 0; axis < 3; ++axis) {
+                    sixDofSettings.mLimitMin[axis] = 0.0f;
+                    sixDofSettings.mLimitMax[axis] = 0.0f;
+                }
+                
+                // Setup motors for rotations
+                if (jointConfig.hasMotor) {
+                    for (int axis = 3; axis < 6; ++axis) {
+                        sixDofSettings.mMotorSettings[axis].mSpringSettings.mFrequency = 0.0f;
+                        sixDofSettings.mMotorSettings[axis].mMinTorqueLimit = jointConfig.motorMaxTorque * -1.0f;
+                        sixDofSettings.mMotorSettings[axis].mMaxTorqueLimit = jointConfig.motorMaxTorque;
+                    }
+                }
+                
+                JPH::SixDOFConstraint* constraint = static_cast<JPH::SixDOFConstraint*>(
+                    bodyInterface.CreateConstraint(&sixDofSettings, body1, body2));
+                if (constraint) {
+                    robotData.sixDofJoints.push_back(constraint);
+                    ps->AddConstraint(constraint);
+                    
+                    if (jointConfig.hasMotor) {
+                        for (int axis = 3; axis < 6; ++axis) {
+                            constraint->SetMotorState(static_cast<JPH::SixDOFConstraintSettings::EAxis>(axis), JPH::EMotorState::Velocity);
+                        }
+                    }
+                }
+            } else if (jointConfig.type == "hinge" || jointConfig.type == "Hinge") {
+                JPH::HingeConstraintSettings hingeSettings;
+                hingeSettings.mSpace = JPH::EConstraintSpace::WorldSpace;
+                hingeSettings.mPoint1 = pos;
+                hingeSettings.mPoint2 = pos;
+                hingeSettings.mHingeAxis1 = JPH::Vec3(0, 1, 0);
+                hingeSettings.mHingeAxis2 = JPH::Vec3(0, 1, 0);
+                hingeSettings.mNormalAxis1 = JPH::Vec3(1, 0, 0);
+                hingeSettings.mNormalAxis2 = JPH::Vec3(1, 0, 0);
+                
+                if (jointConfig.hasMotor) {
+                    hingeSettings.mMotorSettings.mSpringSettings.mFrequency = 0.0f;
+                    hingeSettings.mMotorSettings.mMinTorqueLimit = jointConfig.motorMaxTorque * -1.0f;
+                    hingeSettings.mMotorSettings.mMaxTorqueLimit = jointConfig.motorMaxTorque;
+                }
+                
+                JPH::HingeConstraint* constraint = static_cast<JPH::HingeConstraint*>(
+                    bodyInterface.CreateConstraint(&hingeSettings, body1, body2));
+                if (constraint) {
+                    robotData.hingeJoints.push_back(constraint);
+                    ps->AddConstraint(constraint);
+                    
+                    if (jointConfig.hasMotor) {
+                        constraint->SetMotorState(JPH::EMotorState::Velocity);
+                    }
+                }
+            }
+        }
+        
+        std::cout << "[LoadRobot" << idx << "] Multi-body config loaded: " 
+                  << robotData.bodies.size() << " bodies, "
+                  << robotData.hingeJoints.size() << " hinge joints, "
+                  << robotData.sixDofJoints.size() << " 6DOF joints" << std::endl;
+    } else {
+        // Original satellite-based loading
+        std::cout << "[LoadRobot" << idx << "] Step 5: Entering satellite loop" << std::endl;
+        robotData.satellites.resize(robotData.config.numSatellites);
+    }
     
     for (int i = 0; i < robotData.config.numSatellites; ++i)
     {
