@@ -6,48 +6,73 @@ This plan follows the Test-Driven Development workflow defined in `conductor/wor
 
 ---
 
-## Phase 1: Lock-Free Data Structures
+## Phase 1: Lock-Free Data Structures [COMPLETE]
 
 **Goal**: Eliminate mutex contention in training loop
 
-- [ ] Task: Write failing test for lock-free queue
-    - [ ] Create concurrent producer/consumer test
-    - [ ] Test with 128 parallel producers (environments)
-    - [ ] Verify zero contention overhead
-    - [ ] Confirm test fails (implementation not yet present)
+- [x] Task: Write failing test for lock-free queue (commit: lockfree_test)
+    - [x] Create concurrent producer/consumer test
+    - [x] Test with 128 parallel producers (environments)
+    - [x] Verify zero contention overhead
+    - [x] Confirm test fails (implementation not yet present)
 
-- [ ] Task: Implement LockFreeQueue
-    - [ ] Design ring buffer with atomic head/tail indices
-    - [ ] Implement `push()` with atomic CAS operations
-    - [ ] Implement `pop()` with atomic CAS operations
-    - [ ] Add memory ordering constraints (acquire/release)
+- [x] Task: Implement LockFreeQueue (commit: lockfree_impl)
+    - [x] Design ring buffer with atomic head/tail indices
+    - [x] Implement `push()` with atomic CAS operations
+    - [x] Implement `pop()` with atomic CAS operations
+    - [x] Add memory ordering constraints (acquire/release)
 
-- [ ] Task: Integrate LockFreeQueue into training loop
-    - [ ] Replace `gSimMutex` protected queues
-    - [ ] Update `VectorizedEnv` to use lock-free transfer
-    - [ ] Verify zero mutex contention in profiling
+- [x] Task: Integrate LockFreeQueue into training loop (commit: lockfree_integration)
+    - [x] Replace `gSimMutex` protected queues
+    - [x] Update `VectorizedEnv` to use lock-free transfer
+    - [x] Verify zero mutex contention in profiling
 
-- [ ] Task: Verify test coverage for Phase 1
-    - [ ] Run coverage tool
-    - [ ] Ensure >80% coverage for new files
-    - [ ] Document any coverage gaps
+- [x] Task: Verify test coverage for Phase 1
+    - [x] Run coverage tool
+    - [x] Ensure >80% coverage for new files
+    - [x] Document any coverage gaps
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Lock-Free Data Structures' (Protocol in workflow.md)
-    - [ ] Announce phase completion
-    - [ ] Verify test coverage for phase changes
-    - [ ] Execute automated tests with proactive debugging
-    - [ ] Propose manual verification plan
-    - [ ] Await explicit user feedback
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Lock-Free Data Structures' (Protocol in workflow.md)
+    - [x] Announce phase completion
+    - [x] Verify test coverage for phase changes
+    - [x] Execute automated tests with proactive debugging
+    - [x] Propose manual verification plan
+    - [x] Await explicit user feedback
 
 ---
 
-## Phase 2: Thread Pinning Optimization
+## Phase 2: Thread Pinning Optimization [COMPLETE]
 
 **Goal**: Optimize CPU core affinity for physics workers
 
-- [ ] Task: Write failing test for thread pinning
-    - [ ] Create test verifying thread affinity
-    - [ ] Test core isolation (no cross-core migration)
+- [x] Task: Write failing test for thread pinning (commit: threadpin_test)
+    - [x] Create test verifying thread affinity
+    - [x] Test core isolation (no cross-core migration)
+    - [x] Measure context switch reduction
+    - [x] Confirm test fails (pinning not yet implemented)
+
+- [x] Task: Implement ThreadPinning system (commit: threadpin_impl)
+    - [x] Create `ThreadPinning` class with `pthread_setaffinity_np`
+    - [x] Define core mapping: Core 0 (main), Cores 1-5 (physics)
+    - [x] Implement `pinThread(core_id)` function
+    - [x] Add error handling for invalid cores
+
+- [x] Task: Integrate thread pinning into Jolt job system (commit: threadpin_integration)
+    - [x] Pin physics workers to cores 1-5, 7-11
+    - [x] Pin main RL loop to core 0
+    - [x] Verify with `taskset` or `htop`
+
+- [x] Task: Verify test coverage for Phase 2
+    - [x] Run coverage tool
+    - [x] Ensure >80% coverage for new files
+    - [x] Document any coverage gaps
+
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Thread Pinning' (Protocol in workflow.md)
+    - [x] Announce phase completion
+    - [x] Verify test coverage for phase changes
+    - [x] Execute automated tests with proactive debugging
+    - [x] Propose manual verification plan
+    - [x] Await explicit user feedback
     - [ ] Measure context switch reduction
     - [ ] Confirm test fails (pinning not yet implemented)
 
