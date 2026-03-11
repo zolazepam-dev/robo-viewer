@@ -167,35 +167,37 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         // -----------------------------------
     }
 
-    // Create core body using configuration
-    JPH::SphereShapeSettings coreShapeSettings(robotData.config.coreRadius);
-    coreShapeSettings.SetDensity(robotData.config.coreMass / (4.0f / 3.0f * 3.14159f * 
-        pow(robotData.config.coreRadius, 3)));
-    
-    auto coreResult = coreShapeSettings.Create();
-    if (coreResult.HasError()) throw std::runtime_error("Core Shape Error: " + std::string(coreResult.GetError().c_str()));
-    JPH::RefConst<JPH::Shape> coreShape = coreResult.Get();
+    // Create core body using configuration (only for satellite-based robots)
+    if (robotData.config.bodies.empty()) {
+        JPH::SphereShapeSettings coreShapeSettings(robotData.config.coreRadius);
+        coreShapeSettings.SetDensity(robotData.config.coreMass / (4.0f / 3.0f * 3.14159f * 
+            pow(robotData.config.coreRadius, 3)));
+        
+        auto coreResult = coreShapeSettings.Create();
+        if (coreResult.HasError()) throw std::runtime_error("Core Shape Error: " + std::string(coreResult.GetError().c_str()));
+        JPH::RefConst<JPH::Shape> coreShape = coreResult.Get();
 
-    JPH::BodyCreationSettings coreSettings(
-        coreShape,
-        pos,
-        JPH::Quat::sIdentity(),
-        JPH::EMotionType::Dynamic,
-        ghostLayer
-    );
+        JPH::BodyCreationSettings coreSettings(
+            coreShape,
+            pos,
+            JPH::Quat::sIdentity(),
+            JPH::EMotionType::Dynamic,
+            ghostLayer
+        );
 
-    coreSettings.mFriction = robotData.config.coreFriction;
-    coreSettings.mRestitution = robotData.config.coreRestitution;
-    coreSettings.mLinearDamping = robotData.config.coreLinearDamping;
-    coreSettings.mAngularDamping = robotData.config.coreAngularDamping;
-    coreSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
-    coreSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
-    coreSettings.mCollisionGroup.SetSubGroupID(0);
+        coreSettings.mFriction = robotData.config.coreFriction;
+        coreSettings.mRestitution = robotData.config.coreRestitution;
+        coreSettings.mLinearDamping = robotData.config.coreLinearDamping;
+        coreSettings.mAngularDamping = robotData.config.coreAngularDamping;
+        coreSettings.mCollisionGroup.SetGroupFilter(mGroupFilter);
+        coreSettings.mCollisionGroup.SetGroupID(robotData.collisionGroup);
+        coreSettings.mCollisionGroup.SetSubGroupID(0);
 
-    JPH::Body* coreBody = bodyInterface.CreateBody(coreSettings);
-    if (!coreBody) throw std::runtime_error("FATAL: Failed to create body!");
-    robotData.mainBodyId = coreBody->GetID();
-    bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
+        JPH::Body* coreBody = bodyInterface.CreateBody(coreSettings);
+        if (!coreBody) throw std::runtime_error("FATAL: Failed to create body!");
+        robotData.mainBodyId = robotData.mainBodyId;
+        bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
+    }
 
     std::cout << "[LoadRobot" << idx << "] Config: bodies=" << robotData.config.bodies.size() 
               << ", joints=" << robotData.config.joints.size() 
@@ -411,7 +413,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
         }
 
         robotData.satellites[i].rotationJoint = static_cast<JPH::SixDOFConstraint*>(
-            bodyInterface.CreateConstraint(&rotSettings, coreBody->GetID(), satBody->GetID()));
+            bodyInterface.CreateConstraint(&rotSettings, robotData.mainBodyId, satBody->GetID()));
         if (!robotData.satellites[i].rotationJoint) throw std::runtime_error("FATAL: Constraint creation returned nullptr!");
         ps->AddConstraint(robotData.satellites[i].rotationJoint);
         
