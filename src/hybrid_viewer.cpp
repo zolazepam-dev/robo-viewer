@@ -187,8 +187,8 @@ int main(int argc, char* argv[]) {
         ReplayBuffer* buffer = new ReplayBuffer(td3cfg.bufferSize, stateDim, actionDim);
         
         // Fast mode disabled - causes memory corruption during weight copies
-        // trainer->SetFastMode(true);
-        // opponentTrainer->SetFastMode(true);
+        trainer->SetFastMode(true);
+        opponentTrainer->SetFastMode(true);
         std::cout << "[Hybrid Viewer] Using B-spline networks (fast mode disabled due to memory issues)" << std::endl;
 
         std::string finalModelPath = checkpointDir + "/model_final.bin";
@@ -373,6 +373,9 @@ int main(int argc, char* argv[]) {
                     core->GetPhysicsSystem().SetGravity(JPH::Vec3(0.0f, phys.gravityY, 0.0f));
                 }
 
+                // CRITICAL: Harvest states after physics update!
+                vecEnv->HarvestStatesZeroCopy();
+
                 const auto& allObs = vecEnv->GetObservations();
                 const auto& allRewards = vecEnv->GetRewards();
                 const auto& allDones = vecEnv->GetDones();
@@ -432,7 +435,7 @@ int main(int argc, char* argv[]) {
             const auto& graphics = ui.GetGraphics();
             std::cout << "[HYBRID] Calling gRenderer->Draw..." << std::endl;
             if (gRenderer && vecEnv) {
-                gRenderer->Draw(vecEnv->GetPhysicsCore(), gCam.position, renderEnvIdx, gCam.front, gCam.up,
+                gRenderer->Draw(&vecEnv->GetPhysicsCore()->GetPhysicsSystem(), gCam.position, renderEnvIdx, gCam.front,
                                 graphics.showCollisionShapes, graphics.showAABBs, graphics.showContactPoints,
                                 graphics.showRobot1, graphics.showRobot2);
             }

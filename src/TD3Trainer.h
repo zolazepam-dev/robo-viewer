@@ -102,6 +102,8 @@ public:
     int GetStepCount() const { return mStepCount; }
     void IncrementStep() { mStepCount++; }
 
+    void SetFastMode(bool fast) { mModel.SetFastMode(fast); }
+
     SpanActorCritic& GetModel() { return mModel; }
     const SpanActorCritic& GetModel() const { return mModel; }
 

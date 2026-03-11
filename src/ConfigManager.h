@@ -57,6 +57,16 @@ struct CentralConfig {
         int numEnvs = 1;
     } training;
 
+    struct Robot {
+        float enginePower = 100.0f;
+        float reactionWheelPower = 5000.0f;
+        float shellRadius = 1.0f;
+        float shellThickness = 0.2f;
+        float shellMass = 20.0f;
+        float motorSpeed = 10.0f;
+        float motorTorque = 200.0f;
+    } robot;
+
     std::vector<RobotDefinition> robotDefinitions;
     std::string currentRobotName = "BouncyOrbiter";
 

@@ -136,7 +136,7 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
     ],
-    linkopts = ["-lGL", "-lpthread", "-flto", "-lgomp"],
+    linkopts = ["-lGL", "-lpthread", "-lgomp"],
     copts = [
         "-std=c++17",
         "-O3",
@@ -145,7 +145,6 @@ cc_binary(
         "-DJPH_DEBUG_RENDERER",
         "-march=native",
         "-ffast-math",
-        "-flto",
         "-fno-strict-aliasing",
         "-I/usr/include/eigen3",
         "-DEIGEN_ENABLE_AVX2",

@@ -153,11 +153,14 @@ public:
      */
     void ComputeFeatures(const float* input, float* features, float* sin_features = nullptr);
 
+    void SetFastMode(bool fast) { mFastMode = fast; }
+
 private:
     size_t mInputDim = 0;
     size_t mOutputDim = 0;
     int mNumFeatures = 1024;
     float mSigma = 1.0f;
+    bool mFastMode = false;
 
     // FIXED (non-trainable) RFF parameters
     AlignedVector32<float> mFixedWeights;    // [numFeatures * inputDim] ~ N(0, 1/sigma^2)
@@ -170,4 +173,8 @@ private:
     // Gradients for trainable parameters
     AlignedVector32<float> mWeightsGradient;  // [outputDim * numFeatures]
     AlignedVector32<float> mBiasGradient;     // [outputDim]
+
+    // Fast approximation parameters
+    AlignedVector32<float> mFastWeights;      // [outputDim * inputDim]
+    AlignedVector32<float> mFastBias;         // [outputDim]
 };

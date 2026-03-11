@@ -75,6 +75,15 @@ void OverlayUIRefactored::UItoCentral(CentralConfig& cfg)
     cfg.physics.allowSleep = mPhysics.allowSleep;
     cfg.physics.timeScale = mTimeScale;
     cfg.physics.stepsPerEpisode = mStepsPerEpisode;
+
+    // Robot tuning
+    cfg.robot.enginePower = mRobotTune.enginePower;
+    cfg.robot.reactionWheelPower = mRobotTune.reactionWheelPower;
+    cfg.robot.shellRadius = mRobotTune.shellRadius;
+    cfg.robot.shellThickness = mRobotTune.shellThickness;
+    cfg.robot.shellMass = mRobotTune.shellMass;
+    cfg.robot.motorSpeed = mRobotTune.motorSpeed;
+    cfg.robot.motorTorque = mRobotTune.motorTorque;
     
     cfg.physics.friction = mPhysics.friction;
     cfg.physics.restitution = mPhysics.restitution;
@@ -112,6 +121,15 @@ void OverlayUIRefactored::CentraltoUI(const CentralConfig& cfg)
     mPhysics.allowSleep = cfg.physics.allowSleep;
     mTimeScale = cfg.physics.timeScale;
     mStepsPerEpisode = cfg.physics.stepsPerEpisode;
+
+    // Robot tuning
+    mRobotTune.enginePower = cfg.robot.enginePower;
+    mRobotTune.reactionWheelPower = cfg.robot.reactionWheelPower;
+    mRobotTune.shellRadius = cfg.robot.shellRadius;
+    mRobotTune.shellThickness = cfg.robot.shellThickness;
+    mRobotTune.shellMass = cfg.robot.shellMass;
+    mRobotTune.motorSpeed = cfg.robot.motorSpeed;
+    mRobotTune.motorTorque = cfg.robot.motorTorque;
     
     mPhysics.friction = cfg.physics.friction;
     mPhysics.restitution = cfg.physics.restitution;

@@ -51,6 +51,13 @@ void RFFLayer::Init(size_t inputDim, size_t outputDim, const RFFConfig& config, 
     mWeightsGradient.resize(trainWeightsSize, 0.0f);
     mBiasGradient.resize(paddedOutputDim, 0.0f);
 
+    // Initialize FAST parameters
+    mFastWeights.resize(mOutputDim * mInputDim);
+    mFastBias.resize(paddedOutputDim, 0.0f);
+    float fastLimit = std::sqrt(6.0f / (static_cast<float>(mInputDim) + static_cast<float>(mOutputDim)));
+    std::uniform_real_distribution<float> fastWeightDist(-fastLimit, fastLimit);
+    for (auto& w : mFastWeights) w = fastWeightDist(rng);
+
     fprintf(stderr, "[RFFLayer::Init] Complete. Bias size: %zu (padded from %zu)\n", paddedOutputDim, mOutputDim);
     fflush(stderr);
 }
@@ -84,6 +91,18 @@ void RFFLayer::ComputeFeatures(const float* input, float* features, float* sin_f
 
 void RFFLayer::Forward(const float* input, float* output, float* featureBuffer)
 {
+    if (mFastMode) {
+        for (size_t i = 0; i < mOutputDim; ++i) {
+            float val = mFastBias[i];
+            const float* weights = mFastWeights.data() + i * mInputDim;
+            for (size_t j = 0; j < mInputDim; ++j) {
+                val += weights[j] * input[j];
+            }
+            output[i] = val > 0.0f ? val : 0.0f; // ReLU
+        }
+        return;
+    }
+
     ComputeFeatures(input, featureBuffer);
     
     const size_t simdWidth = 8;
@@ -111,6 +130,12 @@ void RFFLayer::Forward(const float* input, float* output, float* featureBuffer)
 
 void RFFLayer::ForwardBatch(const float* input, float* output, int batchSize, float* featureBuffer)
 {
+    if (mFastMode) {
+        for (int b = 0; b < batchSize; ++b) {
+            Forward(input + b * mInputDim, output + b * mOutputDim, nullptr);
+        }
+        return;
+    }
     ForwardBatchEigen(input, output, batchSize, featureBuffer);
 }
 

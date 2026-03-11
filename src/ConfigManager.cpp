@@ -62,6 +62,18 @@ void CentralConfig::LoadFromJSON(const json& j) {
         if (t.contains("numEnvs")) training.numEnvs = t["numEnvs"];
     }
 
+    // Robot settings
+    if (j.contains("robot")) {
+        const auto& r = j["robot"];
+        if (r.contains("enginePower")) robot.enginePower = r["enginePower"];
+        if (r.contains("reactionWheelPower")) robot.reactionWheelPower = r["reactionWheelPower"];
+        if (r.contains("shellRadius")) robot.shellRadius = r["shellRadius"];
+        if (r.contains("shellThickness")) robot.shellThickness = r["shellThickness"];
+        if (r.contains("shellMass")) robot.shellMass = r["shellMass"];
+        if (r.contains("motorSpeed")) robot.motorSpeed = r["motorSpeed"];
+        if (r.contains("motorTorque")) robot.motorTorque = r["motorTorque"];
+    }
+
     // Available robot definitions
     if (j.contains("robotDefinitions") && j["robotDefinitions"].is_array()) {
         robotDefinitions.clear();
@@ -119,6 +131,15 @@ json CentralConfig::ToJSON() const {
     j["training"]["checkpointDir"] = training.checkpointDir;
     j["training"]["checkpointInterval"] = training.checkpointInterval;
     j["training"]["numEnvs"] = training.numEnvs;
+
+    // Robot settings
+    j["robot"]["enginePower"] = robot.enginePower;
+    j["robot"]["reactionWheelPower"] = robot.reactionWheelPower;
+    j["robot"]["shellRadius"] = robot.shellRadius;
+    j["robot"]["shellThickness"] = robot.shellThickness;
+    j["robot"]["shellMass"] = robot.shellMass;
+    j["robot"]["motorSpeed"] = robot.motorSpeed;
+    j["robot"]["motorTorque"] = robot.motorTorque;
 
     // Available robot definitions
     json robotDefsArray = json::array();

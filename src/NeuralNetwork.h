@@ -223,6 +223,8 @@ public:
     void Add(const float* state, const float* action, const VectorReward& reward,
              const float* nextState, bool done, const float* latentPos, const float* latentVel);
     void Add(const float* state, const float* action, float reward,
+             const float* nextState, bool done);
+    void Add(const float* state, const float* action, float reward,
              const float* nextState, bool done, const float* latentPos, const float* latentVel);
     
     void Sample(int batchSize, float* states, float* actions, float* rewards,

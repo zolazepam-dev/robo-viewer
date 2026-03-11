@@ -269,7 +269,7 @@ int main(int argc, char* argv[])
         // Camera looking at robot center
         glm::vec3 target = robotCenter;
         glm::vec3 lookAt = target + cameraFront;
-        renderer.Draw(&core, cameraPos, 0, cameraFront, false, false, false, true, true);
+        renderer.Draw(&core.GetPhysicsSystem(), cameraPos, 0, cameraFront, false, false, false, true, true);
         glfwSwapBuffers(window);
     }
 

@@ -188,6 +188,12 @@ public:
     size_t GetInputDim() const { return mInputDim; }
     size_t GetOutputDim() const { return mOutputDim; }
 
+    void SetFastMode(bool fast) {
+        for (auto& layer : mLayers) {
+            layer.SetFastMode(fast);
+        }
+    }
+
 private:
     AlignedVector32<RFFLayer> mLayers;
     std::vector<size_t> mLayerInputDims;
@@ -314,6 +320,15 @@ public:
 
     class LatentMemoryManager& GetLatentMemory() { return mLatentMemory; }
     const class LatentMemoryManager& GetLatentMemory() const { return mLatentMemory; }
+
+    void SetFastMode(bool fast) {
+        mActor.SetFastMode(fast);
+        mCritic1.SetFastMode(fast);
+        mCritic2.SetFastMode(fast);
+        mActorTarget.SetFastMode(fast);
+        mCritic1Target.SetFastMode(fast);
+        mCritic2Target.SetFastMode(fast);
+    }
 
     /**
      * Update target networks

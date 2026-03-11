@@ -52,6 +52,16 @@ struct TrainingConfigUI {
     DomainRandomization dr;
 };
 
+struct RobotTunables {
+    float enginePower = 100.0f;
+    float reactionWheelPower = 5000.0f;
+    float shellRadius = 1.0f;
+    float shellThickness = 0.2f;
+    float shellMass = 20.0f;
+    float motorSpeed = 10.0f;
+    float motorTorque = 200.0f;
+};
+
 struct RobotConfiguration {
     std::string name;
     std::string configFile;
@@ -124,6 +134,7 @@ public:
     const PhysicsTunables& GetPhysics() const { return mPhysics; }
     const GraphicsSettings& GetGraphics() const { return mGraphics; }
     const TrainingConfigUI& GetConfig() const { return mConfig; }
+    const RobotTunables& GetRobots() const { return mRobotTune; }
     
     // Policy management
     bool GetAndClearSaveRequest(std::string& outName);
@@ -163,6 +174,7 @@ private:
     PhysicsTunables mPhysics;
     GraphicsSettings mGraphics;
     TrainingConfigUI mConfig;
+    RobotTunables mRobotTune;
     RobotSelectionUI mRobotSelection;
     
     std::vector<float> mRewardHistory[5];

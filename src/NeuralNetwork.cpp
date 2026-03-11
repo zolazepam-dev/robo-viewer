@@ -456,13 +456,20 @@ void ReplayBuffer::Add(const float* state, const float* action, const VectorRewa
 }
 
 void ReplayBuffer::Add(const float* state, const float* action, float reward,
-                        const float* nextState, bool done, const float* latentPos, const float* latentVel)
+                       const float* nextState, bool done)
+{
+    VectorReward vr;
+    vr.damage_dealt = reward;
+    Add(state, action, vr, nextState, done);
+}
+
+void ReplayBuffer::Add(const float* state, const float* action, float reward,
+                       const float* nextState, bool done, const float* latentPos, const float* latentVel)
 {
     VectorReward vr;
     vr.damage_dealt = reward;
     Add(state, action, vr, nextState, done, latentPos, latentVel);
 }
-
 void ReplayBuffer::Add(const float* state, const float* action, const VectorReward& reward,
                         const float* nextState, bool done, const float* latentPos, const float* latentVel)
 {
