@@ -79,6 +79,8 @@ inline void BatchedGEMM_NoBias(const float* X, const float* W, float* Y,
 // BATCHED ACTIVATION FUNCTIONS (AVX2-optimized)
 // ============================================================================
 
+namespace opt {
+
 /**
  * Batched MoLU (Modulated Leaky Unit) with forward caching
  * f(x) = beta * x if x > 0, else alpha * (exp(x) - 1)
@@ -137,9 +139,19 @@ inline void BackwardMoLU_Batched(float* grad, const float* cachedInput, int size
 
 /**
  * Batched Tanh with AVX2
- * Uses higher-order Pade approximation for numerical stability
- * tanh(x) ≈ x * (105 + 10*x^2) / (105 + 45*x^2 + x^4) for |x| < 4
- * Saturates to ±1 for |x| >= 4
+ * Uses 5th-order Pade approximation for numerical stability:
+ *   tanh(x) ≈ x * (105 + 10*x²) / (105 + 45*x² + x⁴)  for |x| < 4
+ *   tanh(x) → ±1                                       for |x| >= 4
+ * 
+ * Coefficients:
+ *   Numerator:   105 + 10*x²  (Pade [3/2] approximant)
+ *   Denominator: 105 + 45*x² + x⁴
+ * 
+ * Maximum error: <2% for |x| < 4 (acceptable for neural network inference)
+ * Uses Newton-Raphson refinement for fast reciprocal (1 iteration)
+ * 
+ * @param X Input/output array (modified in-place)
+ * @param size Number of elements
  */
 inline void BatchedTanh_AVX2(float* X, size_t size) {
     const size_t simd_size = size - (size % 8);
@@ -436,4 +448,4 @@ inline void PrefetchMatrixRow(const float* row, size_t next_row_offset) {
     _mm_prefetch(row + 128, _MM_HINT_T0);
 }
 
-} // namespace opt
+}  // namespace opt

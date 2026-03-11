@@ -428,8 +428,14 @@ void KLPERBuffer::UpdateTree(int idx, float priority)
     }
 }
 
+/**
+ * Get priority weight for importance sampling
+ * @param idx Buffer index (0 to mSize-1), NOT tree index
+ * @return Normalized priority weight for PER importance sampling
+ */
 float KLPERBuffer::GetPriorityWeight(int idx) const
 {
+    // idx is buffer index; convert to tree leaf index by adding mTreeSize
     float minProb = static_cast<float>(mMinTree[1]) / mSumTree[1];
     float maxWeight = std::pow(mSize * minProb, -mBeta);
     float prob = mSumTree[idx + mTreeSize] / mSumTree[1];
