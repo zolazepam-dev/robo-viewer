@@ -39,14 +39,14 @@ public:
 
 private:
     struct PhysicsBatch {
-        PhysicsCore* core;  // Pointer to avoid move issues
+        std::unique_ptr<PhysicsCore> core;  // Pointer to avoid move issues
         std::vector<int> envIndices;  // Which envs use this physics system
         std::thread workerThread;
         std::atomic<bool> workReady;
         std::atomic<bool> workDone;
         
         PhysicsBatch() : core(nullptr), workReady(false), workDone(false) {}
-        ~PhysicsBatch() { delete core; }
+        ~PhysicsBatch() = default;
         PhysicsBatch(const PhysicsBatch&) = delete;
         PhysicsBatch& operator=(const PhysicsBatch&) = delete;
     };

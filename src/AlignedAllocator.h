@@ -40,14 +40,32 @@ public:
         if (n == 0) return nullptr;
         if (n > max_size()) throw std::bad_alloc();
         
-        void* ptr = _mm_malloc(n * sizeof(T), Alignment);
+        void* ptr;
+#ifdef _WIN32
+        ptr = _aligned_malloc(n * sizeof(T), Alignment);
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+        if (posix_memalign(&ptr, Alignment, n * sizeof(T)) != 0) ptr = nullptr;
+#else
+        // Linux / Standard C11
+        // Size must be a multiple of alignment for aligned_alloc
+        std::size_t size = n * sizeof(T);
+        std::size_t remainder = size % Alignment;
+        if (remainder != 0) size += (Alignment - remainder);
+        ptr = aligned_alloc(Alignment, size);
+#endif
         if (!ptr) throw std::bad_alloc();
         return static_cast<T*>(ptr);
     }
 
     void deallocate(T* ptr, std::size_t) noexcept
     {
-        if (ptr) _mm_free(ptr);
+        if (ptr) {
+#ifdef _WIN32
+            _aligned_free(ptr);
+#else
+            free(ptr);
+#endif
+        }
     }
 
     template<typename U, typename... Args>

@@ -25,6 +25,11 @@
 #include "PhysicsCore.h"
 #include "NeuralMath.h"
 #include "TD3Trainer.h"
+#include "Logging.h"
+
+#ifndef NUM_PARALLEL_ENVS
+#define NUM_PARALLEL_ENVS 128
+#endif
 
 /** Arena size for octopod combat */
 constexpr float OCTOPOD_ARENA_SIZE = 30.0f;
@@ -55,6 +60,10 @@ constexpr float OCTOPOD_REWARD_UPRIGHT = 0.3f;
 constexpr float OCTOPOD_REWARD_HEIGHT = 0.2f;
 constexpr float OCTOPOD_REWARD_SPEED = 0.3f;
 constexpr float OCTOPOD_REWARD_APPROACH = 0.8f;
+
+constexpr float OCTOPOD_REWARD_DAMAGE_DEALT = 5.0f;
+constexpr float OCTOPOD_REWARD_DAMAGE_TAKEN = -2.0f;
+constexpr float OCTOPOD_REWARD_ENERGY = -0.001f;
 
 /**
  * @brief Contact listener for octopod force sensing
@@ -216,4 +225,7 @@ private:
 
     VectorReward mReward1;
     VectorReward mReward2;
+
+    std::array<JPH::RVec3, 25> mInitialPositions1{};
+    std::array<JPH::RVec3, 25> mInitialPositions2{};
 };

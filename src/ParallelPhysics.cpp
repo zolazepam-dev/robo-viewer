@@ -27,7 +27,7 @@ void ParallelPhysics::Init(const std::string& robotConfigPath) {
     // Initialize each physics batch
     for (int i = 0; i < mNumSystems; ++i) {
         auto batch = std::make_unique<PhysicsBatch>();
-        batch->core = new PhysicsCore();
+        batch->core = std::make_unique<PhysicsCore>();
         batch->core->Init(mEnvsPerSystem);
         batch->workReady.store(false);
         batch->workDone.store(false);
@@ -90,7 +90,7 @@ void ParallelPhysics::StepAllParallel() {
 PhysicsCore* ParallelPhysics::GetPhysicsCore(int envIndex) {
     int batchIdx = envIndex / mEnvsPerSystem;
     if (batchIdx >= 0 && batchIdx < mNumSystems) {
-        return mBatches[batchIdx]->core;
+        return mBatches[batchIdx]->core.get();
     }
     return nullptr;
 }

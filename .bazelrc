@@ -6,3 +6,5 @@ build --copt=-march=native
 build --copt=-ffast-math
 build --copt=-fno-strict-aliasing
 build --copt=-DGLEW_NO_GLU
+build --jobs=8
+build --local_ram_resources=6144

@@ -116,6 +116,11 @@ public:
         m_size = new_size;
     }
 
+    void resize(std::initializer_list<size_type> shape) {
+        if (shape.size() != Dims) throw std::invalid_argument("Incorrect number of dimensions");
+        resize(std::data(shape));
+    }
+
     // Element access
     template<typename... Args>
     reference at(Args... indices) {

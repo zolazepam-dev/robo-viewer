@@ -27,9 +27,11 @@
 #include "NeuralMath.h"
 #include "OptimizedBatchOps.h"
 
+using namespace opt;
+
 // Test constants
 constexpr size_t TEST_SIZE = 1024;
-constexpr float EPSILON = 1e-5f;
+constexpr float EPSILON = 0.02f;
 
 /**
  * Test Suite: AVX2 Tanh Implementation

@@ -304,10 +304,11 @@ KLPERBuffer::KLPERBuffer(int capacity, int stateDim, int actionDim)
     mPriorities.resize(capacity);
     mKLDivergences.resize(capacity);
 
-    int treeSize = 1;
-    while (treeSize < capacity) treeSize *= 2;
-    mSumTree.resize(2 * treeSize, 0.0f);
-    mMinTree.resize(2 * treeSize, std::numeric_limits<int>::max());
+    // Calculate tree size as power of 2 for proper sum-tree indexing
+    mTreeSize = 1;
+    while (mTreeSize < capacity) mTreeSize *= 2;
+    mSumTree.resize(2 * mTreeSize, 0.0f);
+    mMinTree.resize(2 * mTreeSize, std::numeric_limits<int>::max());
 }
 
 void KLPERBuffer::Add(const float* state, const float* action, float behaviorLogProb,
@@ -348,8 +349,9 @@ void KLPERBuffer::Sample(int batchSize, float* states, float* actions, float* lo
     for (int i = 0; i < batchSize; ++i) {
         float val = segment * (dist(rng) + i);
         int idx = 1;
-        
-        while (idx < mCapacity) {
+
+        // Traverse down to leaf level (indices mTreeSize to 2*mTreeSize-1)
+        while (idx < mTreeSize) {
             if (mSumTree[2 * idx] >= val) {
                 idx = 2 * idx;
             } else {
@@ -357,8 +359,9 @@ void KLPERBuffer::Sample(int batchSize, float* states, float* actions, float* lo
                 idx = 2 * idx + 1;
             }
         }
-        
-        indices[i] = std::min(idx - mCapacity, mSize - 1);
+
+        // Convert tree leaf index to buffer index
+        indices[i] = std::min(idx - mTreeSize, mSize - 1);
         
         std::copy(mStates.begin() + indices[i] * mStateDim,
                   mStates.begin() + (indices[i] + 1) * mStateDim,
@@ -412,10 +415,12 @@ float KLPERBuffer::ComputeKLDivergence(float behaviorLogProb, float targetLogPro
 
 void KLPERBuffer::UpdateTree(int idx, float priority)
 {
-    idx += mCapacity;
+    // Convert buffer index to tree leaf index
+    idx += mTreeSize;
     mSumTree[idx] = priority;
     mMinTree[idx] = static_cast<int>(priority);
-    
+
+    // Propagate up to root
     while (idx > 1) {
         idx /= 2;
         mSumTree[idx] = mSumTree[2 * idx] + mSumTree[2 * idx + 1];
@@ -427,7 +432,7 @@ float KLPERBuffer::GetPriorityWeight(int idx) const
 {
     float minProb = static_cast<float>(mMinTree[1]) / mSumTree[1];
     float maxWeight = std::pow(mSize * minProb, -mBeta);
-    float prob = mSumTree[idx + mCapacity] / mSumTree[1];
+    float prob = mSumTree[idx + mTreeSize] / mSumTree[1];
     float weight = std::pow(mSize * prob, -mBeta);
     return weight / maxWeight;
 }

@@ -4,7 +4,12 @@
  */
 
 #include <Jolt/Jolt.h>
+#include <Jolt/RegisterTypes.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/EstimateCollisionResponse.h>
+
 #include "OctopodEnv.h"
 #include "OctopodLoader.h"
 
@@ -13,9 +18,6 @@
 #include <fstream>
 #include <random>
 #include <mutex>
-#include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Collision/EstimateCollisionResponse.h>
 
 void OctopodContactListener::OnContactAdded(const JPH::Body& body1, const JPH::Body& body2,
                                              const JPH::ContactManifold& manifold, JPH::ContactSettings& settings)
@@ -36,8 +38,9 @@ void OctopodContactListener::OnContactRemoved(const JPH::SubShapeIDPair& subShap
 void OctopodContactListener::ExtractImpulseData(const JPH::Body& body1, const JPH::Body& body2,
                                                  const JPH::ContactManifold& manifold)
 {
-    // Temporarily disabled - race condition in multi-threaded physics
-    // Force readings are not critical for training
+    // Use atomic operations or per-env storage to avoid race conditions
+    // For now, skip if bodies don't belong to tracked robots
+    // TODO: Implement proper thread-safe force accumulation
 }
 
 OctopodContactListener& OctopodContactListener::Get() { 
@@ -54,6 +57,27 @@ void OctopodEnv::Init(uint32_t envIndex, PhysicsCore* core, int stepsPerEpisode)
     mStepsPerEpisode = stepsPerEpisode;
 
     Reset();
+
+    // Store initial body positions relative to central body
+    JPH::BodyInterface& bodyInterface = mPhysicsSystem->GetBodyInterface();
+    
+    if (mRobot1.IsValid()) {
+        JPH::RVec3 centralPos = bodyInterface.GetPosition(mRobot1.centralBody);
+        for (size_t i = 0; i < mRobot1.bodies.size() && i < 25; i++) {
+            if (!mRobot1.bodies[i].IsInvalid()) {
+                mInitialPositions1[i] = bodyInterface.GetPosition(mRobot1.bodies[i]) - centralPos;
+            }
+        }
+    }
+    
+    if (mRobot2.IsValid()) {
+        JPH::RVec3 centralPos = bodyInterface.GetPosition(mRobot2.centralBody);
+        for (size_t i = 0; i < mRobot2.bodies.size() && i < 25; i++) {
+            if (!mRobot2.bodies[i].IsInvalid()) {
+                mInitialPositions2[i] = bodyInterface.GetPosition(mRobot2.bodies[i]) - centralPos;
+            }
+        }
+    }
 }
 
 void OctopodEnv::Reset()
@@ -127,33 +151,31 @@ void OctopodEnv::Reset()
         // Reset existing bodies to initial positions
         std::cerr << "[OctopodEnv] Resetting octopod positions..." << std::endl;
         
-        // Reset all body positions and velocities
-        auto resetRobot = [&](const OctopodRobot& robot, const JPH::RVec3& basePos) {
+        // Restore all body positions using stored relative offsets
+        auto resetRobot = [&](const OctopodRobot& robot, const JPH::RVec3& basePos, 
+                              const std::array<JPH::RVec3, 25>& initialOffsets) {
+            bodyInterface.SetPosition(robot.centralBody, basePos, JPH::EActivation::Activate);
+            bodyInterface.SetLinearVelocity(robot.centralBody, JPH::Vec3::sZero());
+            bodyInterface.SetAngularVelocity(robot.centralBody, JPH::Vec3::sZero());
+            
             for (size_t i = 0; i < robot.bodies.size(); i++) {
-                if (!robot.bodies[i].IsInvalid()) {
-                    bodyInterface.SetPosition(robot.bodies[i], basePos, JPH::EActivation::Activate);
+                if (!robot.bodies[i].IsInvalid() && robot.bodies[i] != robot.centralBody) {
+                    JPH::RVec3 newPos = basePos + initialOffsets[i];
+                    bodyInterface.SetPosition(robot.bodies[i], newPos, JPH::EActivation::Activate);
                     bodyInterface.SetLinearVelocity(robot.bodies[i], JPH::Vec3::sZero());
                     bodyInterface.SetAngularVelocity(robot.bodies[i], JPH::Vec3::sZero());
                 }
             }
         };
         
-        // This won't work properly - we need to store initial relative positions
-        // For now, just reset central bodies
-        bodyInterface.SetPosition(mRobot1.centralBody, pos1, JPH::EActivation::Activate);
-        bodyInterface.SetPosition(mRobot2.centralBody, pos2, JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(mRobot1.centralBody, JPH::Vec3::sZero());
-        bodyInterface.SetLinearVelocity(mRobot2.centralBody, JPH::Vec3::sZero());
-        bodyInterface.SetAngularVelocity(mRobot1.centralBody, JPH::Vec3::sZero());
-        bodyInterface.SetAngularVelocity(mRobot2.centralBody, JPH::Vec3::sZero());
+        resetRobot(mRobot1, pos1, mInitialPositions1);
+        resetRobot(mRobot2, pos2, mInitialPositions2);
     }
 
     std::cerr << "[OctopodEnv] Octopod 1: " << mRobot1.bodies.size() << " bodies, " 
               << mRobot1.constraints.size() << " constraints" << std::endl;
     std::cerr << "[OctopodEnv] Octopod 2: " << mRobot2.bodies.size() << " bodies, " 
               << mRobot2.constraints.size() << " constraints" << std::endl;
-
-    // Force sensors disabled - race condition in multi-threaded physics
 }
 
 void OctopodEnv::QueueActions(const float* actions1, const float* actions2)
@@ -162,11 +184,11 @@ void OctopodEnv::QueueActions(const float* actions1, const float* actions2)
     
     // Apply motor actions to constraints
     // Actions are normalized [-1, 1], map to joint angle limits
-    float angleScale = 1.0f;  // Radians per action unit
+    constexpr float OCTOPOD_ANGLE_SCALE = 1.0f;  // Radians per action unit
     
     for (size_t i = 0; i < mRobot1.constraints.size() && i < OCTOPOD_ACTION_DIM; i++) {
         if (mRobot1.constraints[i]) {
-            float targetAngle = actions1[i] * angleScale;
+            float targetAngle = actions1[i] * OCTOPOD_ANGLE_SCALE;
             mRobot1.constraints[i]->SetMotorState(JPH::EMotorState::Position);
             mRobot1.constraints[i]->SetTargetAngle(targetAngle);
         }
@@ -174,7 +196,7 @@ void OctopodEnv::QueueActions(const float* actions1, const float* actions2)
     
     for (size_t i = 0; i < mRobot2.constraints.size() && i < OCTOPOD_ACTION_DIM; i++) {
         if (mRobot2.constraints[i]) {
-            float targetAngle = actions2[i] * angleScale;
+            float targetAngle = actions2[i] * OCTOPOD_ANGLE_SCALE;
             mRobot2.constraints[i]->SetMotorState(JPH::EMotorState::Position);
             mRobot2.constraints[i]->SetTargetAngle(targetAngle);
         }
@@ -218,7 +240,8 @@ void OctopodEnv::CheckCollisions()
         
         JPH::RVec3 victimPos = bodyInterface.GetPosition(victim.centralBody);
         
-        // Check each leg segment for high-velocity impacts
+        // Use actual collision data from contact listener instead of distance checks
+        // TODO: Wire up contact listener to provide collision pairs with impulse data
         for (const auto& bodyId : attacker.bodies) {
             if (bodyId.IsInvalid() || bodyId == attacker.centralBody) continue;
             
@@ -229,7 +252,7 @@ void OctopodEnv::CheckCollisions()
             // Damage threshold
             if (speed > 5.0f) {
                 float distSq = (segmentPos - victimPos).LengthSq();
-                if (distSq < 2.0f * 2.0f) {  // Within 2 meters
+                if (distSq < 1.0f * 1.0f) {  // Reduced to 1 meter as suggested
                     float damage = speed * OCTOPOD_DAMAGE_MULTIPLIER * 0.01f;
                     victim.hp -= damage;
                     attacker.totalDamageDealt += damage;
@@ -431,10 +454,10 @@ void OctopodEnv::CalculateRewards(float& r1, float& r2)
     mPrevHp2 = mRobot2.hp;
 
     VectorReward vr1, vr2;
-    vr1.damage_dealt = deltaDmgDealt1 * 5.0f; // High weight for damage
-    vr1.damage_taken = -deltaDmgTaken1 * 2.0f;
-    vr2.damage_dealt = deltaDmgDealt2 * 5.0f;
-    vr2.damage_taken = -deltaDmgTaken2 * 2.0f;
+    vr1.damage_dealt = deltaDmgDealt1 * OCTOPOD_REWARD_DAMAGE_DEALT;
+    vr1.damage_taken = deltaDmgTaken1 * OCTOPOD_REWARD_DAMAGE_TAKEN;
+    vr2.damage_dealt = deltaDmgDealt2 * OCTOPOD_REWARD_DAMAGE_DEALT;
+    vr2.damage_taken = deltaDmgTaken2 * OCTOPOD_REWARD_DAMAGE_TAKEN;
 
     // Energy efficiency (slight penalty for movement)
     float deltaEnergy1 = std::max(0.0f, mRobot1.totalEnergyUsed - mPrevEnergy1);
@@ -442,8 +465,8 @@ void OctopodEnv::CalculateRewards(float& r1, float& r2)
     mPrevEnergy1 = mRobot1.totalEnergyUsed;
     mPrevEnergy2 = mRobot2.totalEnergyUsed;
 
-    vr1.energy_used = -deltaEnergy1 * 0.001f;
-    vr2.energy_used = -deltaEnergy2 * 0.001f;
+    vr1.energy_used = deltaEnergy1 * OCTOPOD_REWARD_ENERGY;
+    vr2.energy_used = deltaEnergy2 * OCTOPOD_REWARD_ENERGY;
 
     // KOTH reward
     float distToKoth1 = static_cast<float>((pos1 - mKothPoint).Length());
@@ -467,7 +490,19 @@ void OctopodEnv::CalculateRewards(float& r1, float& r2)
     r2 = vr2.Scalar() + prox1 + approach2 + stability2 + wallPenalty2;
     
     // Normalize final reward to reasonable range
+    static int clampCount = 0;
+    if (r1 > 1.0f || r1 < -1.0f) {
+        if (++clampCount % 1000 == 0) {
+            LOG_WARN("Reward clamping detected: r1=%.2f (clamped to %.2f)", r1, std::clamp(r1, -1.0f, 1.0f));
+        }
+    }
     r1 = std::clamp(r1, -1.0f, 1.0f);
+    
+    if (r2 > 1.0f || r2 < -1.0f) {
+        if (++clampCount % 1000 == 0) {
+            LOG_WARN("Reward clamping detected: r2=%.2f (clamped to %.2f)", r2, std::clamp(r2, -1.0f, 1.0f));
+        }
+    }
     r2 = std::clamp(r2, -1.0f, 1.0f);
 
     if (!std::isfinite(r1)) { r1 = 0.0f; }

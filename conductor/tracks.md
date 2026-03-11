@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Fix Critical Compilation and Training Bugs**
+- [~] **Track: Fix Critical Compilation and Training Bugs**
   *Link: [./tracks/fix_critical_bugs_20260310/](./tracks/fix_critical_bugs_20260310/)*

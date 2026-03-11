@@ -65,6 +65,8 @@ cc_library(
         "MuonOptimizer.cpp",
         "ParallelPhysics.cpp",
         "ConfigManager.cpp",
+        "Tensor.cpp",
+        "TensorMath.cpp",
     ],
     hdrs = [
         "PhysicsCore.h",
@@ -107,6 +109,13 @@ cc_library(
         "VectorizedOctopodEnv.h",
         "ShardEnv.h",
         "RobotLoader_fixed.h",
+        "Logging.h",
+        "LockFreeActionBuffer.h",
+        "AlignedAllocator.hpp",
+        "Tensor.hpp",
+        "SimdOps.hpp",
+        "RFFTensor.hpp",
+        "RFF.hpp",
         # Optimized training headers
         "OptimizedBatchOps.h",
         "ParallelPhysicsStepper.h",
@@ -227,4 +236,57 @@ cc_binary(
         "-march=native",
         "-I/usr/include/eigen3"
     ],
+)
+
+cc_test(
+    name = "NeuralMathTest",
+    srcs = ["NeuralMathTest.cpp"],
+    deps = [
+        ":core",
+        "@googletest//:gtest_main",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-I/usr/include/eigen3"
+    ],
+    linkopts = ["-lgomp"],
+)
+
+cc_test(
+    name = "RFFTensorTest",
+    srcs = ["RFFTensorTest.cpp"],
+    deps = [
+        ":core",
+        "@googletest//:gtest_main",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+    ],
+    linkopts = ["-lgomp"],
+)
+
+cc_test(
+    name = "CriticalBugsTest",
+    srcs = ["CriticalBugsTest.cpp"],
+    deps = [
+        ":core",
+        "@googletest//:gtest_main",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-I/usr/include/eigen3"
+    ],
+    linkopts = ["-lgomp", "-lpthread"],
 )

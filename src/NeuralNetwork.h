@@ -201,6 +201,7 @@ private:
     int mActionDim;
     int mSize = 0;
     int mIndex = 0;
+    int mTreeSize = 0;  // Tree size (power of 2) for proper sum-tree indexing
     float mAlpha = 0.6f;
     float mBeta = 0.4f;
     float mMaxPriority = 1.0f;

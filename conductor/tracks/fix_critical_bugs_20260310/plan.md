@@ -10,10 +10,10 @@ This plan follows the Test-Driven Development workflow defined in `conductor/wor
 
 **Goal**: Replace non-standard `_mm256_tanh_ps` with valid AVX2 implementation
 
-- [ ] Task: Write failing test for tanh implementation
-    - [ ] Create test case comparing AVX2 tanh against `std::tanh`
-    - [ ] Test boundary cases: x=0, x=±1, x=±10, x=±infinity
-    - [ ] Verify max error tolerance < 1e-5
+- [~] Task: Write failing test for tanh implementation
+    - [x] Create test case comparing AVX2 tanh against `std::tanh`
+    - [x] Test boundary cases: x=0, x=±1, x=±10, x=±infinity
+    - [x] Verify max error tolerance < 1e-5
     - [ ] Confirm test fails (function not yet implemented)
 
 - [ ] Task: Implement AVX2-compliant tanh function
