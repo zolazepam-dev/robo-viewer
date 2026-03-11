@@ -122,9 +122,6 @@ void TrainingLoop(TD3Trainer* trainer, ReplayBuffer* buffer) {
 void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* opponentTrainer, ReplayBuffer* buffer, OverlayUIRefactored* ui, int stateDim, int actionDim)
 {
     int latentDim = trainer->GetModel().GetLatentDim();
-    fprintf(stderr, "[SimulationLoop] STARTING with %d envs, stateDim=%d, actionDim=%d, latentDim=%d\n", 
-            vecEnv->GetNumEnvs(), stateDim, actionDim, latentDim);
-    fflush(stderr);
     
     long long localSteps = 0; int mEpisodes = 0;
     auto lastSpsTime = std::chrono::high_resolution_clock::now(); int totalEnvStepsAccum = 0;
@@ -139,20 +136,13 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
     AlignedVector32<float> prevLatentVel(numRobots * latentDim, 0.0f);
 
     bool firstStep = true;
-    
-    fprintf(stderr, "[SimulationLoop] Buffers allocated, entering loop\n");
-    fflush(stderr);
 
     while (gSimRunning) {
-        if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
-        
+        if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); continue; }
+
         const PhysicsTunables& phys = ui->GetPhysics();
         int numEnvs = vecEnv->GetNumEnvs();
-        
-        if (localSteps % 100 == 0) {
-            fprintf(stderr, "[SimulationLoop] Step %lld, numEnvs=%d\n", localSteps, numEnvs);
-            fflush(stderr);
-        }
+
         const auto& obs = vecEnv->GetObservations();
         
         static AlignedVector32<float> obs1Batch, obs2Batch; 
