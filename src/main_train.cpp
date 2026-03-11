@@ -188,11 +188,8 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
                 indices2[i]);
         }
         
-        // NEW: vecEnv->Step now handles parallel action queuing, physics step, and parallel harvesting
-        {
-            DIAGNOSE_MUTEX_LOCK(gSimMutex, "SimulationLoop: PhysicsUpdate");
-            vecEnv->Step(robotActions);
-        }
+        // OPT-004: Removed mutex lock - VecEnv has internal synchronization
+        vecEnv->Step(robotActions);
 
         int writeIdx = gWriteBufferIdx.load();
         auto& bi = vecEnv->GetPhysicsCore()->GetPhysicsSystem().GetBodyInterface();
@@ -212,25 +209,26 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
         const auto& allDones = vecEnv->GetDones();
         
         if (!firstStep) {
-            DIAGNOSE_SCOPE("SimulationLoop: ReplayBufferAdd");
+            // OPT-003: Parallel replay buffer add
+            #pragma omp parallel for num_threads(8) schedule(dynamic, 16)
             for (int i = 0; i < numEnvs; ++i) {
-                buffer->Add(prevObs.data() + i * 2 * stateDim, 
-                            robotActions.data() + i * actionDim, 
-                            allRewards[i * 2], 
-                            allObs.data() + i * 2 * stateDim, 
+                buffer->Add(prevObs.data() + i * 2 * stateDim,
+                            robotActions.data() + i * actionDim,
+                            allRewards[i * 2],
+                            allObs.data() + i * 2 * stateDim,
                             allDones[i],
                             prevLatentPos.data() + (i * 2) * latentDim,
                             prevLatentVel.data() + (i * 2) * latentDim);
-                            
-                buffer->Add(prevObs.data() + i * 2 * stateDim + stateDim, 
-                            robotActions.data() + numEnvs * actionDim + i * actionDim, 
-                            allRewards[i * 2 + 1], 
-                            allObs.data() + i * 2 * stateDim + stateDim, 
+
+                buffer->Add(prevObs.data() + i * 2 * stateDim + stateDim,
+                            robotActions.data() + numEnvs * actionDim + i * actionDim,
+                            allRewards[i * 2 + 1],
+                            allObs.data() + i * 2 * stateDim + stateDim,
                             allDones[i],
                             prevLatentPos.data() + (i * 2 + 1) * latentDim,
                             prevLatentVel.data() + (i * 2 + 1) * latentDim);
             }
-            
+
             for (int i = 0; i < numEnvs; ++i) if (allDones[i]) mEpisodes++;
             vecEnv->ResetDoneEnvs();
         }
