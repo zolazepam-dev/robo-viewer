@@ -104,14 +104,17 @@ void TrainingLoop(TD3Trainer* trainer, ReplayBuffer* buffer) {
     fprintf(stderr, "[TrainingLoop] STARTING\n");
     fflush(stderr);
 
-    // Disable Eigen's internal multi-threading
+    // Disable Eigen's internal multi-threading to prevent core over-subscription
     Eigen::setNbThreads(1);
+
+    int trainCounter = 0;
+    const int TRAIN_EVERY_N_STEPS = 2;  // Train every 2nd step for +10-20% SPS
 
     while (gTrainingRunning) {
         if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); continue; }
 
-        // Train when we have enough data (lower threshold for faster learning)
-        if (buffer->Size() >= 512) {
+        // Train when we have enough data (throttled for better SPS)
+        if (buffer->Size() >= 512 && ++trainCounter % TRAIN_EVERY_N_STEPS == 0) {
             trainer->Train(*buffer);
         } else {
             std::this_thread::yield();  // Yield instead of sleep for lower latency
@@ -134,26 +137,44 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
     AlignedVector32<float> latentVelBuffer(numRobots * latentDim);
     AlignedVector32<float> prevLatentPos(numRobots * latentDim, 0.0f);
     AlignedVector32<float> prevLatentVel(numRobots * latentDim, 0.0f);
+    
+    // Pre-allocate batch buffers (avoid resizing every iteration)
+    int numEnvs = vecEnv->GetNumEnvs();
+    static AlignedVector32<float> obs1Batch, obs2Batch;
+    static std::vector<int> indices1, indices2;
+    static std::vector<float> batchRewards, batchActions, batchNextStates, batchLatentPos, batchLatentVel;
+    static std::vector<char> batchDones;  // Use char instead of bool for data() access
+    if (obs1Batch.capacity() < numEnvs * stateDim) {
+        obs1Batch.reserve(numEnvs * stateDim * 2);
+        obs2Batch.reserve(numEnvs * stateDim * 2);
+        indices1.reserve(numEnvs * 2);
+        indices2.reserve(numEnvs * 2);
+        batchRewards.reserve(numEnvs * 2);
+        batchActions.reserve(numEnvs * 2 * actionDim);
+        batchNextStates.reserve(numEnvs * 2 * stateDim);
+        batchDones.reserve(numEnvs * 2);
+        batchLatentPos.reserve(numEnvs * 2 * latentDim);
+        batchLatentVel.reserve(numEnvs * 2 * latentDim);
+    }
 
     bool firstStep = true;
+    int ompThreads = std::max(1, omp_get_max_threads() - 2);  // Leave cores for physics
 
     while (gSimRunning) {
         if (gSimPaused) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); continue; }
 
         const PhysicsTunables& phys = ui->GetPhysics();
-        int numEnvs = vecEnv->GetNumEnvs();
+        numEnvs = vecEnv->GetNumEnvs();
 
         const auto& obs = vecEnv->GetObservations();
         
-        static AlignedVector32<float> obs1Batch, obs2Batch; 
-        static std::vector<int> indices1, indices2;
         obs1Batch.resize(numEnvs * stateDim); 
         obs2Batch.resize(numEnvs * stateDim);
         indices1.resize(numEnvs); 
         indices2.resize(numEnvs);
         
-        // Parallel observation batching
-        #pragma omp parallel for num_threads(8) schedule(static)
+        // Parallel observation batching (reduced threads to prevent oversubscription)
+        #pragma omp parallel for num_threads(ompThreads) schedule(static)
         for (int i = 0; i < numEnvs; ++i) {
             std::memcpy(obs1Batch.data() + i * stateDim, (float*)obs.data() + (i * 2 * stateDim), stateDim * sizeof(float));
             indices1[i] = i * 2;
@@ -165,8 +186,8 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
         trainer->SelectActionBatchWithLatent(obs1Batch.data(), robotActions.data(), numEnvs, indices1);
         opponentTrainer->SelectActionBatchWithLatent(obs2Batch.data(), robotActions.data() + (numEnvs * actionDim), numEnvs, indices2);
 
-        // Capture updated latent states for replay buffer
-        #pragma omp parallel for num_threads(8)
+        // Capture updated latent states for replay buffer (batched)
+        #pragma omp parallel for num_threads(ompThreads) schedule(static)
         for (int i = 0; i < numEnvs; ++i) {
             trainer->GetModel().GetLatentMemory().GetLatentStates(
                 latentPosBuffer.data() + (i * 2) * latentDim,
@@ -178,7 +199,7 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
                 indices2[i]);
         }
         
-        // OPT-004: Removed mutex lock - VecEnv has internal synchronization
+        // OPT-004: VecEnv has internal synchronization
         vecEnv->Step(robotActions);
 
         int writeIdx = gWriteBufferIdx.load();
@@ -199,25 +220,30 @@ void SimulationLoop(VectorizedEnv* vecEnv, TD3Trainer* trainer, TD3Trainer* oppo
         const auto& allDones = vecEnv->GetDones();
         
         if (!firstStep) {
-            // OPT-003: Parallel replay buffer add
-            #pragma omp parallel for num_threads(8) schedule(dynamic, 16)
+            // Prepare batch data for replay buffer
+            batchRewards.resize(numEnvs * 2);
+            batchActions.resize(numEnvs * 2 * actionDim);
+            batchNextStates.resize(numEnvs * 2 * stateDim);
+            batchDones.resize(numEnvs * 2);
+            batchLatentPos.resize(numEnvs * 2 * latentDim);
+            batchLatentVel.resize(numEnvs * 2 * latentDim);
+            
             for (int i = 0; i < numEnvs; ++i) {
-                buffer->Add(prevObs.data() + i * 2 * stateDim,
-                            robotActions.data() + i * actionDim,
-                            allRewards[i * 2],
-                            allObs.data() + i * 2 * stateDim,
-                            allDones[i],
-                            prevLatentPos.data() + (i * 2) * latentDim,
-                            prevLatentVel.data() + (i * 2) * latentDim);
-
-                buffer->Add(prevObs.data() + i * 2 * stateDim + stateDim,
-                            robotActions.data() + numEnvs * actionDim + i * actionDim,
-                            allRewards[i * 2 + 1],
-                            allObs.data() + i * 2 * stateDim + stateDim,
-                            allDones[i],
-                            prevLatentPos.data() + (i * 2 + 1) * latentDim,
-                            prevLatentVel.data() + (i * 2 + 1) * latentDim);
+                batchRewards[i * 2] = allRewards[i * 2];
+                batchRewards[i * 2 + 1] = allRewards[i * 2 + 1];
+                std::memcpy(batchActions.data() + i * 2 * actionDim, robotActions.data() + i * actionDim, actionDim * sizeof(float));
+                std::memcpy(batchActions.data() + (i * 2 + 1) * actionDim, robotActions.data() + numEnvs * actionDim + i * actionDim, actionDim * sizeof(float));
+                std::memcpy(batchNextStates.data() + i * 2 * stateDim, allObs.data() + i * 2 * stateDim, stateDim * 2 * sizeof(float));
+                batchDones[i * 2] = allDones[i] ? 1.0f : 0.0f;
+                batchDones[i * 2 + 1] = allDones[i] ? 1.0f : 0.0f;
+                std::memcpy(batchLatentPos.data() + i * 2 * latentDim, prevLatentPos.data() + (i * 2) * latentDim, latentDim * 2 * sizeof(float));
+                std::memcpy(batchLatentVel.data() + i * 2 * latentDim, prevLatentVel.data() + (i * 2) * latentDim, latentDim * 2 * sizeof(float));
             }
+            
+            // Batch add to replay buffer (thread-safe, single operation)
+            buffer->AddBatch(prevObs.data(), batchActions.data(), batchRewards.data(),
+                            batchNextStates.data(), batchDones.data(),
+                            batchLatentPos.data(), batchLatentVel.data(), numEnvs * 2);
 
             for (int i = 0; i < numEnvs; ++i) if (allDones[i]) mEpisodes++;
             vecEnv->ResetDoneEnvs();

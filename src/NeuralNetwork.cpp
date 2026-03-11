@@ -514,6 +514,55 @@ void ReplayBuffer::Add(const float* state, const float* action, const VectorRewa
     mSize = std::min(mSize + 1, mCapacity);
 }
 
+void ReplayBuffer::AddBatch(const float* states, const float* actions, const float* rewards,
+                            const float* nextStates, const char* dones, const float* latentPos,
+                            const float* latentVel, int count)
+{
+    // Batch copy all data at once (much faster than individual Add calls)
+    for (int i = 0; i < count; ++i) {
+        int bufIdx = (mIndex + i) % mCapacity;
+        int stateIdx = bufIdx * mStateDim;
+        int actionIdx = bufIdx * mActionDim;
+        int latentIdx = bufIdx * mLatentDim;
+        int srcStateIdx = i * mStateDim;
+        int srcActionIdx = i * mActionDim;
+        int srcLatentIdx = i * mLatentDim;
+        
+        // Copy state
+        std::copy(states + srcStateIdx, states + srcStateIdx + mStateDim, mStates.begin() + stateIdx);
+        
+        // Copy action
+        std::copy(actions + srcActionIdx, actions + srcActionIdx + mActionDim, mActions.begin() + actionIdx);
+        
+        // Copy reward (scalar)
+        mRewards[bufIdx] = rewards[i];
+        mVectorRewards[bufIdx].damage_dealt = rewards[i];
+        
+        // Copy next state
+        std::copy(nextStates + srcStateIdx, nextStates + srcStateIdx + mStateDim, mNextStates.begin() + stateIdx);
+        
+        // Copy done flag
+        mDones[bufIdx] = dones[i] ? 1.0f : 0.0f;
+        
+        // Copy latent states
+        if (latentPos) {
+            std::copy(latentPos + srcLatentIdx, latentPos + srcLatentIdx + mLatentDim, mLatentPos.begin() + latentIdx);
+        } else {
+            std::fill(mLatentPos.begin() + latentIdx, mLatentPos.begin() + latentIdx + mLatentDim, 0.0f);
+        }
+        
+        if (latentVel) {
+            std::copy(latentVel + srcLatentIdx, latentVel + srcLatentIdx + mLatentDim, mLatentVel.begin() + latentIdx);
+        } else {
+            std::fill(mLatentVel.begin() + latentIdx, mLatentVel.begin() + latentIdx + mLatentDim, 0.0f);
+        }
+    }
+    
+    // Update index and size once for entire batch
+    mIndex = (mIndex + count) % mCapacity;
+    mSize = std::min(mSize + count, mCapacity);
+}
+
 void ReplayBuffer::Sample(int batchSize, float* states, float* actions, float* rewards,
                            float* nextStates, float* dones, float* latentPos, float* latentVel, std::mt19937& rng) {
     std::uniform_int_distribution<int> dist(0, mSize - 1);

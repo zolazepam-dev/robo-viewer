@@ -228,6 +228,11 @@ public:
     void Add(const float* state, const float* action, float reward,
              const float* nextState, bool done, const float* latentPos, const float* latentVel);
     
+    // Batch add for thread-safe parallel insertion
+    void AddBatch(const float* states, const float* actions, const float* rewards,
+                  const float* nextStates, const char* dones, const float* latentPos, 
+                  const float* latentVel, int count);
+    
     void Sample(int batchSize, float* states, float* actions, float* rewards,
                 float* nextStates, float* dones, float* latentPos, float* latentVel, std::mt19937& rng);
     
