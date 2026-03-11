@@ -290,3 +290,24 @@ cc_test(
     ],
     linkopts = ["-lgomp", "-lpthread"],
 )
+
+# SIMD Vectorization Test - Phase 3 of SPS Performance Optimization
+# Tests AVX2/FMA optimizations for observation preprocessing, reward calculation,
+# and batch environment stepping
+cc_binary(
+    name = "simd_vectorization_test",
+    srcs = ["SIMDVectorizationTest.cpp"],
+    deps = [
+        ":core",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-ffast-math",
+        "-I/usr/include/eigen3",
+    ],
+    linkopts = ["-lpthread"],
+)

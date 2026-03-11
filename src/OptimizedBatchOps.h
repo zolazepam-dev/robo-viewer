@@ -79,8 +79,6 @@ inline void BatchedGEMM_NoBias(const float* X, const float* W, float* Y,
 // BATCHED ACTIVATION FUNCTIONS (AVX2-optimized)
 // ============================================================================
 
-namespace opt {
-
 /**
  * Batched MoLU (Modulated Leaky Unit) with forward caching
  * f(x) = beta * x if x > 0, else alpha * (exp(x) - 1)
