@@ -195,7 +195,7 @@ CombatRobotData CombatRobotLoader::LoadRobot(
 
         JPH::Body* coreBody = bodyInterface.CreateBody(coreSettings);
         if (!coreBody) throw std::runtime_error("FATAL: Failed to create body!");
-        robotData.mainBodyId = robotData.mainBodyId;
+        robotData.mainBodyId = coreBody->GetID();
         bodyInterface.AddBody(robotData.mainBodyId, JPH::EActivation::Activate);
     }
 

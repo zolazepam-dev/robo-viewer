@@ -29,16 +29,16 @@
   "joints": {
     "hinge_damping": 0.7,
     "hinge_armature": 0.4,
-    "motor_torque": 8000.0,
-    "motor_min_torque": -15000.0,
-    "motor_max_torque": 15000.0,
+    "motor_torque": 12000.0,
+    "motor_min_torque": -22500.0,
+    "motor_max_torque": 22500.0,
     "slide_range": [-0.3, 0.6]
   },
   "actions": {
     "per_satellite": 4,
     "rotation_scale": 150.0,
     "slide_scale": 300.0,
-    "reaction_torque_scale": 25000.0
+    "reaction_torque_scale": 37500.0
   },
   "sensors": {
     "lidar_rays": 16,

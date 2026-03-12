@@ -341,56 +341,90 @@ void CombatEnv::CheckCollisions()
         JPH::RVec3 attackerPos = bodyInterface.GetPosition(attacker.mainBodyId);
         JPH::Vec3 attackerVel = bodyInterface.GetLinearVelocity(attacker.mainBodyId);
         float distSq = (attackerPos - victimPos).LengthSq();
-        if (distSq < 2.5f * 2.5f) { // Main body radius is 0.5, so 2.5 is a decent "slam" range
+        if (distSq < 5.0f * 5.0f) {
             float relativeVel = (attackerVel - victimVel).Length();
-            float damage = relativeVel * DAMAGE_MULTIPLIER * 0.05f; // Significant slam damage
-            victim.hp -= damage;
-            attacker.totalDamageDealt += damage;
-            victim.totalDamageTaken += damage;
+            if (relativeVel > 2.0f) {
+                float damage = relativeVel * DAMAGE_MULTIPLIER * 0.1f;
+                victim.hp = std::max(0.0f, victim.hp - damage);
+                attacker.totalDamageDealt += damage;
+                victim.totalDamageTaken += damage;
+                std::cout << "[DAMAGE] Main body slam: " << damage << " HP (vel: " << relativeVel << ")\n";
+            }
         }
         
-        if (attacker.type == RobotType::SATELLITE) {
+        // MULTI-BODY DAMAGE (for robots using config.bodies format like bouncy_orbiter)
+        for (int i = 0; i < (int)attacker.bodyIds.size(); ++i) {
+            JPH::BodyID bodyId = attacker.bodyIds[i];
+            if (bodyId.IsInvalid() || bodyId == attacker.mainBodyId || bodyId == victim.mainBodyId) continue;
+            
+            if (!bodyInterface.IsAdded(bodyId)) continue;
+            
+            JPH::RVec3 bodyPos = bodyInterface.GetPosition(bodyId);
+            JPH::Vec3 bodyVel = bodyInterface.GetLinearVelocity(bodyId);
+            float bodyDistSq = static_cast<float>((bodyPos - victimPos).LengthSq());
+            
+            if (bodyDistSq < 2.0f * 2.0f) {
+                float relativeVel = (bodyVel - victimVel).Length();
+                if (relativeVel > 2.0f) {
+                    float damage = relativeVel * DAMAGE_MULTIPLIER * 0.05f;
+                    victim.hp = std::max(0.0f, victim.hp - damage);
+                    attacker.totalDamageDealt += damage;
+                    victim.totalDamageTaken += damage;
+                    std::cout << "[DAMAGE] Multi-body hit: " << damage << " HP (vel: " << relativeVel << ")\n";
+                }
+            }
+        }
+        
+        // SATELLITE DAMAGE (legacy satellite format)
+        if (attacker.type == RobotType::SATELLITE && !attacker.satellites.empty()) {
             for (int i = 0; i < (int)attacker.satellites.size(); ++i) {
-                // SPIKE DAMAGE
                 if (!attacker.satellites[i].spikeBodyId.IsInvalid()) {
                     JPH::RVec3 spikePos = bodyInterface.GetPosition(attacker.satellites[i].spikeBodyId);
                     if ((spikePos - victimPos).LengthSq() < spikeThreshold * spikeThreshold) {
                         JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].spikeBodyId);
                         float relativeVel = (vel - victimVel).Length();
-                        float damage = relativeVel * DAMAGE_MULTIPLIER * 0.1f; 
-                        victim.hp -= damage;
-                        attacker.totalDamageDealt += damage;
-                        victim.totalDamageTaken += damage;
+                        if (relativeVel > 2.0f) {
+                            float damage = relativeVel * DAMAGE_MULTIPLIER * 0.08f;
+                            victim.hp = std::max(0.0f, victim.hp - damage);
+                            attacker.totalDamageDealt += damage;
+                            victim.totalDamageTaken += damage;
+                            std::cout << "[DAMAGE] Spike hit: " << damage << " HP (vel: " << relativeVel << ")\n";
+                        }
                     }
                 }
                 
-                // SATELLITE BODY DAMAGE (New: allows damage without spikes)
                 if (!attacker.satellites[i].coreBodyId.IsInvalid()) {
                     JPH::RVec3 satPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
                     float satRadius = attacker.config.satellites.size() > i ? attacker.config.satellites[i].radius : 0.1f;
-                    float satThreshold = satRadius + 0.6f; // satellite radius + victim main body radius buffer
+                    float satThreshold = satRadius + 0.6f;
                     
                     if ((satPos - victimPos).LengthSq() < satThreshold * satThreshold) {
                         JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
                         float relativeVel = (vel - victimVel).Length();
-                        float damage = relativeVel * DAMAGE_MULTIPLIER * 0.02f; // Less than spike, more than zero
-                        victim.hp -= damage;
-                        attacker.totalDamageDealt += damage;
-                        victim.totalDamageTaken += damage;
+                        if (relativeVel > 2.0f) {
+                            float damage = relativeVel * DAMAGE_MULTIPLIER * 0.04f;
+                            victim.hp = std::max(0.0f, victim.hp - damage);
+                            attacker.totalDamageDealt += damage;
+                            victim.totalDamageTaken += damage;
+                            std::cout << "[DAMAGE] Satellite hit: " << damage << " HP (vel: " << relativeVel << ")\n";
+                        }
                     }
                 }
             }
-        } else if (attacker.type == RobotType::INTERNAL_ENGINE) {
+        } else if (attacker.type == RobotType::INTERNAL_ENGINE && !attacker.satellites.empty()) {
             for (int i = 0; i < (int)attacker.satellites.size(); ++i) {
                 if (attacker.satellites[i].coreBodyId.IsInvalid()) continue;
                 JPH::RVec3 engPos = bodyInterface.GetPosition(attacker.satellites[i].coreBodyId);
                 if ((engPos - victimPos).LengthSq() < engineThreshold * engineThreshold) {
                     JPH::Vec3 vel = bodyInterface.GetLinearVelocity(attacker.satellites[i].coreBodyId);
                     float relativeVel = (vel - victimVel).Length();
-                    float damage = relativeVel * DAMAGE_MULTIPLIER * 0.2f; // 100x increase from 0.002f
-                    victim.hp -= damage;
-                    attacker.totalDamageDealt += damage;
-                    victim.totalDamageTaken += damage;
+                    if (relativeVel > 2.0f) {
+                        float damage = relativeVel * DAMAGE_MULTIPLIER * 0.15f;
+                        victim.hp = std::max(0.0f, victim.hp - damage);
+                        attacker.totalDamageDealt += damage;
+                        victim.totalDamageTaken += damage;
+                        std::cout << "[DAMAGE] Engine slam: " << damage << " HP (vel: " << relativeVel << ")\n";
+                    }
                 }
             }
         }

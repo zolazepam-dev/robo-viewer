@@ -1,0 +1,38 @@
+{
+  "name": "Snake8Segment",
+  "type": "snake",
+  "description": "8-segment snake for smooth undulating locomotion",
+  "segments": [
+    {"name": "head", "shape": "capsule", "radius": 0.08, "height": 0.49, "mass": 1.56, "position": [0, 0.18, 0]},
+    {"name": "seg0", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -0.7]},
+    {"name": "seg1", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -1.4]},
+    {"name": "seg2", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -2.1]},
+    {"name": "seg3", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -2.8]},
+    {"name": "seg4", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -3.5]},
+    {"name": "seg5", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -4.2]},
+    {"name": "seg6", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 1.2, "position": [0, 0.18, -4.9]},
+    {"name": "tail", "shape": "capsule", "radius": 0.056, "height": 0.28, "mass": 0.48, "position": [0, 0.18, -5.6]}
+  ],
+  "joints": [
+    {"name": "neck", "type": "hinge", "parent": "head", "child": "seg0", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint0", "type": "hinge", "parent": "seg0", "child": "seg1", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint1", "type": "hinge", "parent": "seg1", "child": "seg2", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint2", "type": "hinge", "parent": "seg2", "child": "seg3", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint3", "type": "hinge", "parent": "seg3", "child": "seg4", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint4", "type": "hinge", "parent": "seg4", "child": "seg5", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "joint5", "type": "hinge", "parent": "seg5", "child": "seg6", "axis": [0, 1, 0], "motor_torque": 25.0, "motor_speed": 6.0},
+    {"name": "tail_joint", "type": "hinge", "parent": "seg6", "child": "tail", "axis": [0, 1, 0], "motor_torque": 15.0, "motor_speed": 6.0}
+  ],
+  "control": {
+    "action_dim": 8,
+    "observation_dim": 64,
+    "joint_names": ["neck", "joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "tail_joint"],
+    "gait": "sine_wave"
+  },
+  "physics": {
+    "friction": 0.3,
+    "restitution": 0.05,
+    "linear_damping": 0.15,
+    "angular_damping": 0.15
+  }
+}

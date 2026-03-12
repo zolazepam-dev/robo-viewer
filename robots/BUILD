@@ -1,1 +1,16 @@
-exports_files(["combat_bot.json", "test_bot.json", "f22.json", "orbital_shard.json", "octopod.json", "bouncy_orbiter.json"])
+exports_files([
+    "combat_bot.json",
+    "test_bot.json",
+    "f22.json",
+    "orbital_shard.json",
+    "octopod.json",
+    "bouncy_orbiter.json",
+    "arm_3dof.json",
+    "arm_5dof.json",
+    "arm_7dof.json",
+    "snake_4seg.json",
+    "snake_8seg.json",
+    "snake_12seg.json",
+    "arm_gripper.json",
+    "snake_head.json",
+])

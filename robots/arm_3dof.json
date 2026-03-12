@@ -1,0 +1,27 @@
+{
+  "name": "Arm3DOF",
+  "type": "arm",
+  "description": "3-DOF planar manipulator arm for basic reaching tasks",
+  "segments": [
+    {"name": "base", "shape": "box", "size": [0.6, 0.2, 0.6], "mass": 5.0, "position": [0, 0.1, 0]},
+    {"name": "lower_arm", "shape": "capsule", "radius": 0.08, "height": 0.6, "mass": 2.0, "position": [0, 0.5, 0]},
+    {"name": "upper_arm", "shape": "capsule", "radius": 0.07, "height": 0.5, "mass": 1.5, "position": [0, 1.05, 0]},
+    {"name": "hand", "shape": "box", "size": [0.2, 0.1, 0.3], "mass": 0.5, "position": [0, 1.55, 0]}
+  ],
+  "joints": [
+    {"name": "base_joint", "type": "hinge", "parent": "base", "child": "lower_arm", "axis": [0, 0, 1], "motor_torque": 150.0, "motor_speed": 5.0},
+    {"name": "elbow_joint", "type": "hinge", "parent": "lower_arm", "child": "upper_arm", "axis": [0, 0, 1], "motor_torque": 100.0, "motor_speed": 8.0},
+    {"name": "wrist_joint", "type": "hinge", "parent": "upper_arm", "child": "hand", "axis": [0, 0, 1], "motor_torque": 50.0, "motor_speed": 10.0}
+  ],
+  "control": {
+    "action_dim": 3,
+    "observation_dim": 24,
+    "joint_names": ["base_joint", "elbow_joint", "wrist_joint"]
+  },
+  "physics": {
+    "friction": 0.5,
+    "restitution": 0.1,
+    "linear_damping": 0.1,
+    "angular_damping": 0.1
+  }
+}

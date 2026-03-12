@@ -26,11 +26,11 @@
     { "type": "box", "dimensions": [0.2, 0.8, 0.2], "relative_pos": [-0.8,  0.0, -0.8], "relative_rot": [0,0,0,1] }
   ],
   "joints": {
-    "motor_torque": 1000.0
+    "motor_torque": 1500.0
   },
   "actions": {
     "reaction_wheel_dim": 8,
     "rotation_scale": 50.0,
-    "reaction_torque_scale": 10000.0
+    "reaction_torque_scale": 15000.0
   }
 }

@@ -1,0 +1,31 @@
+{
+  "name": "Arm5DOF",
+  "type": "arm",
+  "description": "5-DOF articulated arm for manipulation tasks",
+  "segments": [
+    {"name": "base", "shape": "box", "size": [0.8, 0.3, 0.8], "mass": 8.0, "position": [0, 0.15, 0]},
+    {"name": "shoulder", "shape": "cylinder", "radius": 0.15, "height": 0.2, "mass": 3.0, "position": [0, 0.35, 0]},
+    {"name": "lower_arm", "shape": "capsule", "radius": 0.08, "height": 0.7, "mass": 2.5, "position": [0, 0.85, 0]},
+    {"name": "upper_arm", "shape": "capsule", "radius": 0.07, "height": 0.6, "mass": 2.0, "position": [0, 1.45, 0]},
+    {"name": "forearm", "shape": "capsule", "radius": 0.06, "height": 0.4, "mass": 1.5, "position": [0, 1.95, 0]},
+    {"name": "hand", "shape": "box", "size": [0.24, 0.12, 0.36], "mass": 0.8, "position": [0, 2.35, 0]}
+  ],
+  "joints": [
+    {"name": "shoulder_pan", "type": "hinge", "parent": "base", "child": "shoulder", "axis": [0, 1, 0], "motor_torque": 200.0, "motor_speed": 4.0},
+    {"name": "shoulder_tilt", "type": "hinge", "parent": "shoulder", "child": "lower_arm", "axis": [0, 0, 1], "motor_torque": 150.0, "motor_speed": 6.0},
+    {"name": "elbow", "type": "hinge", "parent": "lower_arm", "child": "upper_arm", "axis": [0, 0, 1], "motor_torque": 120.0, "motor_speed": 8.0},
+    {"name": "wrist_tilt", "type": "hinge", "parent": "upper_arm", "child": "forearm", "axis": [0, 0, 1], "motor_torque": 80.0, "motor_speed": 10.0},
+    {"name": "wrist_rotate", "type": "hinge", "parent": "forearm", "child": "hand", "axis": [1, 0, 0], "motor_torque": 50.0, "motor_speed": 12.0}
+  ],
+  "control": {
+    "action_dim": 5,
+    "observation_dim": 40,
+    "joint_names": ["shoulder_pan", "shoulder_tilt", "elbow", "wrist_tilt", "wrist_rotate"]
+  },
+  "physics": {
+    "friction": 0.5,
+    "restitution": 0.1,
+    "linear_damping": 0.1,
+    "angular_damping": 0.1
+  }
+}

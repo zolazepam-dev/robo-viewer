@@ -1,0 +1,30 @@
+{
+  "name": "Snake4Segment",
+  "type": "snake",
+  "description": "4-segment snake for basic undulating locomotion",
+  "segments": [
+    {"name": "head", "shape": "capsule", "radius": 0.1, "height": 0.48, "mass": 1.8, "position": [0, 0.2, 0]},
+    {"name": "seg1", "shape": "capsule", "radius": 0.1, "height": 0.8, "mass": 1.5, "position": [0, 0.2, -0.8]},
+    {"name": "seg2", "shape": "capsule", "radius": 0.1, "height": 0.8, "mass": 1.5, "position": [0, 0.2, -1.6]},
+    {"name": "seg3", "shape": "capsule", "radius": 0.1, "height": 0.8, "mass": 1.5, "position": [0, 0.2, -2.4]},
+    {"name": "tail", "shape": "capsule", "radius": 0.08, "height": 0.4, "mass": 0.75, "position": [0, 0.2, -3.2]}
+  ],
+  "joints": [
+    {"name": "neck", "type": "hinge", "parent": "head", "child": "seg1", "axis": [0, 1, 0], "motor_torque": 30.0, "motor_speed": 5.0},
+    {"name": "joint1", "type": "hinge", "parent": "seg1", "child": "seg2", "axis": [0, 1, 0], "motor_torque": 30.0, "motor_speed": 5.0},
+    {"name": "joint2", "type": "hinge", "parent": "seg2", "child": "seg3", "axis": [0, 1, 0], "motor_torque": 30.0, "motor_speed": 5.0},
+    {"name": "tail_joint", "type": "hinge", "parent": "seg3", "child": "tail", "axis": [0, 1, 0], "motor_torque": 20.0, "motor_speed": 5.0}
+  ],
+  "control": {
+    "action_dim": 4,
+    "observation_dim": 32,
+    "joint_names": ["neck", "joint1", "joint2", "tail_joint"],
+    "gait": "sine_wave"
+  },
+  "physics": {
+    "friction": 0.3,
+    "restitution": 0.05,
+    "linear_damping": 0.15,
+    "angular_damping": 0.15
+  }
+}

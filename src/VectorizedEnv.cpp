@@ -41,12 +41,12 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
     mPhysicsCore.GetPhysicsSystem().SetContactListener(gCombatContactListener);
     std::cout << "[VectorizedEnv] Contact listener registered" << "\n";
 
-    // --- BUILD THE SINGLE SOURCE OF TRUTH ARENA (36x36x36) ---
+    // --- BUILD THE SINGLE SOURCE OF TRUTH ARENA (60x60x60) ---
     JPH::BodyInterface& body_interface = mPhysicsCore.GetPhysicsSystem().GetBodyInterface();
     std::cout << "[VectorizedEnv] Creating arena..." << "\n";
 
-    // Floor: 36x36 meters, 2.0m thick
-    JPH::BoxShapeSettings floor_shape(JPH::Vec3(18.0f, 1.0f, 18.0f));
+    // Floor: 60x60 meters, 2.0m thick (increased from 36x36)
+    JPH::BoxShapeSettings floor_shape(JPH::Vec3(30.0f, 1.0f, 30.0f));
     JPH::RefConst<JPH::Shape> floor = floor_shape.Create().Get();
     std::cout << "[VectorizedEnv] Floor shape created" << "\n";
     
@@ -54,27 +54,27 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
     std::cout << "[VectorizedEnv] Floor added" << "\n";
 
     // Ceiling
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 36.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(floor, JPH::RVec3(0.0f, 60.0f, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     std::cout << "[VectorizedEnv] Ceiling added" << "\n";
 
-    // Walls: 2.0m thick
-    JPH::BoxShapeSettings wall_shape(JPH::Vec3(18.0f, 18.0f, 1.0f));
+    // Walls: 5.0m thick (increased from 2.0m for better collision prevention)
+    JPH::BoxShapeSettings wall_shape(JPH::Vec3(30.0f, 30.0f, 5.0f));
     JPH::RefConst<JPH::Shape> wall = wall_shape.Create().Get();
     std::cout << "[VectorizedEnv] Wall shape created" << "\n";
 
-    // North/South (z = +/- 18.0 + offset)
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, -19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    // North/South (z = +/- 30.0 + offset)
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 30.0f, -35.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     std::cout << "[VectorizedEnv] North wall added" << "\n";
     
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 18.0f, 19.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(0.0f, 30.0f, 35.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     std::cout << "[VectorizedEnv] South wall added" << "\n";
 
-    // East/West (x = +/- 18.0 + offset, rotated)
+    // East/West (x = +/- 30.0 + offset, rotated)
     JPH::Quat rot90 = JPH::Quat::sRotation(JPH::Vec3::sAxisY(), JPH::DegreesToRadians(90.0f));
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(35.0f, 30.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     std::cout << "[VectorizedEnv] East wall added" << "\n";
     
-    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(-19.0f, 18.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
+    body_interface.CreateAndAddBody(JPH::BodyCreationSettings(wall, JPH::RVec3(-35.0f, 30.0f, 0.0f), rot90, JPH::EMotionType::Static, Layers::STATIC), JPH::EActivation::DontActivate);
     std::cout << "[VectorizedEnv] West wall added" << "\n";
     std::cout << "[VectorizedEnv] Arena complete" << "\n";
     // -------------------------------------------------

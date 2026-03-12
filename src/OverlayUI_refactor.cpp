@@ -260,61 +260,69 @@ void OverlayUIRefactored::DrawPhysicsTab()
 {
     ImGui::TextColored(mColorAccent, "SOLVER SETTINGS");
     ImGui::SliderFloat("Gravity", &mPhysics.gravityY, -20.0f, 0.0f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Global gravity force. Standard is -9.81.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Global gravity force (m/s²).\nStandard Earth gravity: -9.81\nLower values simulate moon/mars gravity.\nHigher values increase falling speed and impact forces.");
 
     ImGui::SliderFloat("Timestep", &mPhysics.timestep, 0.001f, 0.033f, "%.4f");
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Time step for each physics update. 0.0083 is 120Hz.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Time delta for each physics simulation step.\n0.0083s = 120Hz (recommended)\n0.0167s = 60Hz (standard)\nSmaller values = more accurate but slower simulation.");
 
     ImGui::SliderInt("Sub Steps", &mPhysics.numSubSteps, 1, 16);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Internal physics iterations per timestep for stability.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of sub-steps per timestep.\nHigher values improve stability for fast-moving objects\nbut increase CPU cost. Recommended: 1-4.");
 
     ImGui::SliderInt("Vel Steps", &mPhysics.velocitySteps, 1, 32);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of velocity constraint solver iterations.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Velocity constraint solver iterations.\nHigher values = more accurate velocity resolution\nbut diminishing returns after 8-16 iterations.");
 
     ImGui::SliderInt("Pos Steps", &mPhysics.positionSteps, 1, 16);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of position constraint solver iterations.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Position constraint solver iterations.\nCorrects positional drift and penetration.\nHigher values = less jitter but more CPU usage.");
 
     ImGui::SliderFloat("Baumgarte", &mPhysics.Baumgarte, 0.01f, 1.0f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Percentage of error correction per step (0.1-0.3 recommended).");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Baumgarte stabilization factor.\nControls rate of constraint error correction.\n0.1-0.3 = smooth, 0.5+ = aggressive correction.\nToo high can cause instability.");
 
     ImGui::Checkbox("Warm Starting", &mPhysics.warmStarting);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reuse solver results from previous frame for faster convergence.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reuse constraint impulses from previous frame.\nSignificantly improves solver convergence speed.\nKeep enabled for better performance.");
 
     ImGui::Separator();
     ImGui::TextColored(mColorAccent, "COLLISION & DYNAMICS");
     ImGui::SliderFloat("Friction", &mPhysics.friction, 0.0f, 2.0f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Surface friction coefficient.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Coefficient of friction for all surfaces.\n0.0 = ice (no friction)\n0.5 = wood/standard\n1.0+ = high grip (rubber)\nAffects sliding, traction, and energy loss.");
 
     ImGui::SliderFloat("Restitution", &mPhysics.restitution, 0.0f, 1.0f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Bounciness. 0.0 = no bounce, 1.0 = perfect elastic.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Coefficient of restitution (bounciness).\n0.0 = no bounce (clay)\n0.3 = moderate bounce (plastic)\n1.0 = perfectly elastic (superball)\nHigher values = more energy retained on impact.");
 
     ImGui::SliderFloat("Lin Damping", &mPhysics.linearDamping, 0.0f, 1.0f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Linear air resistance/drag.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Linear velocity damping (air resistance).\n0.0 = no drag (vacuum)\n0.05 = light air resistance\n1.0 = heavy drag (underwater)\nSimulates energy loss from air friction.");
+
+    ImGui::SliderFloat("Ang Damping", &mPhysics.angularDamping, 0.0f, 1.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Angular velocity damping (rotational drag).\n0.0 = no rotational drag\n0.05 = light air resistance\n1.0 = heavy rotational drag\nReduces spinning over time.");
+
+    ImGui::SliderFloat("Max Pen Vel", &mPhysics.maxPenetrationVelocity, 0.1f, 20.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Maximum velocity for penetration resolution.\nPrevents explosive separation of interpenetrating objects.\nLower = gentler correction, Higher = faster separation.");
+
+    ImGui::Separator();
+    ImGui::TextColored(mColorAccent, "ADVANCED SOLVER");
+    ImGui::SliderFloat("Penetration Slop", &mPhysics.penetrationSlop, 0.0f, 0.1f, "%.4f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Allowed penetration depth before correction.\nSmall values (0.001-0.01) = tight constraints\nLarger values = more stable but visible penetration.\nDefault: 0.005m (5mm).");
+
+    ImGui::SliderFloat("Speculative Contact", &mPhysics.speculativeContactDistance, 0.0f, 0.1f, "%.4f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Distance for predictive contact detection.\nPredicts future collisions to prevent tunneling.\nHigher values = better prevention but more false positives.\nDefault: 0.01m (10mm).");
+
+    ImGui::Checkbox("Allow Sleep", &mPhysics.allowSleep);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Allow bodies to enter sleep state when idle.\nReduces CPU usage for stationary objects.\nDisable for RL training to ensure consistent behavior.");
 
     ImGui::Separator();
     ImGui::TextColored(mColorAccent, "DOMAIN RANDOMIZATION");
     ImGui::Checkbox("Enable DR", &mConfig.dr.enabled);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Randomizes physics settings per-reset to improve generalization.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Domain Randomization: randomizes physics parameters\non each environment reset. Improves policy\ngeneralization to real-world variations.");
 
     if (mConfig.dr.enabled) {
         ImGui::SliderFloat("Grav Range", &mConfig.dr.gravityRange, 0.0f, 5.0f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Gravity +/- range during randomization.");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Random gravity variation: g ± range.\nExample: 2.0 means gravity varies between\n-11.81 and -7.81 m/s² on each reset.");
 
         ImGui::SliderFloat("Frict Range", &mConfig.dr.frictionRange, 0.0f, 0.5f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Friction +/- range during randomization.");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Random friction variation: μ ± range.\nExample: 0.2 means friction varies by ±0.2\nfrom the base value on each reset.");
 
         ImGui::SliderFloat("Rest Range", &mConfig.dr.restitutionRange, 0.0f, 0.5f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restitution +/- range during randomization.");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Random restitution variation: e ± range.\nExample: 0.1 means bounciness varies by ±0.1\nfrom the base value on each reset.");
     }
-
-    ImGui::SliderFloat("Ang Damping", &mPhysics.angularDamping, 0.0f, 1.0f);
-    ImGui::SliderFloat("Max Pen Vel", &mPhysics.maxPenetrationVelocity, 0.1f, 20.0f);
-    
-    ImGui::Separator();
-    ImGui::TextColored(mColorAccent, "ADVANCED");
-    ImGui::SliderFloat("Slop", &mPhysics.penetrationSlop, 0.0f, 0.1f, "%.4f");
-    ImGui::SliderFloat("Spec Dist", &mPhysics.speculativeContactDistance, 0.0f, 0.1f, "%.4f");
-    ImGui::Checkbox("Allow Sleep", &mPhysics.allowSleep);
 }
 
 void OverlayUIRefactored::DrawRobotsTab()

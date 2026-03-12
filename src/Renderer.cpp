@@ -68,6 +68,7 @@ uniform vec3 uObjectColor;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform float uAlpha;
+uniform float uEmissive;
 uniform Light uLights[4];
 uniform int uNumLights;
 
@@ -142,7 +143,10 @@ void main()
     float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     vec3 reflection = mix(vec3(0.1), vec3(0.8), fresnel) * uMetallic;
     
-    vec3 color = ambient + Lo + reflection;
+    // Emissive glow based on energy output
+    vec3 emissiveColor = uObjectColor * uEmissive * 2.0;
+    
+    vec3 color = ambient + Lo + reflection + emissiveColor;
     
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
@@ -303,6 +307,7 @@ Renderer::Renderer(int width, int height)
     mViewPosLoc = glGetUniformLocation(mProgram, "uViewPos");
     mObjectColorLoc = glGetUniformLocation(mProgram, "uObjectColor");
     mAlphaLoc = glGetUniformLocation(mProgram, "uAlpha");
+    mEmissiveLoc = glGetUniformLocation(mProgram, "uEmissive");
     mMetallicLoc = glGetUniformLocation(mProgram, "uMetallic");
     mRoughnessLoc = glGetUniformLocation(mProgram, "uRoughness");
     mNumLightsLoc = glGetUniformLocation(mProgram, "uNumLights");
@@ -424,7 +429,7 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
             else if (body_index % 3 == 1) objectColor = glm::vec3(0.8f, 0.0f, 0.8f);
             else objectColor = glm::vec3(1.0f, 0.9f, 0.1f);
             glUniform3fv(mObjectColorLoc, 1, glm::value_ptr(objectColor));
-            glUniform1f(mMetallicLoc, metallic); glUniform1f(mRoughnessLoc, roughness); glUniform1f(mAlphaLoc, alpha);
+            glUniform1f(mMetallicLoc, metallic); glUniform1f(mRoughnessLoc, roughness); glUniform1f(mAlphaLoc, alpha); glUniform1f(mEmissiveLoc, 0.3f);  // Slight glow
             if (draw_sphere) { glBindVertexArray(mSphereVao); glDrawElements(GL_TRIANGLES, mSphereIndexCount, GL_UNSIGNED_INT, nullptr); }
             else { glBindVertexArray(mCubeVao); glDrawArrays(GL_TRIANGLES, 0, 36); }
         };
@@ -509,6 +514,7 @@ void Renderer::Draw(JPH::PhysicsSystem* physicsSystem, const glm::vec3& cameraPo
             glUniform1f(mMetallicLoc, 0.0f);
             glUniform1f(mRoughnessLoc, 1.0f);
             glUniform1f(mAlphaLoc, 1.0f);
+            glUniform1f(mEmissiveLoc, 0.0f);
 
             glBindVertexArray(mCubeVao);
             glDrawArrays(GL_TRIANGLES, 0, 36);

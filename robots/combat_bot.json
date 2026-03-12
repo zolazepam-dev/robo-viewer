@@ -33,9 +33,9 @@
   "joints": {
     "hinge_damping": 0.99,
     "hinge_armature": 5.0,
-    "motor_torque": 1500.0,
-    "motor_min_torque": -500.0,
-    "motor_max_torque": 500.0,
+    "motor_torque": 2250.0,
+    "motor_min_torque": -750.0,
+    "motor_max_torque": 750.0,
     "slide_range": [0.0, 0.5]
   },
   "sensors": {
@@ -47,6 +47,6 @@
     "reaction_wheel_dim": 4,
     "rotation_scale": 25.0,
     "slide_scale": 100.0,
-    "reaction_torque_scale": 5000.0
+    "reaction_torque_scale": 7500.0
   }
 }

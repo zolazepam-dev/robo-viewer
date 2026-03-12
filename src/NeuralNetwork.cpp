@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 #include <cmath>
+#include <omp.h>
 
 void ODE2VAENetwork::Init(int observationDim, int latentDim, std::mt19937& rng)
 {
@@ -567,34 +568,41 @@ void ReplayBuffer::Sample(int batchSize, float* states, float* actions, float* r
                            float* nextStates, float* dones, float* latentPos, float* latentVel, std::mt19937& rng) {
     std::uniform_int_distribution<int> dist(0, mSize - 1);
     
-    for (int i = 0; i < batchSize; ++i) {
-        int idx = dist(rng);
+    #pragma omp parallel
+    {
+        std::mt19937 threadRng(rng() + omp_get_thread_num());
+        std::uniform_int_distribution<int> localDist(0, mSize - 1);
         
-        std::copy(mStates.begin() + idx * mStateDim,
-                  mStates.begin() + (idx + 1) * mStateDim,
-                  states + i * mStateDim);
-        
-        std::copy(mActions.begin() + idx * mActionDim,
-                  mActions.begin() + (idx + 1) * mActionDim,
-                  actions + i * mActionDim);
-        
-        rewards[i] = mRewards[idx];
-        
-        std::copy(mNextStates.begin() + idx * mStateDim,
-                  mNextStates.begin() + (idx + 1) * mStateDim,
-                  nextStates + i * mStateDim);
-        
-        dones[i] = mDones[idx];
+        #pragma omp for
+        for (int i = 0; i < batchSize; ++i) {
+            int idx = localDist(threadRng);
+            
+            std::copy(mStates.begin() + idx * mStateDim,
+                      mStates.begin() + (idx + 1) * mStateDim,
+                      states + i * mStateDim);
+            
+            std::copy(mActions.begin() + idx * mActionDim,
+                      mActions.begin() + (idx + 1) * mActionDim,
+                      actions + i * mActionDim);
+            
+            rewards[i] = mRewards[idx];
+            
+            std::copy(mNextStates.begin() + idx * mStateDim,
+                      mNextStates.begin() + (idx + 1) * mStateDim,
+                      nextStates + i * mStateDim);
+            
+            dones[i] = mDones[idx];
 
-        if (latentPos) {
-            std::copy(mLatentPos.begin() + idx * mLatentDim,
-                      mLatentPos.begin() + (idx + 1) * mLatentDim,
-                      latentPos + i * mLatentDim);
-        }
-        if (latentVel) {
-            std::copy(mLatentVel.begin() + idx * mLatentDim,
-                      mLatentVel.begin() + (idx + 1) * mLatentDim,
-                      latentVel + i * mLatentDim);
+            if (latentPos) {
+                std::copy(mLatentPos.begin() + idx * mLatentDim,
+                          mLatentPos.begin() + (idx + 1) * mLatentDim,
+                          latentPos + i * mLatentDim);
+            }
+            if (latentVel) {
+                std::copy(mLatentVel.begin() + idx * mLatentDim,
+                          mLatentVel.begin() + (idx + 1) * mLatentDim,
+                          latentVel + i * mLatentDim);
+            }
         }
     }
 }
