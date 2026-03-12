@@ -1,5 +1,36 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
+
+cc_binary(
+    name = "train",
+    srcs = ["main_train.cpp"],
+    deps = [
+        ":core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@nlohmann_json//:json",
+        "@jolt//:jolt",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+        "@tinyxml2//:tinyxml2",
+        "@assimp//:assimp",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-DJPH_DEBUG_RENDERER",
+        "-march=native",
+    ],
+    linkopts = [
+        "-lGL",
+        "-lpthread",
+    ],
+)
+
 cc_binary(
     name = "mjcf_viewer",
     srcs = ["mjcf_viewer.cpp"],
@@ -37,6 +68,7 @@ cc_library(
     srcs = [
         "PhysicsCore.cpp",
         "Renderer.cpp",
+        "Application.cpp",
         "CombatRobot.cpp",
         "RobotLoader.cpp",
         "RobotTemplates.cpp",
@@ -71,6 +103,7 @@ cc_library(
     ],
     hdrs = [
         "PhysicsCore.h",
+        "Application.h",
         "Renderer.h",
         "CombatRobot.h",
         "RobotLoader.h",
@@ -110,7 +143,6 @@ cc_library(
         "OctopodEnv.h",
         "VectorizedOctopodEnv.h",
         "ShardEnv.h",
-        "RobotLoader_fixed.h",
         "Logging.h",
         "LockFreeActionBuffer.h",
         "AlignedAllocator.hpp",
@@ -148,8 +180,10 @@ cc_library(
         "-DJPH_DEBUG_RENDERER",
         "-march=native",
         "-fopenmp",
-        "-I/usr/include/eigen3"
+        "-I/usr/include/eigen3",
+        "-I../modules/common"
     ],
+    includes = ["../modules/common"],
 )
 
 cc_library(
@@ -314,4 +348,45 @@ cc_binary(
         "-I/usr/include/eigen3",
     ],
     linkopts = ["-lpthread"],
+)
+
+# Balancing robot test
+cc_binary(
+    name = "balancing_bot_simple",
+    srcs = ["balancing_bot_simple.cpp"],
+    deps = [
+        ":core",
+        "@jolt//:jolt",
+    ],
+    linkopts = ["-lpthread", "-lgomp"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-I/usr/include/eigen3"
+    ],
+)
+
+# Balancing robot visual debugger
+cc_binary(
+    name = "balancing_bot_debug",
+    srcs = ["balancing_bot_viewer.cpp"],
+    deps = [
+        ":core",
+        "@glfw",
+        "@glm",
+        "@glew//:glew_static",
+        "@jolt//:jolt",
+    ],
+    linkopts = ["-lGL", "-lpthread", "-lgomp"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-mavx2",
+        "-mfma",
+        "-march=native",
+        "-I/usr/include/eigen3"
+    ],
 )

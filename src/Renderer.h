@@ -57,6 +57,7 @@ private:
     GLint mObjectColorLoc = -1;
     GLint mMetallicLoc = -1;
     GLint mRoughnessLoc = -1;
+    GLint mEmissiveLoc = -1;
     GLint mNumLightsLoc = -1;
     GLint mLightPosLoc[4] = {-1};
     GLint mLightColorLoc[4] = {-1};

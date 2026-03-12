@@ -7,7 +7,4 @@ build --copt=-ffast-math
 build --copt=-fno-strict-aliasing
 build --copt=-fno-math-errno
 build --copt=-DGLEW_NO_GLU
-build --config=release
 build --jobs=8
-build --local_ram_resources=6144
-build --memory_efficient_mmap=true
