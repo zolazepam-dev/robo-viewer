@@ -113,6 +113,16 @@ void VectorizedEnv::Init(const std::string& robotConfigPath, bool initRobots)
         mAllDones.resize(mNumEnvs, false);
         mAllVectorRewards.resize(mNumEnvs);
         std::cout << "[VectorizedEnv] Buffers allocated" << "\n";
+        
+        // Initialize SoA batch for SIMD-optimized processing
+        std::cout << "[VectorizedEnv] Initializing SoA batch..." << "\n";
+        mSoAInitialized = mSoABatch.Initialize(mNumEnvs, mObservationDim, mActionDim, 13);
+        if (mSoAInitialized) {
+            std::cout << "[VectorizedEnv] SoA batch initialized: " << mNumEnvs << " envs, " 
+                      << mObservationDim << " obs dim, " << mActionDim << " action dim" << "\n";
+        } else {
+            std::cerr << "[VectorizedEnv] WARNING: SoA batch initialization failed" << "\n";
+        }
     }
 
     mPhysicsCore.GetPhysicsSystem().OptimizeBroadPhase();

@@ -5,6 +5,7 @@
 #include "CombatEnv.h"
 #include "PhysicsCore.h"
 #include "AlignedAllocator.h"
+#include "SoAEnvironment.h"
 
 class VectorizedEnv
 {
@@ -48,6 +49,10 @@ private:
     PhysicsCore mPhysicsCore;
     CombatRobotLoader mRobotLoader;
     std::vector<CombatEnv> mEnvs;
+
+    // SoA batch for SIMD-optimized processing
+    opt::SoAEnvironmentBatch mSoABatch;
+    bool mSoAInitialized = false;
 
     int mNumEnvs;
     int mStepsPerEpisode;
