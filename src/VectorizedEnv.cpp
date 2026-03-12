@@ -196,6 +196,18 @@ void VectorizedEnv::HarvestStatesParallel()
 
 void VectorizedEnv::HarvestStates()
 {
+    // Optional: Use SoA batch for SIMD processing (if initialized)
+    if (mSoAInitialized) {
+        // Transpose observations to SoA layout for potential SIMD use
+        // Note: This is optional - uncomment for SIMD reward calc
+        // mSoABatch.TransposeObservations(mAllObservations.data(), mObservationDim);
+        
+        // Calculate rewards using SIMD (if using SoA layout)
+        // mSoABatch.CalculateRewardsSIMD();
+        // Then copy back to mAllRewards
+        // But for now, fall through to direct calculation for compatibility
+    }
+    
     for (int i = 0; i < mNumEnvs; ++i)
     {
         if (mAllDones[i]) continue;
@@ -209,6 +221,11 @@ void VectorizedEnv::HarvestStates()
 
         mEnvs[i].HarvestState(obs1, obs2, reward1, reward2, done);
         mAllDones[i] = done;
+        
+        // Optionally populate SoA batch with physics state
+        if (mSoAInitialized && i < (int)mSoABatch.numEnvs) {
+            // Could extract positions/velocities here for rendering
+        }
     }
 
     for (int i = 0; i < mNumEnvs; ++i) {

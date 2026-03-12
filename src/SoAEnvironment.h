@@ -655,6 +655,79 @@ struct SoAEnvironmentBatch {
     inline void SetReward(size_t envIdx, size_t robotIdx, float value) {
         rewards[envIdx * 2 + robotIdx] = value;
     }
+    
+    // ========================================================================
+    // BATCH OPERATIONS FOR VECTORIZED ENV
+    // ========================================================================
+    
+    /**
+     * @brief Populate positions from array of positions (SoA to AoS conversion for display)
+     * 
+     * Takes a flat array of [env0_pos0, env0_pos1, ..., envN_posM] and populates
+     * the SoA positions arrays for efficient rendering/analysis.
+     * 
+     * @param positions Flat array of positions [env0_x, env0_y, env0_z, env1_x, ...]
+     * @param numEnvs Number of environments
+     * @param numObjects Number of objects per environment
+     */
+    void PopulateFromPositions(const float* positions, size_t numEnvs, size_t numObjects) {
+        #pragma omp parallel for schedule(static)
+        for (size_t env = 0; env < numEnvs; ++env) {
+            size_t srcOffset = env * numObjects * 3;  // 3 floats per object (x, y, z)
+            size_t dstOffset = env * numObjects;
+            
+            for (size_t obj = 0; obj < numObjects; ++obj) {
+                positionsX[dstOffset + obj] = positions[srcOffset + obj * 3 + 0];
+                positionsY[dstOffset + obj] = positions[srcOffset + obj * 3 + 1];
+                positionsZ[dstOffset + obj] = positions[srcOffset + obj * 3 + 2];
+            }
+        }
+    }
+    
+    /**
+     * @brief Get reward array pointer for direct access
+     * @return Pointer to reward array (SoA layout: [env0_r0, env0_r1, env1_r0, ...])
+     */
+    inline float* GetRewardPtr() { return rewards.data(); }
+    
+    /**
+     * @brief Get observation array pointer for direct access  
+     * @return Pointer to observation array (SoA layout: [feat0_env0, feat0_env1, ...])
+     */
+    inline float* GetObservationPtr() { return observations.data(); }
+    
+    /**
+     * @brief Get positions array pointer for direct access
+     * @return Pointer to positions array (SoA layout: [env0_obj0, env1_obj0, ...])
+     */
+    inline float* GetPositionXPtr() { return positionsX.data(); }
+    inline float* GetPositionYPtr() { return positionsY.data(); }
+    inline float* GetPositionZPtr() { return positionsZ.data(); }
+    
+    /**
+     * @brief Copy observations from VectorizedEnv format to SoA format
+     * 
+     * VectorizedEnv uses: [env0_obs0, env0_obs1, ..., env1_obs0, ...]
+     * SoA uses: [feat0_env0, feat0_env1, ..., feat1_env0, ...]
+     * 
+     * This converts from AoS to SoA for SIMD processing.
+     * 
+     * @param flatObs Flat observation array from VectorizedEnv
+     * @param obsDim Observation dimension per robot
+     */
+    void TransposeObservations(const float* flatObs, size_t obsDim) {
+        // flatObs layout: [env0_obs0, env0_obs1, ..., env0_obsN, env1_obs0, ...]
+        // SoA layout: [obs0_env0, obs0_env1, ..., obs1_env0, obs1_env1, ...]
+        
+        #pragma omp parallel for schedule(static)
+        for (size_t env = 0; env < numEnvs; ++env) {
+            for (size_t feat = 0; feat < obsDim; ++feat) {
+                // Source: flat[env * obsDim + feat]
+                // Dest: SoA[feat * numEnvs + env]
+                observations[feat * numEnvs + env] = flatObs[env * obsDim + feat];
+            }
+        }
+    }
 };
 
 }  // namespace opt
